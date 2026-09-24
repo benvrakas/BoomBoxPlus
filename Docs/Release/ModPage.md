@@ -43,7 +43,8 @@ Inspired by the PEAK mod sPEAKer.
   mid-song, in sync.
 - **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, both
   players enter each other's 4-digit link code within 3 minutes; both queues are merged, alternating songs
-  from each.
+  from each. A group stays paired across saves and restarts — press **Leave Group** on any Boom Box to take
+  just that one out again.
 - **Synced lyrics.** The current line appears at the bottom of the screen while you can hear the music
   (from LRCLIB, or a `.lrc` file next to your song).
 - **Now playing card.** A short notification shows each new song.

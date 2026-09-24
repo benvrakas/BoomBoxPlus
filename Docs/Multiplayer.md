@@ -43,13 +43,28 @@ first version paused those too, which paused every Play press on a Boom Box whos
 Pressing Play, Play Next or Add on the music page now also loads the Custom Music tape if another tape is
 in.
 
-Channels are session state only — nothing is saved. Codes are re-rolled each session. Confirmed: neither
-`ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a single `SaveGame` property, and both are ordinary
-runtime-spawned actors (the channel via `SpawnChannel`, never restored from a save), so a world restart —
-reloading the save, or restarting the level — always starts with zero channels and zero pending link
-requests; every Boom Box gets a fresh, unlinked channel and a freshly rolled code the moment it's next
-queried. `ABBPPlaylistSubsystem::BeginPlay` logs the channel and pending-request counts (always 0) so this
-is visible in the log rather than just asserted here.
+**Groupings persist across a save reload; leaving is per Boom Box.** Channels themselves are still
+session-only — neither `ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a `SaveGame` property, both are
+ordinary runtime-spawned actors, and a world restart always starts with zero channels, zero pending link
+requests and freshly rolled codes (`ABBPPlaylistSubsystem::BeginPlay` logs the counts, always 0). What
+*does* persist is **which Boom Boxes belong together**: `ABBPPlaylistSubsystem` implements
+`IFGSaveInterface` and saves `SavedGroups`, a `TArray<FString>` where each entry is one group's members'
+`GetPathName()` values joined with `|` (the game's save system keeps an actor's path stable across a
+reload, the same guarantee foundations/pipes rely on to reconnect). Every `MaintainChannels` tick
+(`SyncSavedGroupsFromChannels`) rebuilds this list from the live channels (one entry per channel with 2+
+members), so it's always current, on the host's next autosave, to within half a second.
+
+On the way back up, `RegroupSavedBoomBoxes` (also called every tick, before the "give every orphan its own
+channel" loop) checks each saved group: once **2 or more** of its Boom Boxes are discovered active and
+still unchannelled, they're all put on one new channel together in a single step — so a reunited group
+shares a channel immediately, rather than each member briefly getting a lone channel first. A saved group
+with only one surviving member just falls through to a normal solo channel, and drops out of `SavedGroups`
+on the next sync (no permanent single-member group ever lingers).
+
+**Leaving is the only way a group loses a member**, and it's per Boom Box: `UnlinkBoomBox` ("Leave Group"
+on the page) takes one Boom Box off a shared channel and gives it its own again; the rest of the group
+keeps playing together and stays paired, restart or not. There's no automatic disconnect any more — a group
+only shrinks when a player explicitly presses Leave Group at one of its Boom Boxes.
 
 ## Replicated state
 

@@ -323,7 +323,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(LinkRow, CodeSize, false);
 	LinkButton = MakeButton(WidgetTree, LOCTEXT("Link", "Link"));
 	AddToRow(LinkRow, LinkButton, false);
-	UnlinkButton = MakeButton(WidgetTree, LOCTEXT("Unlink", "Unlink"));
+	UnlinkButton = MakeButton(WidgetTree, LOCTEXT("Unlink", "Leave Group"));
 	AddToRow(LinkRow, UnlinkButton, false, 0.f);
 	LinkMessageText = MakeText(WidgetTree, 11, DimTextColor);
 	LinkColumn->AddChildToVerticalBox(LinkMessageText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
@@ -830,7 +830,7 @@ void UBBPMusicPage::RefreshLink()
 		}
 		else if (Shared > 1)
 		{
-			Text = FText::Format(LOCTEXT("LinkCodeShared", "Link code: {0}   (queue shared by {1} Boom Boxes)"),
+			Text = FText::Format(LOCTEXT("LinkCodeShared", "Link code: {0}   (grouped with {1} Boom Boxes; this stays paired across saves)"),
 				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())), Shared);
 		}
 		else
@@ -918,7 +918,7 @@ void UBBPMusicPage::HandleLink()
 
 void UBBPMusicPage::HandleUnlink()
 {
-	SetLinkMessage(LOCTEXT("Unlinking", "Unlinking..."));
+	SetLinkMessage(LOCTEXT("Unlinking", "Leaving the group..."));
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: unlinking %s"), *GetNameSafe(GetBoomBox()));
 	UBBPBlueprintLibrary::RequestUnlinkBoomBox(GetBoomBox());
 }
