@@ -29,6 +29,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
+	// Adds tracks to the end of BoomBox's queue in order, sent in small batches.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestAddTracks(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks);
+
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestRemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 

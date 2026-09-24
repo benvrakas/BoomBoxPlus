@@ -19,6 +19,14 @@ public:
 	void Server_AddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 	bool Server_AddTrack_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
+	// Adds several tracks to the end of the queue, in order. At most MaxTracksPerBatch per call.
+	UFUNCTION(Server, Reliable, WithValidation = Server_AddTracks_Validate)
+	void Server_AddTracks(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks);
+	bool Server_AddTracks_Validate(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks);
+
+	// Largest batch Server_AddTracks accepts; bigger lists are split by the sender.
+	static constexpr int32 MaxTracksPerBatch = 25;
+
 	UFUNCTION(Server, Reliable, WithValidation = Server_RemoveEntry_Validate)
 	void Server_RemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 	bool Server_RemoveEntry_Validate(AFGBoomBoxPlayer* BoomBox, int32 EntryId);

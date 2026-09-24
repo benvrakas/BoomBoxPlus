@@ -41,6 +41,26 @@ void UBBPBlueprintLibrary::RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBP
 	}
 }
 
+void UBBPBlueprintLibrary::RequestAddTracks(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks)
+{
+	if (Tracks.Num() == 0)
+	{
+		return;
+	}
+	UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("AddTracks"));
+	if (!RCO)
+	{
+		return;
+	}
+	for (int32 Start = 0; Start < Tracks.Num(); Start += UBBPRemoteCallObject::MaxTracksPerBatch)
+	{
+		const int32 Count = FMath::Min(UBBPRemoteCallObject::MaxTracksPerBatch, Tracks.Num() - Start);
+		RCO->Server_AddTracks(BoomBox, TArray<FBBPTrack>(Tracks.GetData() + Start, Count));
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Sent %d tracks for %s in %d batch(es)"), Tracks.Num(), *GetNameSafe(BoomBox),
+		FMath::DivideAndRoundUp(Tracks.Num(), UBBPRemoteCallObject::MaxTracksPerBatch));
+}
+
 void UBBPBlueprintLibrary::RequestRemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId)
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("RemoveEntry")))

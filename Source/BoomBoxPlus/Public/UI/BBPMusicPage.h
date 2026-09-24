@@ -16,6 +16,7 @@ class UFGTapeData;
 class UScrollBox;
 class UTextBlock;
 class UBBPTrackRow;
+struct FBBPMatchProgress;
 
 // The Custom Music page added to the Boom Box window: search, results, queue and transport controls.
 UCLASS()
@@ -177,6 +178,12 @@ private:
 	// Starts an online search, or resolves a pasted link, for the search box text.
 	void RunOnlineSearch(const FString& Text);
 
+	// Shows a Spotify playlist's matches as they arrive.
+	void HandleMatchProgress(int32 Generation, const FBBPMatchProgress& Progress);
+
+	// Stops this page's running Spotify match, unless it is already queueing into the Boom Box.
+	void CancelMatchJob();
+
 	// Stores online results for the current search generation and refreshes the list.
 	void ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>& Tracks, const FString& Error, bool bIsCollection);
 
@@ -257,6 +264,11 @@ private:
 	TArray<FBBPTrack> OnlineResults;
 	FString OnlineStatus;
 	bool bOnlineIsCollection = false;
+
+	// Running Spotify match job (0 when none), its playlist size, and whether Add all has handed it the queueing.
+	int32 MatchJobId = 0;
+	int32 MatchTotal = 0;
+	bool bMatchQueued = false;
 
 	// Increments on every new search so late responses to older searches are ignored.
 	int32 SearchGeneration = 0;

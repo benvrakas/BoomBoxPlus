@@ -307,6 +307,7 @@ void UBBPMusicPage::NativeConstruct()
 void UBBPMusicPage::NativeDestruct()
 {
 	CancelShowRequest();
+	CancelMatchJob();
 	LivePages.Remove(this);
 	if (ABBPMusicChannel* Channel = BoundChannel.Get())
 	{
@@ -577,11 +578,15 @@ void UBBPMusicPage::RefreshResults()
 	{
 		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor, FText::FromString(OnlineStatus)));
 	}
-	if (OnlineResults.Num() > 0)
+	const bool bMatching = MatchJobId != 0;
+	if (OnlineResults.Num() > 0 || (bMatching && MatchTotal > 0))
 	{
-		if (bOnlineIsCollection)
+		if (bOnlineIsCollection && !bMatchQueued)
 		{
-			UBBPGameButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num()));
+			const FText Label = bMatching
+				? FText::Format(LOCTEXT("AddAllMatching", "Add all {0} (queues as they're found)"), MatchTotal)
+				: FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num());
+			UBBPGameButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, Label);
 			AddAll->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 			AddToList(ResultsList, AddAll);
 		}
@@ -827,6 +832,7 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 	}
 
 	const int32 Generation = ++SearchGeneration;
+	CancelMatchJob();
 	OnlineResults.Reset();
 	bOnlineIsCollection = false;
 	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
@@ -855,15 +861,24 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 		}));
 		break;
 	case EBBPLinkKind::SpotifyCollection:
-		OnlineStatus = TEXT("Matching the Spotify playlist on YouTube (can take a minute)...");
-		Net->ResolveSpotifyCollection(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation](const TArray<FBBPTrack>& Tracks, const FString& Error)
+		OnlineStatus = TEXT("Reading the Spotify playlist...");
+		bOnlineIsCollection = true;
+	{
+		// -1 marks "starting"; a job that fails immediately reports back before the id is known and resets it to 0.
+		MatchJobId = -1;
+		const int32 NewJobId = Net->StartSpotifyCollection(Text, FBBPOnMatchProgress::CreateLambda([WeakThis, Generation](const FBBPMatchProgress& Progress)
 		{
 			if (UBBPMusicPage* This = WeakThis.Get())
 			{
-				This->ShowOnlineResults(Generation, Tracks, Error, true);
+				This->HandleMatchProgress(Generation, Progress);
 			}
 		}));
+		if (MatchJobId == -1)
+		{
+			MatchJobId = NewJobId;
+		}
 		break;
+	}
 	case EBBPLinkKind::YouTubeVideo:
 	case EBBPLinkKind::YouTubePlaylist:
 	case EBBPLinkKind::SoundCloudTrack:
@@ -915,12 +930,61 @@ void UBBPMusicPage::ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>&
 
 void UBBPMusicPage::HandleAddAllOnline()
 {
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: adding %d online tracks to the queue"), OnlineResults.Num());
 	EnsureCustomMusicLoaded();
-	for (const FBBPTrack& Track : OnlineResults)
+	const UGameInstance* GameInstance = GetGameInstance();
+	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	if (MatchJobId > 0 && Net && Net->QueueJobInto(MatchJobId, GetBoomBox()))
 	{
-		UBBPBlueprintLibrary::RequestAddTrack(GetBoomBox(), Track, false);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: queueing Spotify matches as they're found (%d ready)"), OnlineResults.Num());
+		bMatchQueued = true;
+		RefreshResults();
+		return;
 	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: adding %d online tracks to the queue"), OnlineResults.Num());
+	UBBPBlueprintLibrary::RequestAddTracks(GetBoomBox(), OnlineResults);
+	bMatchQueued = true;
+	OnlineStatus = FString::Printf(TEXT("Added %d tracks to the queue."), OnlineResults.Num());
+	RefreshResults();
+}
+
+void UBBPMusicPage::HandleMatchProgress(int32 Generation, const FBBPMatchProgress& Progress)
+{
+	if (Generation != SearchGeneration)
+	{
+		return;
+	}
+	OnlineResults = Progress.Matched;
+	MatchTotal = Progress.Total;
+	bOnlineIsCollection = true;
+	if (!Progress.bFinished)
+	{
+		OnlineStatus = Progress.Total == 0 ? FString(TEXT("Reading the Spotify playlist..."))
+			: FString::Printf(TEXT("Matching on YouTube: %d of %d done%s"), Progress.Processed, Progress.Total,
+				bMatchQueued ? TEXT(". Adding each to the queue as it's found.") : TEXT("."));
+	}
+	else
+	{
+		MatchJobId = 0;
+		OnlineStatus = !Progress.Error.IsEmpty() ? FString::Printf(TEXT("Spotify playlist: %s"), *Progress.Error)
+			: FString::Printf(TEXT("Matched %d of %d Spotify tracks on YouTube%s"), Progress.Matched.Num(), Progress.Total,
+				bMatchQueued ? TEXT(", all added to the queue.") : TEXT("."));
+	}
+	RefreshResults();
+}
+
+void UBBPMusicPage::CancelMatchJob()
+{
+	if (MatchJobId > 0)
+	{
+		const UGameInstance* GameInstance = GetGameInstance();
+		if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+		{
+			Net->CancelJob(MatchJobId);
+		}
+	}
+	MatchJobId = 0;
+	MatchTotal = 0;
+	bMatchQueued = false;
 }
 
 void UBBPMusicPage::HandleLibraryChanged()

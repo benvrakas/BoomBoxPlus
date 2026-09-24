@@ -4,6 +4,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "FGPlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "Algo/AllOf.h"
 #include "Net/UnrealNetwork.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
@@ -70,11 +71,41 @@ void UBBPRemoteCallObject::Server_AddTrack_Implementation(AFGBoomBoxPlayer* Boom
 	}
 }
 
+namespace
+{
+	bool IsTrackValid(const FBBPTrack& Track)
+	{
+		return Track.Id.Len() <= MaxTextLength && Track.Title.Len() <= MaxTextLength
+			&& Track.Artist.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
+			&& Track.Duration >= 0.f && Track.Duration < 24.f * 3600.f;
+	}
+}
+
+void UBBPRemoteCallObject::Server_AddTracks_Implementation(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks)
+{
+	if (ABBPMusicChannel* Channel = GetChannelForRequest(BoomBox, TEXT("AddTracks")))
+	{
+		const FString Requester = GetRequesterName();
+		for (const FBBPTrack& Track : Tracks)
+		{
+			Channel->AddTrack(Track, false, Requester);
+		}
+	}
+}
+
+bool UBBPRemoteCallObject::Server_AddTracks_Validate(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks)
+{
+	const bool bValid = Tracks.Num() <= MaxTracksPerBatch && Algo::AllOf(Tracks, IsTrackValid);
+	if (!bValid)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: AddTracks failed validation (%d tracks)"), Tracks.Num());
+	}
+	return bValid;
+}
+
 bool UBBPRemoteCallObject::Server_AddTrack_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront)
 {
-	const bool bValid = Track.Id.Len() <= MaxTextLength && Track.Title.Len() <= MaxTextLength
-		&& Track.Artist.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
-		&& Track.Duration >= 0.f && Track.Duration < 24.f * 3600.f;
+	const bool bValid = IsTrackValid(Track);
 	if (!bValid)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: AddTrack failed validation (id len %d, duration %.1f)"), Track.Id.Len(), Track.Duration);

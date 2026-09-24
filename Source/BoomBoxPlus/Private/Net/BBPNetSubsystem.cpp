@@ -15,7 +15,10 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Net/BBPProcess.h"
+#include "BBPBlueprintLibrary.h"
+#include "FGBoomBoxPlayer.h"
 #include "Playlist/BBPMusicChannel.h"
+#include <atomic>
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -26,7 +29,9 @@ namespace
 	constexpr int32 NetCacheVersion = 1;
 	constexpr int32 YouTubeSearchResults = 8;
 	constexpr int32 SoundCloudSearchResults = 4;
-	constexpr int32 MaxCollectionTracks = 100;
+	constexpr int32 MaxCollectionTracks = 500;
+	constexpr int32 MaxSpotifyTracks = 100;
+	constexpr int32 MatchWorkers = 3;
 	constexpr int32 SpotifyMatchCandidates = 3;
 	constexpr float HttpTimeoutSeconds = 15.f;
 	const TCHAR* BrowserUserAgent = TEXT("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
@@ -275,6 +280,38 @@ namespace
 	}
 }
 
+// One Spotify track to find on YouTube.
+struct FBBPWantedTrack
+{
+	FString Query;
+	float Duration = 0.f;
+};
+
+// State shared between a match job's worker threads.
+struct FBBPMatchWork
+{
+	TArray<FBBPWantedTrack> Wanted;
+	std::atomic<int32> NextIndex{ 0 };
+	std::atomic<int32> WorkersLeft{ 0 };
+	std::atomic<bool> bCancelled{ false };
+};
+
+// A Spotify playlist being matched on YouTube. Game thread only, apart from Work.
+struct FBBPMatchJob
+{
+	TSharedPtr<FBBPMatchWork, ESPMode::ThreadSafe> Work;
+	FBBPOnMatchProgress OnProgress;
+	FBBPMatchProgress Progress;
+
+	// Result per playlist track, filled in any order; published in order.
+	TArray<TOptional<FBBPTrack>> Slots;
+	TArray<bool> Received;
+
+	// Boom Box to queue matches into, and how many of Progress.Matched have been queued.
+	TWeakObjectPtr<AFGBoomBoxPlayer> QueueInto;
+	int32 Queued = 0;
+};
+
 void UBBPNetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -431,12 +468,17 @@ void UBBPNetSubsystem::ResolveSpotifyTrack(const FString& Url, FBBPOnNetText OnD
 	});
 }
 
-void UBBPNetSubsystem::ResolveSpotifyCollection(const FString& Url, FBBPOnNetTracks OnDone)
+int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchProgress OnProgress)
 {
+	const int32 JobId = NextJobId++;
 	if (!bToolsAvailable)
 	{
-		OnDone.ExecuteIfBound({}, TEXT("YouTube/SoundCloud unavailable (tools missing)"));
-		return;
+		FBBPMatchProgress Failed;
+		Failed.JobId = JobId;
+		Failed.bFinished = true;
+		Failed.Error = TEXT("YouTube/SoundCloud unavailable (tools missing)");
+		OnProgress.ExecuteIfBound(Failed);
+		return JobId;
 	}
 	FString EmbedUrl = Url.TrimStartAndEnd().Replace(TEXT("open.spotify.com/"), TEXT("open.spotify.com/embed/"));
 	int32 QueryStart = INDEX_NONE;
@@ -444,21 +486,40 @@ void UBBPNetSubsystem::ResolveSpotifyCollection(const FString& Url, FBBPOnNetTra
 	{
 		EmbedUrl.LeftInline(QueryStart);
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: resolving Spotify collection '%s'"), *EmbedUrl);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d resolving Spotify collection '%s'"), JobId, *EmbedUrl);
 
-	HttpGet(EmbedUrl, [YtDlp = YtDlpPath, OnDone](const FString& Body, const FString& Error)
+	TSharedPtr<FBBPMatchJob> Job = MakeShared<FBBPMatchJob>();
+	Job->Work = MakeShared<FBBPMatchWork, ESPMode::ThreadSafe>();
+	Job->OnProgress = OnProgress;
+	Job->Progress.JobId = JobId;
+	MatchJobs.Add(JobId, Job);
+
+	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
+	HttpGet(EmbedUrl, [WeakThis, JobId, YtDlp = YtDlpPath](const FString& Body, const FString& Error)
 	{
+		UBBPNetSubsystem* This = WeakThis.Get();
+		TSharedPtr<FBBPMatchJob>* JobPtr = This ? This->MatchJobs.Find(JobId) : nullptr;
+		if (!JobPtr)
+		{
+			return;
+		}
+		FBBPMatchJob& Job = **JobPtr;
+
 		const FString TrackListJson = Error.IsEmpty() ? ExtractJsonArray(Body, TEXT("trackList")) : FString();
 		TArray<TSharedPtr<FJsonValue>> Items;
 		if (TrackListJson.IsEmpty() || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TrackListJson), Items))
 		{
-			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify trackList not found (%s)"), Error.IsEmpty() ? TEXT("page format changed") : *Error);
-			OnDone.ExecuteIfBound({}, TEXT("Couldn't read that Spotify playlist"));
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: job %d: Spotify trackList not found (%s)"), JobId, Error.IsEmpty() ? TEXT("page format changed") : *Error);
+			Job.Progress.bFinished = true;
+			Job.Progress.Error = TEXT("Couldn't read that Spotify playlist");
+			const FBBPOnMatchProgress Callback = Job.OnProgress;
+			const FBBPMatchProgress Final = Job.Progress;
+			This->MatchJobs.Remove(JobId);
+			Callback.ExecuteIfBound(Final);
 			return;
 		}
 
-		struct FWanted { FString Query; float Duration; };
-		TArray<FWanted> Wanted;
+		TArray<FBBPWantedTrack>& Wanted = Job.Work->Wanted;
 		for (const TSharedPtr<FJsonValue>& Item : Items)
 		{
 			const TSharedPtr<FJsonObject>* Object = nullptr;
@@ -475,36 +536,161 @@ void UBBPNetSubsystem::ResolveSpotifyCollection(const FString& Url, FBBPOnNetTra
 			{
 				Wanted.Add({ FString::Printf(TEXT("%s %s"), *Title, *PrimaryArtist(Subtitle)), (float)(DurationMs / 1000.0) });
 			}
-			if (Wanted.Num() >= MaxCollectionTracks)
+			if (Wanted.Num() >= MaxSpotifyTracks)
 			{
 				break;
 			}
 		}
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: Spotify collection has %d tracks; matching on YouTube"), Wanted.Num());
-
-		Async(EAsyncExecution::ThreadPool, [YtDlp, Wanted = MoveTemp(Wanted), OnDone]()
+		const int32 Total = Wanted.Num();
+		Job.Progress.Total = Total;
+		Job.Slots.SetNum(Total);
+		Job.Received.Init(false, Total);
+		Job.OnProgress.ExecuteIfBound(Job.Progress);
+		if (Total == 0)
 		{
-			TArray<FBBPTrack> Matches;
-			for (const FWanted& Item : Wanted)
+			This->HandleMatchFinished(JobId);
+			return;
+		}
+
+		const int32 Workers = FMath::Min(MatchWorkers, Total);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: %d Spotify tracks; matching on YouTube with %d workers"), JobId, Total, Workers);
+		TSharedPtr<FBBPMatchWork, ESPMode::ThreadSafe> Work = Job.Work;
+		Work->WorkersLeft = Workers;
+		for (int32 Worker = 0; Worker < Workers; ++Worker)
+		{
+			Async(EAsyncExecution::ThreadPool, [WeakThis, JobId, YtDlp, Work]()
 			{
-				FString MatchError;
-				const TArray<FBBPTrack> Candidates = RunListing(YtDlp, FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
-				if (Candidates.Num() > 0)
+				// Workers take playlist tracks in order, so the first tracks are matched first.
+				for (int32 Index = Work->NextIndex++; Index < Work->Wanted.Num() && !Work->bCancelled; Index = Work->NextIndex++)
 				{
-					Matches.Add(Candidates[PickClosestDuration(Candidates, Item.Duration)]);
+					const FBBPWantedTrack& Item = Work->Wanted[Index];
+					FString MatchError;
+					const TArray<FBBPTrack> Candidates = RunListing(YtDlp, FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
+					TOptional<FBBPTrack> Match;
+					if (Candidates.Num() > 0)
+					{
+						Match = Candidates[PickClosestDuration(Candidates, Item.Duration)];
+					}
+					else
+					{
+						UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: no YouTube match for '%s'"), JobId, *Item.Query);
+					}
+					AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId, Index, Match = MoveTemp(Match)]()
+					{
+						if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
+						{
+							Subsystem->HandleMatchResult(JobId, Index, Match);
+						}
+					});
 				}
-				else
+				if (--Work->WorkersLeft == 0)
 				{
-					UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: no YouTube match for '%s'"), *Item.Query);
+					AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId]()
+					{
+						if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
+						{
+							Subsystem->HandleMatchFinished(JobId);
+						}
+					});
 				}
-			}
-			AsyncTask(ENamedThreads::GameThread, [Matches = MoveTemp(Matches), Total = Wanted.Num(), OnDone]()
-			{
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: matched %d of %d Spotify tracks"), Matches.Num(), Total);
-				OnDone.ExecuteIfBound(Matches, Matches.Num() == 0 ? FString(TEXT("No matches found")) : FString());
 			});
-		});
+		}
 	});
+	return JobId;
+}
+
+void UBBPNetSubsystem::HandleMatchResult(int32 JobId, int32 Index, const TOptional<FBBPTrack>& Match)
+{
+	TSharedPtr<FBBPMatchJob>* JobPtr = MatchJobs.Find(JobId);
+	if (!JobPtr || !(*JobPtr)->Slots.IsValidIndex(Index))
+	{
+		return;
+	}
+	FBBPMatchJob& Job = **JobPtr;
+	Job.Slots[Index] = Match;
+	Job.Received[Index] = true;
+
+	const int32 Before = Job.Progress.Processed;
+	while (Job.Progress.Processed < Job.Progress.Total && Job.Received[Job.Progress.Processed])
+	{
+		if (Job.Slots[Job.Progress.Processed].IsSet())
+		{
+			Job.Progress.Matched.Add(Job.Slots[Job.Progress.Processed].GetValue());
+		}
+		++Job.Progress.Processed;
+	}
+	if (Job.Progress.Processed == Before)
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Net: job %d: %d of %d settled, %d matched"), JobId, Job.Progress.Processed, Job.Progress.Total, Job.Progress.Matched.Num());
+	QueueNewMatches(Job);
+	Job.OnProgress.ExecuteIfBound(Job.Progress);
+}
+
+void UBBPNetSubsystem::HandleMatchFinished(int32 JobId)
+{
+	TSharedPtr<FBBPMatchJob> Job;
+	if (!MatchJobs.RemoveAndCopyValue(JobId, Job) || !Job.IsValid())
+	{
+		return;
+	}
+	// Tracks never reported (cancelled) count as settled without a match.
+	for (int32 i = Job->Progress.Processed; i < Job->Progress.Total; ++i)
+	{
+		if (Job->Received[i] && Job->Slots[i].IsSet())
+		{
+			Job->Progress.Matched.Add(Job->Slots[i].GetValue());
+		}
+	}
+	Job->Progress.Processed = Job->Progress.Total;
+	Job->Progress.bFinished = true;
+	if (Job->Progress.Matched.Num() == 0 && Job->Progress.Error.IsEmpty())
+	{
+		Job->Progress.Error = TEXT("No matches found");
+	}
+	QueueNewMatches(*Job);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d finished: matched %d of %d Spotify tracks%s"), JobId, Job->Progress.Matched.Num(), Job->Progress.Total,
+		Job->QueueInto.IsValid() ? TEXT(" (all queued)") : TEXT(""));
+	Job->OnProgress.ExecuteIfBound(Job->Progress);
+}
+
+bool UBBPNetSubsystem::QueueJobInto(int32 JobId, AFGBoomBoxPlayer* BoomBox)
+{
+	TSharedPtr<FBBPMatchJob>* JobPtr = MatchJobs.Find(JobId);
+	if (!JobPtr || !BoomBox)
+	{
+		return false;
+	}
+	FBBPMatchJob& Job = **JobPtr;
+	Job.QueueInto = BoomBox;
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: queueing matches into %s as they arrive (%d ready now)"), JobId, *GetNameSafe(BoomBox), Job.Progress.Matched.Num() - Job.Queued);
+	QueueNewMatches(Job);
+	return true;
+}
+
+void UBBPNetSubsystem::CancelJob(int32 JobId)
+{
+	TSharedPtr<FBBPMatchJob>* JobPtr = MatchJobs.Find(JobId);
+	if (!JobPtr || (*JobPtr)->QueueInto.IsValid())
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d cancelled after %d of %d tracks"), JobId, (*JobPtr)->Progress.Processed, (*JobPtr)->Progress.Total);
+	(*JobPtr)->Work->bCancelled = true;
+	MatchJobs.Remove(JobId);
+}
+
+void UBBPNetSubsystem::QueueNewMatches(FBBPMatchJob& Job)
+{
+	AFGBoomBoxPlayer* BoomBox = Job.QueueInto.Get();
+	if (!BoomBox || Job.Queued >= Job.Progress.Matched.Num())
+	{
+		return;
+	}
+	const TArray<FBBPTrack> NewTracks(Job.Progress.Matched.GetData() + Job.Queued, Job.Progress.Matched.Num() - Job.Queued);
+	Job.Queued = Job.Progress.Matched.Num();
+	UBBPBlueprintLibrary::RequestAddTracks(BoomBox, NewTracks);
 }
 
 bool UBBPNetSubsystem::IsDownloadPending(const FString& TrackId) const

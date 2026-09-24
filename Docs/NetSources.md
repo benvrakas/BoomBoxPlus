@@ -97,9 +97,32 @@ Typing searches the local library live. **Enter** runs the online part:
 |---|---|
 | Plain text | YouTube (8) + SoundCloud (4) search, appended under local results with `[YouTube]`/`[SoundCloud]` tags |
 | YouTube/SoundCloud track link | Shows that track |
-| YouTube playlist / SoundCloud set | Lists up to 100 tracks, with an "Add all N to queue" button |
+| YouTube playlist / SoundCloud set | Lists up to 500 tracks, with an "Add all N to queue" button |
 | Spotify track link | Replaces the text with `Title PrimaryArtist`, then searches |
-| Spotify playlist/album | Matches each track on YouTube (closest duration of the top 3), then "Add all" |
+| Spotify playlist/album | Starts a background match job (below); results appear as they're matched |
+
+## Big playlists: background matching and batched adds
+
+**Spotify playlists are matched as a background job** (`UBBPNetSubsystem::StartSpotifyCollection`). After
+the embed page gives the track list (up to 100, the embed page's own limit), three worker threads search
+YouTube in parallel (`MatchWorkers`), taking tracks in playlist order so the first ones finish first. Each
+result goes back to the game thread with its index; the job publishes the **settled prefix** only (track N
+shows once tracks 0..N are matched or given up on), so results always appear in playlist order even though
+workers finish out of order. Every published step calls the page's progress callback ("Matching on YouTube:
+12 of 87 done").
+
+**"Add all" doesn't wait for matching to finish.** While a job runs, the button reads "Add all 87 (queues as
+they're found)". Pressing it hands the job a Boom Box (`QueueJobInto`): everything matched so far is queued
+immediately — so the first song starts playing right away — and each later match is queued as it's
+published, in order. This lives in the game-instance subsystem, not the widget, so it keeps going after the
+Boom Box window is closed. A new search or closing the page cancels a job only if it isn't queueing
+(`CancelJob`); cancelled workers stop after their current search.
+
+**Adds are batched.** `UBBPBlueprintLibrary::RequestAddTracks` sends tracks in batches of 25
+(`Server_AddTracks`) instead of one reliable RPC per track, which would risk overflowing the reliable
+buffer and disconnecting a client that adds a 500-track playlist.
+
+Downloads were already lazy: each machine fetches only the current track and the next three.
 
 Each search bumps a generation counter; responses to older searches are dropped, so a slow Spotify playlist
 match can't overwrite a newer search.
