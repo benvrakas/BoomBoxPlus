@@ -105,7 +105,7 @@ Open **Mods → BoomBoxPlus**.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Music volume | 0.8 | Volume of Custom Music. It also follows the game's Master and Boom Box volume sliders. |
+| Music volume | 1.0 | Volume of Custom Music, from 0.0 (silent) to 2.0 (twice as loud). It also follows the game's Master and Boom Box volume sliders. |
 | Show lyrics | On | The lyric line at the bottom of the screen. Turning it off also stops lyric lookups. |
 | Show "now playing" | On | The notification when the song changes. |
 | Only the host controls music | Off | On a hosted game, only the host can change queues and playback. |

@@ -111,7 +111,7 @@ Final volume of a Boom Box's audio =
 
 ```
 Boom Box's own volume (mState.mVolume, replicated via ActiveBoomBoxes)
-x MusicVolume (mod config, default 0.8)
+x MusicVolume (mod config, default 1.0, clamped to 0.0–2.0)
 x the game's Master and Boom Box volume sliders (options RTPC.Menu_Volume_Master, RTPC.Boombox_Bus_Volume)
 x 0.3 headroom (BaseGain in BBPPlaybackController.cpp)
 ```

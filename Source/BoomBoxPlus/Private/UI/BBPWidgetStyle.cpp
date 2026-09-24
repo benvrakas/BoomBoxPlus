@@ -75,6 +75,15 @@ UTextBlock* BBPWidgetStyle::MakeText(UWidgetTree* Tree, int32 FontSize, const FL
 	return Block;
 }
 
+void BBPWidgetStyle::Truncate(UTextBlock* Text)
+{
+	if (Text)
+	{
+		Text->SetClipping(EWidgetClipping::ClipToBounds);
+		Text->SetTextOverflowPolicy(ETextOverflowPolicy::Ellipsis);
+	}
+}
+
 UBBPGameButton* BBPWidgetStyle::MakeButton(UWidgetTree* Tree, const FText& Label, bool bCompact)
 {
 	UBBPGameButton* Button = Tree->ConstructWidget<UBBPGameButton>(bCompact ? UBBPCompactButton::StaticClass() : UBBPGameButton::StaticClass());

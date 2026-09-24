@@ -28,6 +28,7 @@
 #include "UI/BBPTrackRow.h"
 #include "UI/BBPWidgetStyle.h"
 #include "UI/FGInteractWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "FGCharacterPlayer.h"
 
 #define LOCTEXT_NAMESPACE "BoomBoxPlus"
@@ -37,6 +38,10 @@ namespace
 	constexpr float SearchDebounceSeconds = 0.25f;
 	constexpr float ShowEnforceSeconds = 0.5f;
 	constexpr double LinkMessageSeconds = 8.0;
+
+	// Share of the screen the page fills.
+	constexpr float PageWidthShare = 0.9f;
+	constexpr float PageHeightShare = 0.86f;
 
 	// Formats seconds left as m:ss.
 	FText FormatTimeLeft(double Seconds)
@@ -131,7 +136,9 @@ void UBBPMusicPage::BuildDefaultLayout()
 	using namespace BBPWidgetStyle;
 
 	UBorder* Window = MakePanel(WidgetTree, PanelColor, FMargin(18.f, 14.f));
-	WidgetTree->RootWidget = Window;
+	PageSizeBox = WidgetTree->ConstructWidget<USizeBox>();
+	PageSizeBox->SetContent(Window);
+	WidgetTree->RootWidget = PageSizeBox;
 
 	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 	Window->SetContent(Column);
@@ -192,6 +199,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 
 	NowPlaying->AddChildToVerticalBox(MakeText(WidgetTree, 10, DimTextColor, LOCTEXT("NowPlayingLabel", "NOW PLAYING"), EFontWeight::Bold));
 	NowPlayingText = MakeText(WidgetTree, 18, TextColor, FText::GetEmpty(), EFontWeight::Bold);
+	Truncate(NowPlayingText);
 	NowPlaying->AddChildToVerticalBox(NowPlayingText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	LyricText = MakeText(WidgetTree, 12, AccentColor);
 	NowPlaying->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
@@ -302,6 +310,28 @@ void UBBPMusicPage::BuildDefaultLayout()
 	LinkColumn->AddChildToVerticalBox(LinkMessageText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 }
 
+void UBBPMusicPage::UpdatePageSize()
+{
+	if (!PageSizeBox)
+	{
+		return;
+	}
+	const float Scale = UWidgetLayoutLibrary::GetViewportScale(this);
+	const FVector2D Viewport = UWidgetLayoutLibrary::GetViewportSize(this);
+	if (Scale <= 0.f || Viewport.X <= 0.f || Viewport.Y <= 0.f)
+	{
+		return;
+	}
+	// Viewport size is in pixels; the size box works in DPI-scaled units.
+	const float Width = FMath::RoundToFloat(Viewport.X / Scale * PageWidthShare);
+	const float Height = FMath::RoundToFloat(Viewport.Y / Scale * PageHeightShare);
+	if (PageSizeBox->GetWidthOverride() != Width || PageSizeBox->GetHeightOverride() != Height)
+	{
+		PageSizeBox->SetWidthOverride(Width);
+		PageSizeBox->SetHeightOverride(Height);
+	}
+}
+
 void UBBPMusicPage::AddToList(UScrollBox* List, UWidget* Widget)
 {
 	if (List && Widget)
@@ -322,6 +352,7 @@ void UBBPMusicPage::NativeConstruct()
 	AFGBoomBoxPlayer* BoomBox = GetBoomBox();
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page constructed for %s"), BoomBox ? *GetNameSafe(BoomBox) : TEXT("<Boom Box not found>"));
 
+	UpdatePageSize();
 	TryBindSources();
 	UpdateChannelBinding();
 	RebuildResults();
@@ -354,6 +385,7 @@ void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		TryBindSources();
 	}
 	UpdateChannelBinding();
+	UpdatePageSize();
 
 	RebuildCooldown -= InDeltaTime;
 	if ((bResultsDirty || bQueueDirty) && RebuildCooldown <= 0.f)
@@ -619,7 +651,7 @@ void UBBPMusicPage::RebuildResults()
 	{
 		const FText Status = !Library ? LOCTEXT("NoLibrary", "Library unavailable")
 			: Library->IsScanning() ? LOCTEXT("Scanning", "Scanning...")
-			: FText::Format(LOCTEXT("TrackCount", "{0} tracks"), Library->GetTrackCount());
+			: FText::Format(LOCTEXT("TrackCount", "{0} {0}|plural(one=track,other=tracks)"), Library->GetTrackCount());
 		LibraryStatusText->SetText(Status);
 	}
 
@@ -1075,6 +1107,7 @@ void UBBPMusicPage::HandleConnectSpotify()
 			This->RefreshResults();
 			return;
 		}
+		This->OnlineNote.Reset();
 		This->OnlineStatus = TEXT("Spotify connected.");
 		// Read the playlist that prompted the sign-in again, now in full.
 		if (UBBPNetSubsystem::ClassifyLink(This->LastOnlineQuery) == EBBPLinkKind::SpotifyCollection)
@@ -1087,6 +1120,7 @@ void UBBPMusicPage::HandleConnectSpotify()
 		}
 	}));
 	RefreshSpotifyButton();
+	OnlineNote.Reset();
 	OnlineStatus = TEXT("Sign in to Spotify in the browser window that just opened, then come back here.");
 	RefreshResults();
 }
@@ -1099,7 +1133,11 @@ void UBBPMusicPage::HandleMatchProgress(int32 Generation, const FBBPMatchProgres
 	}
 	OnlineResults = Progress.Matched;
 	MatchTotal = Progress.Total;
-	OnlineNote = Progress.Note;
+	// The "connect Spotify" hint is stale once a sign-in has started or finished.
+	const UGameInstance* GameInstance = GetGameInstance();
+	const UBBPSpotifyAuth* Auth = GameInstance ? GameInstance->GetSubsystem<UBBPSpotifyAuth>() : nullptr;
+	const bool bSignInStarted = Auth && (Auth->IsLoginInProgress() || Auth->IsConnected());
+	OnlineNote = bSignInStarted && Progress.Note.Contains(TEXT("Connect Spotify")) ? FString() : Progress.Note;
 	bOnlineIsCollection = true;
 	if (!Progress.bFinished)
 	{

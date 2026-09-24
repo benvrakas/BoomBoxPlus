@@ -47,14 +47,17 @@ void UBBPTrackRow::BuildDefaultLayout()
 	TextsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	TextsSlot->SetVerticalAlignment(VAlign_Center);
 	TextsSlot->SetPadding(FMargin(10.f, 6.f, 8.f, 6.f));
+	Texts->SetClipping(EWidgetClipping::ClipToBounds);
 
 	TitleText = BBPWidgetStyle::MakeText(WidgetTree, 13, BBPWidgetStyle::TextColor, FText::GetEmpty(), BBPWidgetStyle::EFontWeight::SemiBold);
+	BBPWidgetStyle::Truncate(TitleText);
 	Texts->AddChildToVerticalBox(TitleText);
 	UHorizontalBox* DetailRow = WidgetTree->ConstructWidget<UHorizontalBox>();
 	Texts->AddChildToVerticalBox(DetailRow)->SetPadding(FMargin(0.f, 1.f, 0.f, 0.f));
 	SourceText = BBPWidgetStyle::MakeText(WidgetTree, 9, BBPWidgetStyle::AccentColor, FText::GetEmpty(), BBPWidgetStyle::EFontWeight::Bold);
 	DetailRow->AddChildToHorizontalBox(SourceText)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	DetailText = BBPWidgetStyle::MakeText(WidgetTree, 10, BBPWidgetStyle::DimTextColor);
+	BBPWidgetStyle::Truncate(DetailText);
 	DetailRow->AddChildToHorizontalBox(DetailText);
 
 	auto AddButton = [this, Row](const FText& Label) -> UBBPGameButton*

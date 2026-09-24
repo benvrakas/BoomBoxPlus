@@ -43,6 +43,9 @@ namespace BBPWidgetStyle
 	// Creates a text block in the game's font.
 	UTextBlock* MakeText(UWidgetTree* Tree, int32 FontSize, const FLinearColor& Color, const FText& Text = FText::GetEmpty(), EFontWeight Weight = EFontWeight::Regular);
 
+	// Cuts text that doesn't fit its space off with "..." instead of letting it run over neighbouring widgets.
+	void Truncate(UTextBlock* Text);
+
 	// Creates a button drawn with the game's own button widget, or a light flat one when bCompact (for list rows).
 	UBBPGameButton* MakeButton(UWidgetTree* Tree, const FText& Label, bool bCompact = false);
 

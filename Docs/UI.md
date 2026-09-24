@@ -89,6 +89,11 @@ Now:
   contain rows only.
 - At most 100 rows per list. The queue shows a window starting two songs before the current one
   ("Showing songs 41-140 of 408").
+- The page has a fixed size of 90% x 86% of the screen (a `USizeBox` root, updated each tick from the
+  viewport size and DPI scale). Before, it sized itself to its content, so the window jumped around as
+  results and queue rows loaded.
+- Row titles, details and the now-playing title are clipped with an ellipsis (`BBPWidgetStyle::Truncate`)
+  so long YouTube titles no longer run under the row buttons.
 - Row buttons are `UBBPCompactButton`: a flat `UButton` in the game's colours instead of the heavy
   `BPW_TileableButton`. Page-level buttons still use the game widget.
 

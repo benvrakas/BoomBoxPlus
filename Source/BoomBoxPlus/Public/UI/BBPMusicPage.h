@@ -329,6 +329,13 @@ private:
 	// True while the player is dragging the seek slider, so playback updates don't move it.
 	bool bSeeking = false;
 
+	// Holds the page at a fixed share of the screen so it doesn't resize as lists fill.
+	UPROPERTY(Transient)
+	TObjectPtr<class USizeBox> PageSizeBox;
+
+	// Resizes PageSizeBox to the current screen size; cheap when nothing changed.
+	void UpdatePageSize();
+
 	// Shows a link message under the link field for a few seconds.
 	void SetLinkMessage(const FText& Message);
 
