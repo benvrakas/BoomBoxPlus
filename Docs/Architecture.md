@@ -32,8 +32,26 @@ not involved.
 
 ## Native hooks
 
-Registered from `FBoomBoxPlusModule::StartupModule` via `RegisterBBPHooks()` (`Private/Hooks/`), inside
-`#if !WITH_EDITOR` as SML's docs require.
+Registered from `FBoomBoxPlusModule::StartupModule` via `RegisterBBPHooks()` (`Private/Hooks/`). SML says
+not to hook inside the editor, so only the *call* to `InstallBBPHooks()` is under `#if !WITH_EDITOR`; the
+hook code itself is compiled in every build so editor builds still type-check it. (Guarding the hook bodies
+with `if constexpr (WITH_EDITOR) return;` fails: UE treats the resulting C4702 "unreachable code" as an
+error.)
+
+Transport hooks (`BeginPlaySequence`, `BeginStopSequence`, `BeginNext/PreviousSongSequence`,
+`TogglePlaybackNow`) cancel the vanilla call when Custom Music is loaded and route the action to the
+playlist — directly if they fire on the server, through the RCO on a client — so they work whichever side
+the game calls them on. `PlayNow/StopNow/NextNow/PrevNow` are cancelled but not routed, to stop Wwise
+playing the empty playlist without acting twice. Every intercepted call is logged at `Log`: the real call
+flow is unknown until observed in-game (stub source), and these lines are how we'll find out.
+
+## Access transformers
+
+`Config/AccessTransformers.ini` uses the **bare class name** for `Friend`/`Accessor`
+(`Class="AFGBoomBoxPlayer"`); the `/Script/...` path form only applies to the property-flag transformers
+like `EditAnywhere`. A wrong name fails the build at UHT with "Unused accessor access transformer".
+Accessors generate `Get<Prop>()`/`Set<Prop>(v)` by value. Adding one regenerates the target's
+`.generated.h`, so expect a partial FactoryGame recompile.
 
 Handler shapes (from `Mods/SML/.../Patching/NativeHookManager.h`):
 
