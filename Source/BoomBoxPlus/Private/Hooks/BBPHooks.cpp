@@ -6,6 +6,7 @@
 #include "Patching/NativeHookManager.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
+#include "UI/BBPMusicPage.h"
 
 namespace
 {
@@ -170,6 +171,14 @@ void InstallBBPHooks()
 		}
 	});
 
+	// Brings the Custom Music page forward in open Boom Box windows when Custom Music is chosen.
+	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::BeginChangeTapeSequence, [](AFGBoomBoxPlayer* Self, TSubclassOf<UFGTapeData> NewTape, AFGCharacterPlayer* Instigator)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Hook: BeginChangeTapeSequence on %s (%s) to %s"), *GetNameSafe(Self),
+			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(NewTape.Get()));
+		UBBPMusicPage::NotifyTapeChanged(Self, NewTape);
+	});
+
 	// Observes tape changes so the in-game flow can be followed in the log.
 	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::LoadTapeNow, [](AFGBoomBoxPlayer* Self, AFGCharacterPlayer* Character)
 	{
@@ -177,5 +186,5 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), LoadTapeNow"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, LoadTapeNow"));
 }
