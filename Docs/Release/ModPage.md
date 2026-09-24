@@ -37,6 +37,8 @@ Inspired by the PEAK mod sPEAKer.
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
   carry it or place it.
+- **Your own volume, right on the page.** A "My Volume" slider sits next to the transport controls. It's
+  local to you — it doesn't change what anyone else hears — and takes effect the instant you move it.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
   mid-song, in sync.
 - **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, both
@@ -105,7 +107,7 @@ Open **Mods → BoomBoxPlus**.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Music volume | 0.5 | Volume of Custom Music, from 0 (silent) to 1 (full). Multiplied with the game's Master and Boom Box volume sliders and the Boom Box's own volume. |
+| Music volume | 0.5 | Volume of Custom Music, from 0 (silent) to 1 (full). Multiplied with the game's Master and Boom Box volume sliders and the Boom Box's own volume. The same slider also sits directly on the Custom Music page as "My Volume", next to the transport controls, so you don't need to open this menu to adjust it. |
 | Show lyrics | On | The lyric line at the bottom of the screen. Turning it off also stops lyric lookups. |
 | Show "now playing" | On | The notification when the song changes. |
 | Only the host controls music | Off | On a hosted game, only the host can change queues and playback. |

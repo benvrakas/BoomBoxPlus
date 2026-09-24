@@ -133,6 +133,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USlider> SeekSlider;
 
+	// This player's own Custom Music volume (the mod's MusicVolume setting), editable right here instead of only in Mods menu.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USlider> MyVolumeSlider;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> MyVolumeText;
+
 	// This Boom Box's link code and how many Boom Boxes share its queue.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkCodeText;
@@ -258,6 +265,22 @@ private:
 
 	UFUNCTION()
 	void HandleSeekEnd();
+
+	// Writes the dragged value to the mod's MusicVolume setting immediately, and updates the % label.
+	UFUNCTION()
+	void HandleMyVolumeChanged(float Value);
+
+	UFUNCTION()
+	void HandleMyVolumeCaptureBegin();
+
+	UFUNCTION()
+	void HandleMyVolumeCaptureEnd();
+
+	// Refreshes MyVolumeText and, unless the slider is being dragged, MyVolumeSlider's value from the live setting.
+	void RefreshMyVolume();
+
+	// True while the player is dragging the personal volume slider.
+	bool bChangingMyVolume = false;
 
 	// Switches to the first switcher page whose class name contains NameFragment.
 	bool ShowSiblingPage(const TCHAR* NameFragment);

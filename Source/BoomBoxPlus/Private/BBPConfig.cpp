@@ -179,6 +179,22 @@ void UBBPConfig::UseSMLEditorClasses()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Config: %d of %d settings use SML's editor widgets"), Converted, OldRoot->SectionProperties.Num());
 }
 
+void UBBPConfig::SetFloat(const UObject* WorldContext, const FString& Key, float Value)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UConfigManager* Manager = GameInstance ? GameInstance->GetSubsystem<UConfigManager>() : nullptr;
+	UConfigPropertyFloat* Property = Manager ? Cast<UConfigPropertyFloat>(FindProperty(WorldContext, Key)) : nullptr;
+	if (!Property)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: could not set '%s'; configuration not available"), *Key);
+		return;
+	}
+	Property->Value = Value;
+	// Playback reads the value live every frame, so it takes effect immediately; this just persists it to disk.
+	Manager->MarkConfigurationDirty(MakeConfigId());
+}
+
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
 {
 	if (const UConfigPropertyBool* Property = Cast<UConfigPropertyBool>(FindProperty(WorldContext, Key)))

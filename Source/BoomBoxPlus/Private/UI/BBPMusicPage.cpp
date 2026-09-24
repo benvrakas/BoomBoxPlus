@@ -1,5 +1,6 @@
 #include "UI/BBPMusicPage.h"
 #include "BBPBlueprintLibrary.h"
+#include "BBPConfig.h"
 #include "BoomBoxPlus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -129,6 +130,14 @@ void UBBPMusicPage::NativeOnInitialized()
 		SeekSlider->OnControllerCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
 		SeekSlider->OnControllerCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleSeekEnd);
 	}
+	if (MyVolumeSlider)
+	{
+		MyVolumeSlider->OnValueChanged.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeChanged);
+		MyVolumeSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCaptureBegin);
+		MyVolumeSlider->OnMouseCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCaptureEnd);
+		MyVolumeSlider->OnControllerCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCaptureBegin);
+		MyVolumeSlider->OnControllerCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCaptureEnd);
+	}
 }
 
 void UBBPMusicPage::BuildDefaultLayout()
@@ -222,6 +231,16 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, ShuffleButton, false);
 	RepeatButton = MakeButton(WidgetTree, LOCTEXT("Repeat", "Repeat: Off"));
 	AddToRow(Transport, RepeatButton, false);
+
+	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("MyVolumeLabel", "My Volume")), false, 6.f);
+	MyVolumeSlider = WidgetTree->ConstructWidget<USlider>();
+	StyleSlider(MyVolumeSlider);
+	USizeBox* MyVolumeSize = WidgetTree->ConstructWidget<USizeBox>();
+	MyVolumeSize->SetWidthOverride(90.f);
+	MyVolumeSize->SetContent(MyVolumeSlider);
+	AddToRow(Transport, MyVolumeSize, false, 6.f);
+	MyVolumeText = MakeText(WidgetTree, 11, DimTextColor, FText::GetEmpty(), EFontWeight::SemiBold);
+	AddToRow(Transport, MyVolumeText, false, 0.f);
 
 	// Two columns: search and results on the left, the queue on the right.
 	UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -751,6 +770,8 @@ void UBBPMusicPage::RebuildQueue()
 
 void UBBPMusicPage::RefreshTransport()
 {
+	RefreshMyVolume();
+
 	const AFGBoomBoxPlayer* ViewedBoomBox = GetBoomBox();
 	const bool bLoaded = ViewedBoomBox && UBBPCustomMusicTape::IsCustomMusicTape(ViewedBoomBox->GetCurrentTape());
 	BBPWidgetStyle::SetShown(NotLoadedText, !bLoaded);
@@ -919,6 +940,36 @@ void UBBPMusicPage::HandleSeekEnd()
 	const float Target = SeekSlider->GetValue() * Current.Track.Duration;
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: seeking '%s' to %.1f s"), *Current.Track.Title, Target);
 	UBBPBlueprintLibrary::RequestSeekTo(GetBoomBox(), Target);
+}
+
+void UBBPMusicPage::HandleMyVolumeChanged(float Value)
+{
+	// Local-only setting: nothing is sent to the server, it just changes what this player hears.
+	UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, FMath::Clamp(Value, 0.f, 1.f));
+	RefreshMyVolume();
+}
+
+void UBBPMusicPage::HandleMyVolumeCaptureBegin()
+{
+	bChangingMyVolume = true;
+}
+
+void UBBPMusicPage::HandleMyVolumeCaptureEnd()
+{
+	bChangingMyVolume = false;
+}
+
+void UBBPMusicPage::RefreshMyVolume()
+{
+	const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 0.5f), 0.f, 1.f);
+	if (MyVolumeSlider && !bChangingMyVolume)
+	{
+		MyVolumeSlider->SetValue(Value);
+	}
+	if (MyVolumeText)
+	{
+		MyVolumeText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+	}
 }
 
 void UBBPMusicPage::HandleSearchChanged(const FText& Text)

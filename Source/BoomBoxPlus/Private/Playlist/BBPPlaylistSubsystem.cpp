@@ -40,7 +40,11 @@ void ABBPPlaylistSubsystem::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s)"), HasAuthority() ? TEXT("server") : TEXT("client"));
+	// Channels, link codes and pending link requests are runtime-only (no SaveGame properties anywhere in this
+	// class or ABBPMusicChannel), so this array starts empty on every BeginPlay - a fresh session, a reloaded
+	// save or a world restart all reset every Boom Box to its own unlinked channel with a freshly rolled code.
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s); %d channel(s), %d pending link request(s)"),
+		HasAuthority() ? TEXT("server") : TEXT("client"), Channels.Num(), LinkRequests.Num());
 
 	if (GetNetMode() != NM_DedicatedServer)
 	{

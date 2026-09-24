@@ -122,6 +122,27 @@ updates don't move it while dragging. The vanilla progress bar stays display-onl
 inside a Blueprint, and making it draggable would mean overlaying a slider on it by widget hook — possible
 later, but the mod page slider covers the need.
 
+## Personal volume slider
+
+"My Volume" sits on the transport row (`MyVolumeSlider` + `MyVolumeText`, both `BindWidgetOptional`), next
+to Repeat. It's a plain UMG `USlider` (native 0–1 range, which matches the setting's range exactly, no
+rescaling). It reads and writes the `MusicVolume` mod-config value directly — `UBBPConfig::GetFloat` /
+the new `UBBPConfig::SetFloat` — which is a local, unreplicated setting already (see Multiplayer.md), so
+this is genuinely a "my volume" control: it never touches anyone else's playback.
+
+`UBBPConfig::SetFloat` finds the live `UConfigPropertyFloat`, writes `Value` directly and calls
+`UConfigManager::MarkConfigurationDirty`, which the manager saves to disk on a short debounce timer (it
+doesn't write to `BoomBoxPlus.cfg` on every drag frame). `UBBPPlaybackController::UpdateGameVolumeScale`
+already reads `MusicVolume` fresh every tick, so a drag audibly changes the volume immediately, before the
+disk write happens.
+
+`RefreshTransport()` (called from `NativeTick`, so at least once per frame the page is visible) calls
+`RefreshMyVolume()`, which snaps the slider to the live config value and updates the `NN%` label — except
+while `bChangingMyVolume` is set (between `OnMouseCaptureBegin`/`OnControllerCaptureBegin` and their `End`
+counterparts), so a drag isn't fought by the same per-tick refresh that reads it back. Same pattern as
+`bSeeking` for the seek slider, but its own flag: reusing `bSeeking` would have made this slider block seek
+bar updates too.
+
 ## Link panel
 
 Shows this Boom Box's channel code and how many Boom Boxes share it, a 4-digit code field, Link and Unlink

@@ -28,6 +28,9 @@ public:
 	// SML's Mods menu shows. Call before SML registers the configuration.
 	static void UseSMLEditorClasses();
 
+	// Writes a number setting immediately and persists it to disk. No-op if the configuration isn't available.
+	static void SetFloat(const UObject* WorldContext, const FString& Key, float Value);
+
 	// Returns a boolean setting, or Fallback if the configuration isn't available.
 	static bool GetBool(const UObject* WorldContext, const FString& Key, bool Fallback);
 

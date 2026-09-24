@@ -43,7 +43,13 @@ first version paused those too, which paused every Play press on a Boom Box whos
 Pressing Play, Play Next or Add on the music page now also loads the Custom Music tape if another tape is
 in.
 
-Channels are session state only — nothing is saved. Codes are re-rolled each session.
+Channels are session state only — nothing is saved. Codes are re-rolled each session. Confirmed: neither
+`ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a single `SaveGame` property, and both are ordinary
+runtime-spawned actors (the channel via `SpawnChannel`, never restored from a save), so a world restart —
+reloading the save, or restarting the level — always starts with zero channels and zero pending link
+requests; every Boom Box gets a fresh, unlinked channel and a freshly rolled code the moment it's next
+queried. `ABBPPlaylistSubsystem::BeginPlay` logs the channel and pending-request counts (always 0) so this
+is visible in the log rather than just asserted here.
 
 ## Replicated state
 
