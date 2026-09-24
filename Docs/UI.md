@@ -28,7 +28,9 @@ to be a variable, switch `ParentWidgetType` to `Direct_Any`.
 
 - Choosing Custom Music in the tape list calls `AFGBoomBoxPlayer::BeginChangeTapeSequence`; an after-hook
   calls `UBBPMusicPage::NotifyTapeChanged`, which flags every open page for that Boom Box.
-- Opening a Boom Box that already has Custom Music loaded flags the page in `NativeConstruct`.
+- Opening a Boom Box always lands on the **vanilla first page**, even with Custom Music loaded — the user
+  asked for that explicitly; the page is reached through the Custom Music button. (An earlier build
+  auto-opened the page and was reverted.)
 - **Showing is driven by `FTSTicker`, not the page's `NativeTick`.** First in-game test: the page was
   flagged but never appeared, because Slate only ticks painted widgets and a `WidgetSwitcher` only paints its
   active child — a hidden page never ticks, so it can never switch itself visible. `RequestShow()` switches

@@ -179,10 +179,6 @@ void UBBPMusicPage::NativeConstruct()
 
 	AFGBoomBoxPlayer* BoomBox = GetBoomBox();
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page constructed for %s"), BoomBox ? *GetNameSafe(BoomBox) : TEXT("<Boom Box not found>"));
-	if (BoomBox && UBBPCustomMusicTape::IsCustomMusicTape(BoomBox->GetCurrentTape()))
-	{
-		RequestShow();
-	}
 
 	TryBindSources();
 	RefreshResults();
