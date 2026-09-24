@@ -94,3 +94,11 @@ which fall back to a default (and log at Verbose) if SML's `UConfigManager` hasn
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
+
+## `GetCurrentSong` override
+
+With the Custom Music tape loaded, the vanilla Boom Box calls `GetCurrentSong()` (sometimes every frame) and
+logs `Invalid current song index was found: 0` because the tape's playlist is empty. A before-hook overrides
+the result for Custom Music with a valid `FSongData`: the current track's title/artist/duration, or a
+"Custom Music / BoomBoxPlus" placeholder. `Song` stays null — nothing should play it, since transport calls
+are intercepted. (SML emits a harmless C4191 warning for hooks on functions returning structs by value.)

@@ -3,6 +3,7 @@
 #include "Network/BBPRemoteCallObject.h"
 #include "Patching/WidgetBlueprintHookManager.h"
 #include "UI/BBPMusicPage.h"
+#include "UI/BBPOpenMusicButton.h"
 
 UBBPGameInstanceModule::UBBPGameInstanceModule()
 {
@@ -19,4 +20,14 @@ UBBPGameInstanceModule::UBBPGameInstanceModule()
 	MusicPageHook->ParentWidgetType = EWidgetBlueprintHookParentType::Direct;
 	MusicPageHook->SlotConfiguration = CreateDefaultSubobject<UWidgetBlueprintHookSlot_Generic>(TEXT("MusicPageSlot"));
 	WidgetBlueprintHooks.Add(MusicPageHook);
+
+	// Adds a "Custom Music" button beside the Boom Box first page's Change Tape button.
+	UWidgetBlueprintHookData* OpenButtonHook = CreateDefaultSubobject<UWidgetBlueprintHookData>(TEXT("OpenMusicButtonHook"));
+	OpenButtonHook->WidgetClass = TSoftClassPtr<UUserWidget>(FSoftObjectPath(TEXT("/Game/FactoryGame/Equipment/BoomBox/BPW_BoomBox_Player.BPW_BoomBox_Player_C")));
+	OpenButtonHook->NewWidgetClass = UBBPOpenMusicButton::StaticClass();
+	OpenButtonHook->NewWidgetName = TEXT("BBPOpenMusicButton");
+	OpenButtonHook->ParentWidgetName = TEXT("mChangeTape");
+	OpenButtonHook->ParentWidgetType = EWidgetBlueprintHookParentType::Indirect_Child;
+	OpenButtonHook->SlotConfiguration = CreateDefaultSubobject<UWidgetBlueprintHookSlot_Generic>(TEXT("OpenMusicButtonSlot"));
+	WidgetBlueprintHooks.Add(OpenButtonHook);
 }

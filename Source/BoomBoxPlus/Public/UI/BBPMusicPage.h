@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Library/BBPTrack.h"
+#include "Containers/Ticker.h"
 #include "BBPMusicPage.generated.h"
 
 class AFGBoomBoxPlayer;
@@ -27,9 +28,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus|UI")
 	void ShowPage();
 
+	// Shows this page and keeps it shown briefly, in case the window selects its own page afterwards.
+	void RequestShow();
+
 	// Switches the Boom Box window back to its tape list.
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus|UI")
 	void ShowTapeList();
+
+	// Switches the Boom Box window back to its first (player) page.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus|UI")
+	void ShowPlayerPage();
 
 	// Returns the Boom Box this window belongs to, or null if it can't be found.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
@@ -89,6 +97,17 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> TapesButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> BackButton;
+
+	// Loads the Custom Music tape into this Boom Box; shown only while it isn't loaded.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> UseBoomBoxButton;
+
+	// Explains that this Boom Box won't play the queue until Custom Music is loaded.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> NotLoadedText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> OpenFolderButton;
@@ -155,7 +174,22 @@ private:
 	UFUNCTION()
 	void HandleRescan();
 
+	UFUNCTION()
+	void HandleUseBoomBox();
+
+	// Switches to the first switcher page whose class name contains NameFragment.
+	bool ShowSiblingPage(const TCHAR* NameFragment);
+
 	UBBPTrackRow* MakeRow();
+
+	// Re-shows this page while a show request is active. Runs on the core ticker, which ticks even while this page is hidden.
+	bool TickShowRequest(float DeltaTime);
+
+	// Stops any active show request.
+	void CancelShowRequest();
+
+	FTSTicker::FDelegateHandle ShowTickerHandle;
+	float ShowRequestTimeLeft = 0.f;
 
 	FString SearchQuery;
 
@@ -167,7 +201,6 @@ private:
 	// Increments on every new search so late responses to older searches are ignored.
 	int32 SearchGeneration = 0;
 	float SearchDebounceTimer = -1.f;
-	bool bShowRequested = false;
 	bool bBoundLibrary = false;
 	bool bBoundPlaylist = false;
 

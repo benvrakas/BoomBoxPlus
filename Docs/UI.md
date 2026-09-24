@@ -29,8 +29,18 @@ to be a variable, switch `ParentWidgetType` to `Direct_Any`.
 - Choosing Custom Music in the tape list calls `AFGBoomBoxPlayer::BeginChangeTapeSequence`; an after-hook
   calls `UBBPMusicPage::NotifyTapeChanged`, which flags every open page for that Boom Box.
 - Opening a Boom Box that already has Custom Music loaded flags the page in `NativeConstruct`.
-- The flag is acted on in the **next tick**, deliberately: the vanilla click handler probably switches back
-  to the Player page itself, synchronously, and acting a tick later wins that race.
+- **Showing is driven by `FTSTicker`, not the page's `NativeTick`.** First in-game test: the page was
+  flagged but never appeared, because Slate only ticks painted widgets and a `WidgetSwitcher` only paints its
+  active child — a hidden page never ticks, so it can never switch itself visible. `RequestShow()` switches
+  immediately, then re-asserts for 0.5 s on the core ticker in case the window picks its own page a frame
+  later (logged as "switched away from the music page; switching back").
+- Selecting a tape **closes the whole Boom Box window** — vanilla behaviour: the character plays the
+  insert-tape animation, and `LoadTapeNow` fires from its anim notify ~1 s later. Reopen to see the page.
+- The first (player) page gets a **Custom Music** button beside Change Tape (`UBBPOpenMusicButton`, hooked
+  into `BPW_BoomBox_Player` with `Indirect_Child` on `mChangeTape`, i.e. inserted into whichever panel holds
+  that button). The music page has **< Back** (player page) and **Tapes**. If the Boom Box doesn't have
+  Custom Music loaded, the page says so and offers **Play through this Boom Box**, which calls
+  `BeginChangeTapeSequence` with the Custom Music tape.
 - `< Tapes` returns to whichever switcher page's class name contains `TapeSelect` (not a hard-coded index).
 - The page finds its Boom Box by walking its outer chain for a `mBoomBox` object property.
 

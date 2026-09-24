@@ -179,6 +179,30 @@ void InstallBBPHooks()
 		UBBPMusicPage::NotifyTapeChanged(Self, NewTape);
 	});
 
+	// Gives the game a valid song for the Custom Music tape (whose playlist is empty): the current track, or a placeholder.
+	SUBSCRIBE_METHOD(AFGBoomBoxPlayer::GetCurrentSong, [](auto& Scope, AFGBoomBoxPlayer* Self)
+	{
+		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Self->GetCurrentTape()))
+		{
+			return;
+		}
+		FSongData Song;
+		FBBPQueueEntry Entry;
+		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(Self);
+		if (Playlist && Playlist->GetCurrentEntry(Entry))
+		{
+			Song.SongName = FName(*Entry.Track.Title.Left(NAME_SIZE - 1));
+			Song.ArtistName = FName(*Entry.Track.Artist.Left(NAME_SIZE - 1));
+			Song.CachedMaximumSongDuration = Entry.Track.Duration;
+		}
+		else
+		{
+			Song.SongName = FName(TEXT("Custom Music"));
+			Song.ArtistName = FName(TEXT("BoomBoxPlus"));
+		}
+		Scope.Override(Song);
+	});
+
 	// Observes tape changes so the in-game flow can be followed in the log.
 	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::LoadTapeNow, [](AFGBoomBoxPlayer* Self, AFGCharacterPlayer* Character)
 	{
@@ -186,5 +210,5 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, LoadTapeNow"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, LoadTapeNow"));
 }

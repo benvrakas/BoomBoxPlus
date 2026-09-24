@@ -21,12 +21,14 @@
 #include "UI/BBPTrackRow.h"
 #include "UI/BBPWidgetStyle.h"
 #include "UI/FGInteractWidget.h"
+#include "FGCharacterPlayer.h"
 
 #define LOCTEXT_NAMESPACE "BoomBoxPlus"
 
 namespace
 {
 	constexpr float SearchDebounceSeconds = 0.25f;
+	constexpr float ShowEnforceSeconds = 0.5f;
 	constexpr int32 MaxResults = 100;
 	const FName BoomBoxPropertyName(TEXT("mBoomBox"));
 }
@@ -44,7 +46,7 @@ void UBBPMusicPage::NotifyTapeChanged(AFGBoomBoxPlayer* BoomBox, TSubclassOf<UFG
 	{
 		if (Page.IsValid() && Page->GetBoomBox() == BoomBox)
 		{
-			Page->bShowRequested = true;
+			Page->RequestShow();
 			++NumShown;
 		}
 	}
@@ -76,6 +78,8 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (RepeatButton) RepeatButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRepeat);
 	if (ClearQueueButton) ClearQueueButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleClearQueue);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
+	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowPlayerPage);
+	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
 	if (OpenFolderButton) OpenFolderButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleOpenFolder);
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
 }
@@ -108,7 +112,9 @@ void UBBPMusicPage::BuildDefaultLayout()
 	};
 
 	UHorizontalBox* Header = AddRow(0.f);
-	TapesButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Tapes", "< Tapes"));
+	BackButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Back", "< Back"));
+	AddToRow(Header, BackButton, false);
+	TapesButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
 	AddToRow(Header, TapesButton, false);
 	AddToRow(Header, BBPWidgetStyle::MakeText(WidgetTree, 16, BBPWidgetStyle::AccentColor, LOCTEXT("PageTitle", "Custom Music")), true);
 	LibraryStatusText = BBPWidgetStyle::MakeText(WidgetTree, 10, BBPWidgetStyle::DimTextColor);
@@ -117,6 +123,13 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Header, OpenFolderButton, false);
 	RescanButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
 	AddToRow(Header, RescanButton, false);
+
+	UHorizontalBox* NotLoadedRow = AddRow(8.f);
+	NotLoadedText = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor,
+		LOCTEXT("NotLoaded", "This Boom Box isn't playing Custom Music. You can still manage the queue."));
+	AddToRow(NotLoadedRow, NotLoadedText, true);
+	UseBoomBoxButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("UseBoomBox", "Play through this Boom Box"));
+	AddToRow(NotLoadedRow, UseBoomBoxButton, false);
 
 	UHorizontalBox* NowPlayingRow = AddRow(10.f);
 	NowPlayingText = BBPWidgetStyle::MakeText(WidgetTree, 14, BBPWidgetStyle::TextColor);
@@ -168,7 +181,7 @@ void UBBPMusicPage::NativeConstruct()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page constructed for %s"), BoomBox ? *GetNameSafe(BoomBox) : TEXT("<Boom Box not found>"));
 	if (BoomBox && UBBPCustomMusicTape::IsCustomMusicTape(BoomBox->GetCurrentTape()))
 	{
-		bShowRequested = true;
+		RequestShow();
 	}
 
 	TryBindSources();
@@ -179,6 +192,7 @@ void UBBPMusicPage::NativeConstruct()
 
 void UBBPMusicPage::NativeDestruct()
 {
+	CancelShowRequest();
 	LivePages.Remove(this);
 	Super::NativeDestruct();
 }
@@ -186,12 +200,6 @@ void UBBPMusicPage::NativeDestruct()
 void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-
-	if (bShowRequested)
-	{
-		bShowRequested = false;
-		ShowPage();
-	}
 
 	if (!bBoundLibrary || !bBoundPlaylist)
 	{
@@ -247,6 +255,48 @@ AFGBoomBoxPlayer* UBBPMusicPage::GetBoomBox() const
 	return nullptr;
 }
 
+void UBBPMusicPage::RequestShow()
+{
+	ShowRequestTimeLeft = ShowEnforceSeconds;
+	if (!ShowTickerHandle.IsValid())
+	{
+		TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
+		ShowTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis](float DeltaTime)
+		{
+			UBBPMusicPage* This = WeakThis.Get();
+			return This && This->TickShowRequest(DeltaTime);
+		}));
+	}
+	ShowPage();
+}
+
+bool UBBPMusicPage::TickShowRequest(float DeltaTime)
+{
+	const UWidgetSwitcher* Switcher = Cast<UWidgetSwitcher>(GetParent());
+	if (Switcher && Switcher->GetActiveWidget() != this)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: Boom Box window switched away from the music page; switching back"));
+		ShowPage();
+	}
+	ShowRequestTimeLeft -= DeltaTime;
+	if (ShowRequestTimeLeft <= 0.f)
+	{
+		ShowTickerHandle.Reset();
+		return false;
+	}
+	return true;
+}
+
+void UBBPMusicPage::CancelShowRequest()
+{
+	ShowRequestTimeLeft = 0.f;
+	if (ShowTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(ShowTickerHandle);
+		ShowTickerHandle.Reset();
+	}
+}
+
 void UBBPMusicPage::ShowPage()
 {
 	UWidgetSwitcher* Switcher = Cast<UWidgetSwitcher>(GetParent());
@@ -267,27 +317,52 @@ void UBBPMusicPage::ShowPage()
 	{
 		FocusTarget->SetFocus();
 	}
-	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("UI: music page shown"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page shown"));
 }
 
 void UBBPMusicPage::ShowTapeList()
 {
+	ShowSiblingPage(TEXT("TapeSelect"));
+}
+
+void UBBPMusicPage::ShowPlayerPage()
+{
+	ShowSiblingPage(TEXT("BoomBox_Player"));
+}
+
+bool UBBPMusicPage::ShowSiblingPage(const TCHAR* NameFragment)
+{
+	CancelShowRequest();
 	UWidgetSwitcher* Switcher = Cast<UWidgetSwitcher>(GetParent());
 	if (!Switcher)
 	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: cannot return to the tape list, parent is not a WidgetSwitcher"));
-		return;
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: cannot leave the music page, parent is not a WidgetSwitcher"));
+		return false;
 	}
 	for (int32 i = 0; i < Switcher->GetNumWidgets(); ++i)
 	{
 		UWidget* Child = Switcher->GetWidgetAtIndex(i);
-		if (Child && Child->GetClass()->GetName().Contains(TEXT("TapeSelect")))
+		if (Child && Child != this && Child->GetClass()->GetName().Contains(NameFragment))
 		{
 			Switcher->SetActiveWidget(Child);
-			return;
+			return true;
 		}
 	}
-	UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: no TapeSelect page found among %d switcher pages"), Switcher->GetNumWidgets());
+	UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: no page matching '%s' among %d switcher pages"), NameFragment, Switcher->GetNumWidgets());
+	return false;
+}
+
+void UBBPMusicPage::HandleUseBoomBox()
+{
+	AFGBoomBoxPlayer* BoomBox = GetBoomBox();
+	AFGCharacterPlayer* Character = Cast<AFGCharacterPlayer>(GetOwningPlayerPawn());
+	if (!BoomBox || !Character)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: cannot load Custom Music (Boom Box %s, character %s)"), *GetNameSafe(BoomBox), *GetNameSafe(Character));
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: loading Custom Music into %s"), *GetNameSafe(BoomBox));
+	BoomBox->BeginChangeTapeSequence(UBBPCustomMusicTape::StaticClass(), Character);
 }
 
 UBBPTrackRow* UBBPMusicPage::MakeRow()
@@ -399,6 +474,11 @@ void UBBPMusicPage::RefreshQueue()
 
 void UBBPMusicPage::RefreshTransport()
 {
+	const AFGBoomBoxPlayer* ViewedBoomBox = GetBoomBox();
+	const bool bLoaded = ViewedBoomBox && UBBPCustomMusicTape::IsCustomMusicTape(ViewedBoomBox->GetCurrentTape());
+	BBPWidgetStyle::SetShown(NotLoadedText, !bLoaded);
+	BBPWidgetStyle::SetShown(UseBoomBoxButton, !bLoaded);
+
 	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
 	FBBPQueueEntry Current;
 	const bool bHasCurrent = Playlist && Playlist->GetCurrentEntry(Current);
