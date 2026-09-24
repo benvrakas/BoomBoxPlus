@@ -5,7 +5,10 @@
 #include "Playlist/BBPPlaylistTypes.h"
 #include "BBPRemoteCallObject.generated.h"
 
-// Carries a player's playlist requests to the server.
+class ABBPMusicChannel;
+class AFGBoomBoxPlayer;
+
+// Carries a player's requests for a Boom Box's queue to the server, and link results back.
 UCLASS(NotBlueprintable)
 class BOOMBOXPLUS_API UBBPRemoteCallObject : public UFGRemoteCallObject
 {
@@ -13,50 +16,66 @@ class BOOMBOXPLUS_API UBBPRemoteCallObject : public UFGRemoteCallObject
 
 public:
 	UFUNCTION(Server, Reliable, WithValidation = Server_AddTrack_Validate)
-	void Server_AddTrack(const FBBPTrack& Track, bool bFront);
-	bool Server_AddTrack_Validate(const FBBPTrack& Track, bool bFront);
+	void Server_AddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
+	bool Server_AddTrack_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
 	UFUNCTION(Server, Reliable, WithValidation = Server_RemoveEntry_Validate)
-	void Server_RemoveEntry(int32 EntryId);
-	bool Server_RemoveEntry_Validate(int32 EntryId);
+	void Server_RemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
+	bool Server_RemoveEntry_Validate(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 
 	UFUNCTION(Server, Reliable, WithValidation = Server_MoveEntry_Validate)
-	void Server_MoveEntry(int32 EntryId, int32 NewIndex);
-	bool Server_MoveEntry_Validate(int32 EntryId, int32 NewIndex);
+	void Server_MoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId, int32 NewIndex);
+	bool Server_MoveEntry_Validate(AFGBoomBoxPlayer* BoomBox, int32 EntryId, int32 NewIndex);
 
 	UFUNCTION(Server, Reliable)
-	void Server_ClearQueue();
+	void Server_ClearQueue(AFGBoomBoxPlayer* BoomBox);
 
 	UFUNCTION(Server, Reliable)
-	void Server_SetPlaying(bool bPlay);
+	void Server_SetPlaying(AFGBoomBoxPlayer* BoomBox, bool bPlay);
 
 	UFUNCTION(Server, Reliable)
-	void Server_TogglePlaying();
+	void Server_TogglePlaying(AFGBoomBoxPlayer* BoomBox);
 
 	UFUNCTION(Server, Reliable)
-	void Server_Skip();
+	void Server_Skip(AFGBoomBoxPlayer* BoomBox);
 
 	UFUNCTION(Server, Reliable)
-	void Server_Previous();
+	void Server_Previous(AFGBoomBoxPlayer* BoomBox);
 
 	UFUNCTION(Server, Reliable)
-	void Server_PlayEntry(int32 EntryId);
+	void Server_PlayEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 
 	UFUNCTION(Server, Reliable, WithValidation = Server_SeekTo_Validate)
-	void Server_SeekTo(float PositionSeconds);
-	bool Server_SeekTo_Validate(float PositionSeconds);
+	void Server_SeekTo(AFGBoomBoxPlayer* BoomBox, float PositionSeconds);
+	bool Server_SeekTo_Validate(AFGBoomBoxPlayer* BoomBox, float PositionSeconds);
 
 	UFUNCTION(Server, Reliable)
-	void Server_SetShuffle(bool bEnabled);
+	void Server_SetShuffle(AFGBoomBoxPlayer* BoomBox, bool bEnabled);
 
 	UFUNCTION(Server, Reliable)
-	void Server_SetRepeatMode(EBBPRepeatMode Mode);
+	void Server_SetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode);
+
+	// Links BoomBox to the channel with the given 4-digit code.
+	UFUNCTION(Server, Reliable, WithValidation = Server_LinkBoomBox_Validate)
+	void Server_LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code);
+	bool Server_LinkBoomBox_Validate(AFGBoomBoxPlayer* BoomBox, int32 Code);
+
+	// Gives BoomBox its own channel again.
+	UFUNCTION(Server, Reliable)
+	void Server_UnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);
+
+	// Tells the requesting player how a link or unlink went.
+	UFUNCTION(Client, Reliable)
+	void Client_LinkResult(AFGBoomBoxPlayer* BoomBox, bool bSuccess, const FString& Message);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
-	// Returns the playlist if the calling player may control it; logs why not otherwise.
-	class ABBPPlaylistSubsystem* GetPlaylistForRequest(const TCHAR* RequestName) const;
+	// Returns BoomBox's channel if the calling player may control it; logs why not otherwise.
+	ABBPMusicChannel* GetChannelForRequest(AFGBoomBoxPlayer* BoomBox, const TCHAR* RequestName) const;
+
+	// Returns true if the calling player may control music; logs why not otherwise.
+	bool MayControl(const TCHAR* RequestName) const;
 
 	// Returns the calling player's display name.
 	FString GetRequesterName() const;

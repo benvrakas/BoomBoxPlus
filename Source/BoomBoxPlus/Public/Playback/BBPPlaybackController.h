@@ -5,6 +5,7 @@
 #include "Playback/BBPGameMusicFader.h"
 #include "BBPPlaybackController.generated.h"
 
+class ABBPMusicChannel;
 class ABBPPlaylistSubsystem;
 class AFGBoomBoxPlayer;
 class UAudioComponent;
@@ -18,6 +19,9 @@ struct FBBPEmitter
 	GENERATED_BODY()
 
 	TWeakObjectPtr<AFGBoomBoxPlayer> BoomBox;
+
+	// Channel the Boom Box played when EntryId was started.
+	TWeakObjectPtr<ABBPMusicChannel> Channel;
 
 	UPROPERTY()
 	TObjectPtr<UAudioComponent> Component;
@@ -44,7 +48,7 @@ struct FBBPEmitter
 	bool bWaitingForFile = false;
 };
 
-// Plays the shared queue through every Boom Box that has Custom Music loaded, kept in sync with the server clock.
+// Plays each Custom Music Boom Box's channel through that Boom Box, kept in sync with the server clock.
 UCLASS()
 class BOOMBOXPLUS_API UBBPPlaybackController : public UObject
 {
@@ -58,6 +62,10 @@ public:
 	// Returns the distance in centimetres at which Boom Box music becomes inaudible.
 	static float GetAudibleRange();
 
+	// Returns the channel playing on the nearest Custom Music Boom Box the local player can hear, or null.
+	// With bRequireSound, only counts Boom Boxes actually producing sound on this machine.
+	const ABBPMusicChannel* GetAudibleChannel(bool bRequireSound) const;
+
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
 	void SyncEmitters();
@@ -65,8 +73,8 @@ private:
 	// Brings one emitter in line with the current playback state.
 	void UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeconds);
 
-	// Starts the current track on an emitter from the given position.
-	void StartTrack(FBBPEmitter& Emitter, int32 EntryId, float Position);
+	// Starts the channel's current track on an emitter from the given position.
+	void StartTrack(FBBPEmitter& Emitter, const ABBPMusicChannel& Channel, int32 EntryId, float Position);
 
 	// Stops and releases an emitter's wave.
 	void StopTrack(FBBPEmitter& Emitter);
@@ -79,11 +87,28 @@ private:
 	// Starts downloads for the current and next few network tracks in the queue.
 	void PrefetchNetworkTracks();
 
-	// Returns true if Custom Music is playing on a Boom Box within earshot of the local player.
-	bool IsCustomMusicAudible() const;
-
 	// Lowers or restores the game's music depending on whether Custom Music is audible.
 	void UpdateGameMusic(float DeltaSeconds);
+
+	// Re-reads the game's Master and Boom Box volume sliders.
+	void UpdateGameVolumeScale();
+
+	// Sends the current song, play state and position to open vanilla Boom Box pages, which otherwise only follow Wwise playback.
+	void UpdateVanillaPages(float DeltaSeconds);
+
+	// Game volume sliders (Master x Boom Box), 0..1.
+	float GameVolumeScale = 1.f;
+	float GameVolumeTimer = 0.f;
+
+	// What each vanilla page was last told, so song and state are only re-sent on change.
+	struct FBBPVanillaPageState
+	{
+		TWeakObjectPtr<const ABBPMusicChannel> Channel;
+		int32 EntryId = INDEX_NONE - 1;
+		bool bPlaying = false;
+	};
+	TMap<TWeakObjectPtr<UObject>, FBBPVanillaPageState> VanillaPages;
+	float VanillaPositionTimer = 0.f;
 
 	FBBPGameMusicFader GameMusicFader;
 

@@ -1,85 +1,113 @@
-# Multiplayer: shared queue and synced playback
+# Multiplayer: per-Boom Box queues, linking and synced playback
 
 ## Pieces
 
 | Class | Runs on | Does |
 |---|---|---|
-| `ABBPPlaylistSubsystem` | Server (authoritative) + replicated to clients | Queue, transport state, track-end detection, which Boom Boxes have Custom Music |
-| `UBBPRemoteCallObject` | Client → server | Carries every player request; validates and logs rejections |
-| `UBBPBlueprintLibrary` | Anywhere | The one API UI and hooks call (`Request*`); always goes through the local player's RCO |
-| `UBBPPlaybackController` | Every non-dedicated machine | Owns the audio components and streams, keeps them in sync |
+| `ABBPPlaylistSubsystem` | Server (authoritative) + replicated to clients | Which Boom Boxes have Custom Music; the list of channels; link/unlink; creating and removing channels |
+| `ABBPMusicChannel` | Server (authoritative) + replicated to clients | One queue + transport, its 4-digit link code and the Boom Boxes playing it; track-end detection |
+| `UBBPRemoteCallObject` | Client → server (and link replies back) | Carries every player request, each naming its Boom Box; validates and logs rejections |
+| `UBBPBlueprintLibrary` | Anywhere | The one API UI and hooks call (`Request*(BoomBox, ...)`); always goes through the local player's RCO |
+| `UBBPPlaybackController` | Every non-dedicated machine | Owns the audio components and streams, keeps each in sync with its Boom Box's channel |
 
 The subsystem is registered by `UBBPGameWorldModule`, the RCO by `UBBPGameInstanceModule` (native root
-modules, see Architecture.md).
+modules, see Architecture.md). Channels are spawned by the subsystem.
 
-## One queue per session
+## Channels: one queue per Boom Box, shareable
 
-There is a single shared queue. Every Boom Box with the Custom Music tape loaded plays it — normally one,
-but several work and stay in sync. (sPEAKer has exactly one speaker; per-Boom-Box queues would multiply the
-UI and replication complexity for little gain.)
+Each Boom Box has its own queue and audio by default: the server gives it a **channel** the first time it
+has Custom Music loaded, or the first time someone sends a request for it (so a queue can be built before
+the tape goes in). Every channel gets a random, unused **4-digit link code**, shown on the music page.
+
+Typing another Boom Box's code into the page's Link field moves this Boom Box onto that channel: both then
+play the same queue in sync and anyone at either can edit it. **Unlink** puts the Boom Box back on a
+channel of its own, starting from a copy of the shared queue and playback (so the music doesn't cut out).
+
+**Zipper merge on link.** When the linking Boom Box was the only one on its channel, its queue is merged
+into the target's (`ABBPMusicChannel::MergeFrom`): the target's history and current track stay where they
+are, then the upcoming tracks interleave — target, joiner, target, joiner. The joiner's queue is taken from
+its current track onward, then its earlier tracks. Merged entries get new entry ids from the target. If the
+target was idle and the joiner was playing, the joiner's track starts. The queue cap (1000) still applies.
+If the linking Boom Box was already sharing a channel with others, it just leaves; the others keep that
+queue and nothing is merged.
+
+A channel with no Boom Boxes left (all linked away or destroyed) is destroyed. A channel none of whose Boom
+Boxes has Custom Music loaded is **paused**, so it doesn't run through its queue in silence.
+
+Channels are session state only — nothing is saved. Codes are re-rolled each session.
 
 ## Replicated state
 
-- `Queue` — `TArray<FBBPQueueEntry>`. Entries have a server-assigned `EntryId`, so remove/move requests stay
+On each channel (`bAlwaysRelevant`, net update 10 Hz plus `ForceNetUpdate` on every change):
+
+- `Queue` — `TArray<FBBPQueueEntry>`. Entry ids are unique **within the channel**, so remove/move stay
   correct when two players edit concurrently or a track is queued twice.
-- `PlaybackState` — `FBBPPlaybackState`, replicated **as one struct** so clients never see a half-applied
-  change (e.g. a new entry id with the old start time). `Revision` increments on every change, which is how
-  clients notice a restart or seek of the same track.
-- `ActiveBoomBoxes` — Boom Boxes with Custom Music loaded, plus each one's volume.
+- `PlaybackState` — replicated **as one struct** so clients never see a half-applied change. `Revision`
+  increments on every change, which is how clients notice a restart or seek of the same track.
+- `LinkCode`, `Members`.
+
+On the subsystem: `ActiveBoomBoxes` (Boom Boxes with Custom Music, plus each one's volume) and `Channels`.
 
 The subsystem is `bAlwaysRelevant` (inherited from `AFGSubsystem`); SML turns replication on because
-`ReplicationPolicy = SpawnOnServer_Replicate` (`AModSubsystem`'s constructor sets `bReplicates = false`, so
-the policy is what matters).
+`ReplicationPolicy = SpawnOnServer_Replicate`.
 
 ## Time base
 
 `PlaybackState.TrackStartServerTime` is the server world time at which position 0 would have played.
 Everyone computes the expected position as `GetServerWorldTimeSeconds() - TrackStartServerTime` (or
 `PausedPosition` while paused). UE's server-time estimate on clients isn't latency-compensated, so expect
-errors of roughly half the ping — well inside the 250 ms drift tolerance. If that proves too loose, imitate
-the vanilla Boom Box's RCO round-trip with a client timestamp (see Architecture.md).
+errors of roughly half the ping — well inside the 250 ms drift tolerance.
 
 ## Drift correction
 
 `UBBPPlaybackController` compares each stream's real position (`GetPlaybackSeconds`, which only advances on
 real audio) with the expected position once a second, and seeks when they differ by more than 0.25 s. It
-logs every correction with the drift and underrun count — frequent corrections are the first sign of a
-sync problem.
+logs every correction with the drift and underrun count.
+
+A drift that is *exactly* one check interval every time (`playing 10.05, expected 11.06`, then
+`playing 11.06, expected 12.06`) means the stream is never consumed at all — see "No Unreal audio device"
+in Debugging.md.
 
 A new state `Revision` is applied immediately: the pause state is set, and the stream is seeked **only if**
-its position differs from the expected one by more than the tolerance. `Revision` increments on every change
-— shuffle and repeat toggles included — so seeking unconditionally would put an audible hiccup on every
-client whenever someone toggled shuffle. After a seek, drift checks wait a second so it has time to land.
+its position differs from the expected one by more than the tolerance (shuffle/repeat toggles also bump
+`Revision` and must not cause a hiccup).
+
+Each emitter remembers which channel it is playing. When its Boom Box's channel changes (link, unlink, or a
+first channel), the stream is stopped and restarted from the new channel's position, because entry ids from
+different channels can collide.
 
 ## Shuffle and repeat
 
-**The server alone chooses the next track**; clients only follow `CurrentEntryId`. This supersedes the
-original plan's "replicate a shuffle seed" idea: that was only needed if clients derived the play order
-themselves, which they never do. Shuffle picks randomly among entries not yet played this cycle
-(`ShufflePlayed`, server-only); when exhausted it reshuffles (repeat all) or stops (repeat off).
-`Previous` uses a server-only play history; within the first 3 s of a track it goes back, otherwise it
-restarts the track.
+**The server alone chooses the next track**; clients only follow `CurrentEntryId`. Shuffle picks randomly
+among entries not yet played this cycle (`ShufflePlayed`, server-only); when exhausted it reshuffles
+(repeat all) or stops (repeat off). `Previous` uses a server-only play history; within the first 3 s of a
+track it goes back, otherwise it restarts the track.
 
-Adding to an empty/stopped queue starts playback immediately. `+Front` means "play next" (inserted after the
-current entry).
+Adding to an empty/stopped queue starts playback immediately. "Play Next" inserts after the current entry.
 
 ## Missing tracks
 
-A client without the file stays silent for that track but keeps following the shared timeline (the user's
-choice over skip-ahead or white noise). The row shows `NotInLibrary` via
-`UBBPBlueprintLibrary::GetEntryAvailability`. The controller doesn't re-check the library mid-track; a
-rescan helps from the next track on.
+A client without the file stays silent for that track but keeps following the timeline. Network tracks are
+downloaded by each client itself (current + next three of every channel a nearby Boom Box plays), and a
+client joins mid-song as soon as its download finishes.
 
 ## Volume
 
-The vanilla Boom Box syncs its volume through its own multicast, and `mState` isn't replicated. Instead the
-server reads each active Boom Box's authoritative `mState.mVolume` through an access-transformer accessor
-(`GetmState()`) and replicates it in `ActiveBoomBoxes`; clients apply it with `SetVolumeMultiplier`.
+Final volume of a Boom Box's audio =
 
-**Not yet handled:** Unreal's own audio (which we use) is not affected by the game's Wwise volume sliders.
-A mod-config volume will probably be needed.
+```
+Boom Box's own volume (mState.mVolume, replicated via ActiveBoomBoxes)
+x MusicVolume (mod config, default 0.8)
+x the game's Master and Boom Box volume sliders (RTPC.Master_Bus_Volume, RTPC.Boombox_Bus_Volume options)
+x 0.3 headroom (BaseGain in BBPPlaybackController.cpp)
+```
+
+The headroom exists because Unreal's mixer plays at full scale while the game's Wwise mix is much quieter;
+the first in-game test at 0.8 was far too loud. The game sliders are read from `UFGGameUserSettings` once a
+second; values above 1 are treated as 0-100 and divided.
 
 ## Controls
 
-`HostOnlyControl` from the plan is **not implemented yet** — everyone can control, which is also the chosen
-default. When added, the check belongs in `UBBPRemoteCallObject::GetPlaylistForRequest`.
+Everyone can control by default. `HostOnlyControl` (mod config) rejects requests from non-host players on a
+listen server, including link/unlink; the check is `UBBPRemoteCallObject::MayControl`. Link and unlink
+replies go back to the requesting player (`Client_LinkResult`) and show under the page's Link field.

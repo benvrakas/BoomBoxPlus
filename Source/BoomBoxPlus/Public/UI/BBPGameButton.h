@@ -1,0 +1,51 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Components/Button.h"
+#include "BBPGameButton.generated.h"
+
+class UTextBlock;
+
+// A button drawn with Satisfactory's own button widget (BPW_TileableButton), falling back to a plain button if it can't be loaded.
+UCLASS()
+class BOOMBOXPLUS_API UBBPGameButton : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(BlueprintAssignable, Category = "BoomBoxPlus|UI")
+	FOnButtonClickedEvent OnClicked;
+
+	// Sets the button's text.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus|UI")
+	void SetLabel(const FText& InLabel);
+
+	// Returns the clickable widget inside, for keyboard and gamepad focus.
+	UWidget* GetFocusTarget() const;
+
+	// Sets a label on an instance of the game's button widget.
+	static void SetGameButtonText(UUserWidget* GameButton, const FText& Text);
+
+	// Path of the game's button widget class.
+	static const TCHAR* GameButtonClassPath;
+
+protected:
+	virtual void NativeOnInitialized() override;
+
+private:
+	UFUNCTION()
+	void HandleClicked();
+
+	// The game's button widget, or null when using the fallback.
+	UPROPERTY()
+	TObjectPtr<UUserWidget> GameButton;
+
+	// The clickable button: the game widget's inner button, or the fallback.
+	UPROPERTY()
+	TObjectPtr<UButton> InnerButton;
+
+	// Label of the fallback button.
+	UPROPERTY()
+	TObjectPtr<UTextBlock> FallbackLabel;
+};

@@ -102,3 +102,27 @@ logs `Invalid current song index was found: 0` because the tape's playlist is em
 the result for Custom Music with a valid `FSongData`: the current track's title/artist/duration, or a
 "Custom Music / BoomBoxPlus" placeholder. `Song` stays null — nothing should play it, since transport calls
 are intercepted. (SML emits a harmless C4191 warning for hooks on functions returning structs by value.)
+
+## Unreal audio device
+
+Satisfactory does all its sound through Wwise and ships with `[Audio] AudioMixerModuleName` empty, so the
+engine never creates an Unreal audio device (`Audio Device Manager Initialization Failed!` in the log) and
+any `UAudioComponent` is silent. The mixer modules themselves are shipped (`AudioMixerXAudio2`, `...Wasapi`).
+
+`BBPAudioDevice::ConfigureBeforeEngineInit()` runs from the module's `StartupModule`, which in the shipped
+game happens about half a second **before** the engine initialises audio, and sets the config value to
+`AudioMixerXAudio2`; the engine then starts its audio device normally. If the device is still missing when
+the playback controller starts, `BBPAudioDevice::EnsureAvailable()` sets the value and calls the engine's
+protected `UEngine::InitializeAudioDeviceManager()` itself (through a derived-class member pointer, which
+avoids an access transformer on `UEngine` and the engine-wide rebuild it would cause). Skipped in the
+editor and on dedicated servers.
+
+## Fading the game's music
+
+`FBBPGameMusicFader` lowers the Wwise global parameter `Music_Bus_Volume` — the one behind the game's
+Music slider (option id `RTPC.Music_Bus_Volume`) — while the local player can hear a Boom Box actually
+producing Custom Music, using Wwise's own interpolation for the fade. It reads the current value first
+and scales it by the "Game music level" setting (default 0), so no assumption about the parameter's range
+is needed. If the value changes while lowered (the player moved the slider), that becomes the new base.
+After fading back up, it calls `UFGGameUserSettings::UpdateAudioOption` so the game re-applies the
+player's exact setting. Settings: Fade game music (on), Game music level (0), Game music fade time (2 s).

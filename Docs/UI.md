@@ -46,28 +46,61 @@ to be a variable, switch `ParentWidgetType` to `Direct_Any`.
 - `< Tapes` returns to whichever switcher page's class name contains `TapeSelect` (not a hard-coded index).
 - The page finds its Boom Box by walking its outer chain for a `mBoomBox` object property.
 
-## Layout: built-in fallback vs. native styling
+## Layout and the Satisfactory look
 
 `UBBPMusicPage` and `UBBPTrackRow` hold all behaviour, and every visual element is a
-`UPROPERTY(meta = (BindWidgetOptional))`. If the widget tree is empty when initialised (i.e. the plain C++
-class is used), they build a **functional fallback layout** — plain UMG, placeholder colours in
-`BBPWidgetStyle`. That lets the whole feature be tested in-game before any art work.
+`UPROPERTY(meta = (BindWidgetOptional))`, so a Blueprint subclass can still replace the layout later. With
+no Blueprint, they build their layout in C++ from the **game's own assets**, loaded at runtime by path
+(`BBPWidgetStyle`):
 
-**Native FICSIT styling (the chosen UX) is the next editor task:**
+| Element | Game asset |
+|---|---|
+| Buttons | `BPW_TileableButton` (the button on every vanilla machine window), wrapped by `UBBPGameButton` |
+| Text | `/Game/FactoryGame/Interface/Font/DescriptionText` composite font, typefaces Regular / SemiBold / Bold |
+| Search icon | `/Game/FactoryGame/Interface/UI/Assets/Shared/SearchIcon` |
+| Seek slider handle | `.../ConstructorWindows/ManufacutringMenu_Overclock_SliderHandle` (the overclock slider) |
+| Colours | FICSIT orange `#FA9549`, window `#18181A`, recessed panels `#0E0E10`, rows `#28282B` (stored as linear values) |
 
-1. Create a Widget Blueprint with parent class `BBPMusicPage`; lay it out with the game's own widgets
-   (`BPW_TileableButton`, the tape list's row style, game fonts) using the **same names** as the bind
-   properties: `SearchBox`, `ResultsList`, `QueueList`, `NowPlayingText`, `PositionText`, `LyricText`,
-   `QueueHeaderText`, `LibraryStatusText`, `PlayPauseButton`, `NextButton`, `PreviousButton`,
-   `ShuffleButton`, `RepeatButton`, `ClearQueueButton`, `TapesButton`, `OpenFolderButton`, `RescanButton`.
-   Any can be omitted.
-2. Same for a row Blueprint (parent `BBPTrackRow`): `TitleText`, `DetailText`, `AddFrontButton`,
-   `AddEndButton`, `PlayButton`, `MoveUpButton`, `MoveDownButton`, `RemoveButton`; set it as the page
-   Blueprint's `TrackRowClass`.
-3. Point the widget hook's `NewWidgetClass` at the page Blueprint (soft class path) instead of the C++ class.
+Every asset load falls back to a plain look and logs once if the asset is missing, so a game update that
+moves an asset degrades the style instead of breaking the page.
 
-Button labels are set through `BBPWidgetStyle::SetButtonLabel`, which expects the button's content to be a
-`UTextBlock`; a Blueprint with icon buttons simply won't have its labels changed.
+`UBBPGameButton` finds the tileable button's inner `mButton` (`UButton`) and re-broadcasts its `OnClicked`,
+and sets the label through the widget's `mText` property plus its `SetText` Blueprint function
+(`ProcessEvent`, checked to take exactly one `FText`).
+
+Page layout: title bar (Back, CUSTOM MUSIC, library status, Open Folder, Rescan, Tapes), an orange rule, a
+now-playing panel (track, lyric line, seek slider + time, transport), then two columns — search and results
+on the left, the queue on the right — and the link panel at the bottom.
+
+## The Custom Music button on the vanilla page
+
+`UBBPOpenMusicButton` is injected beside `mChangeTape` (Indirect_Child hook). It is built from the same
+`BPW_TileableButton` class, and on construct copies `mButtonStyle`, `mOverrideWidth/Height`, `mIconSize`
+and `mWrapTextAt` from the Change Tape button, plus its horizontal/vertical box slot padding, size and
+alignment, so the two sit and look alike. The log line `UI: Custom Music button matched to Change Tape
+(slot ..., parent ...)` records what it matched.
+
+## Driving the vanilla Player page
+
+The vanilla page only follows Wwise playback, which we cancel, so its progress bar never moved. The
+playback controller now calls the page's `IFGBoomboxListenerInterface` events itself for every listener in
+the Boom Box's `mStateListeners` (access-transformer accessor):
+
+- `CurrentSongChanged` and `PlaybackStateChanged` (`MayActuallyPlay` / 0) when the track, channel or
+  play state changes for that listener;
+- `PlaybackPositionUpdate(position, duration)` every 0.25 s.
+
+## Seeking
+
+The mod page's seek slider sends `RequestSeekTo` when released (mouse or gamepad capture end); playback
+updates don't move it while dragging. The vanilla progress bar stays display-only: it is a `ProgressBar`
+inside a Blueprint, and making it draggable would mean overlaying a slider on it by widget hook — possible
+later, but the mod page slider covers the need.
+
+## Link panel
+
+Shows this Boom Box's channel code and how many Boom Boxes share it, a 4-digit code field, Link and Unlink
+(Unlink only while shared). See Multiplayer.md.
 
 ## Controls in v1
 
@@ -99,7 +132,6 @@ It stays visible in the pause menu for now.
 
 ## Not done yet
 
-- Native styling (above) — needs the editor.
-- Driving the vanilla Player page with our track info.
 - Full gamepad focus (Blueprint pass).
 - Hiding the overlay in menus.
+- A draggable vanilla progress bar (see Seeking).

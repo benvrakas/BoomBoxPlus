@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "BBPHudOverlay.generated.h"
 
+class ABBPMusicChannel;
 class UTextBlock;
 
 // On-screen lyric line and "now playing" notification, shown while the local player can hear a Custom Music Boom Box.
@@ -40,9 +41,10 @@ private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
 	void BuildDefaultLayout();
 
-	// Returns true if the local player is within hearing range of a Boom Box playing Custom Music.
-	bool IsInEarshot() const;
+	// Returns the channel of the nearest Boom Box playing Custom Music within the local player's hearing range, or null.
+	const ABBPMusicChannel* GetHeardChannel() const;
 
 	int32 LastEntryId = INDEX_NONE;
+	TWeakObjectPtr<const ABBPMusicChannel> LastChannel;
 	float NowPlayingTimeLeft = 0.f;
 };

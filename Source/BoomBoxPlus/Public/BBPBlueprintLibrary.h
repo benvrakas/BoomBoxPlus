@@ -6,6 +6,8 @@
 #include "Playlist/BBPPlaylistTypes.h"
 #include "BBPBlueprintLibrary.generated.h"
 
+class ABBPMusicChannel;
+class AFGBoomBoxPlayer;
 class UBBPRemoteCallObject;
 
 // Row state of a queue entry as seen by the local player.
@@ -17,56 +19,68 @@ enum class EBBPEntryAvailability : uint8
 	NotInLibrary
 };
 
-// The playlist actions available to UI and hooks. Requests go to the server through the local player's RCO.
+// The queue actions available to UI and hooks, each aimed at one Boom Box. Requests go to the server through the local player's RCO.
 UCLASS()
 class BOOMBOXPLUS_API UBBPBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestAddTrack(const UObject* WorldContext, const FBBPTrack& Track, bool bFront);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestRemoveEntry(const UObject* WorldContext, int32 EntryId);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestRemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestMoveEntry(const UObject* WorldContext, int32 EntryId, int32 NewIndex);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestMoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId, int32 NewIndex);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestClearQueue(const UObject* WorldContext);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestClearQueue(AFGBoomBoxPlayer* BoomBox);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestSetPlaying(const UObject* WorldContext, bool bPlay);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSetPlaying(AFGBoomBoxPlayer* BoomBox, bool bPlay);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestTogglePlaying(const UObject* WorldContext);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestTogglePlaying(AFGBoomBoxPlayer* BoomBox);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestSkip(const UObject* WorldContext);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSkip(AFGBoomBoxPlayer* BoomBox);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestPrevious(const UObject* WorldContext);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestPrevious(AFGBoomBoxPlayer* BoomBox);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestPlayEntry(const UObject* WorldContext, int32 EntryId);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestPlayEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestSeekTo(const UObject* WorldContext, float PositionSeconds);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSeekTo(AFGBoomBoxPlayer* BoomBox, float PositionSeconds);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestSetShuffle(const UObject* WorldContext, bool bEnabled);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSetShuffle(AFGBoomBoxPlayer* BoomBox, bool bEnabled);
 
-	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static void RequestSetRepeatMode(const UObject* WorldContext, EBBPRepeatMode Mode);
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode);
 
-	// Returns how a queue entry should be shown to the local player.
-	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static EBBPEntryAvailability GetEntryAvailability(const UObject* WorldContext, const FBBPQueueEntry& Entry);
+	// Links BoomBox to the Boom Box whose 4-digit code is Code, so both share one queue.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestLinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code);
 
-	// Returns the lyric line for the current track at the current position, or an empty string.
-	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
-	static FString GetCurrentLyricLine(const UObject* WorldContext);
+	// Gives BoomBox its own queue again, starting from a copy of the shared one.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);
+
+	// Returns the channel (queue and transport) BoomBox plays, or null if it has none yet.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
+	static ABBPMusicChannel* GetChannel(const AFGBoomBoxPlayer* BoomBox);
+
+	// Returns how a queue entry of Channel should be shown to the local player.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
+	static EBBPEntryAvailability GetEntryAvailability(const ABBPMusicChannel* Channel, const FBBPQueueEntry& Entry);
+
+	// Returns the lyric line for Channel's current track at its current position, or an empty string.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
+	static FString GetCurrentLyricLine(const ABBPMusicChannel* Channel);
 
 	// Formats seconds as m:ss.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")

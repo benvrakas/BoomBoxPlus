@@ -6,10 +6,17 @@
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
 #include "Network/BBPRemoteCallObject.h"
+#include "FGBoomBoxPlayer.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 
 UBBPRemoteCallObject* UBBPBlueprintLibrary::GetLocalRCO(const UObject* WorldContext, const TCHAR* RequestName)
 {
+	if (!WorldContext)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("%s: no Boom Box given"), RequestName);
+		return nullptr;
+	}
 	AFGPlayerController* Controller = Cast<AFGPlayerController>(UGameplayStatics::GetPlayerController(WorldContext, 0));
 	if (!Controller)
 	{
@@ -26,110 +33,130 @@ UBBPRemoteCallObject* UBBPBlueprintLibrary::GetLocalRCO(const UObject* WorldCont
 	return RCO;
 }
 
-void UBBPBlueprintLibrary::RequestAddTrack(const UObject* WorldContext, const FBBPTrack& Track, bool bFront)
+void UBBPBlueprintLibrary::RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("AddTrack")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("AddTrack")))
 	{
-		RCO->Server_AddTrack(Track, bFront);
+		RCO->Server_AddTrack(BoomBox, Track, bFront);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestRemoveEntry(const UObject* WorldContext, int32 EntryId)
+void UBBPBlueprintLibrary::RequestRemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("RemoveEntry")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("RemoveEntry")))
 	{
-		RCO->Server_RemoveEntry(EntryId);
+		RCO->Server_RemoveEntry(BoomBox, EntryId);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestMoveEntry(const UObject* WorldContext, int32 EntryId, int32 NewIndex)
+void UBBPBlueprintLibrary::RequestMoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId, int32 NewIndex)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("MoveEntry")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("MoveEntry")))
 	{
-		RCO->Server_MoveEntry(EntryId, NewIndex);
+		RCO->Server_MoveEntry(BoomBox, EntryId, NewIndex);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestClearQueue(const UObject* WorldContext)
+void UBBPBlueprintLibrary::RequestClearQueue(AFGBoomBoxPlayer* BoomBox)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("ClearQueue")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("ClearQueue")))
 	{
-		RCO->Server_ClearQueue();
+		RCO->Server_ClearQueue(BoomBox);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestSetPlaying(const UObject* WorldContext, bool bPlay)
+void UBBPBlueprintLibrary::RequestSetPlaying(AFGBoomBoxPlayer* BoomBox, bool bPlay)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("SetPlaying")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SetPlaying")))
 	{
-		RCO->Server_SetPlaying(bPlay);
+		RCO->Server_SetPlaying(BoomBox, bPlay);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestTogglePlaying(const UObject* WorldContext)
+void UBBPBlueprintLibrary::RequestTogglePlaying(AFGBoomBoxPlayer* BoomBox)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("TogglePlaying")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("TogglePlaying")))
 	{
-		RCO->Server_TogglePlaying();
+		RCO->Server_TogglePlaying(BoomBox);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestSkip(const UObject* WorldContext)
+void UBBPBlueprintLibrary::RequestSkip(AFGBoomBoxPlayer* BoomBox)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("Skip")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("Skip")))
 	{
-		RCO->Server_Skip();
+		RCO->Server_Skip(BoomBox);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestPrevious(const UObject* WorldContext)
+void UBBPBlueprintLibrary::RequestPrevious(AFGBoomBoxPlayer* BoomBox)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("Previous")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("Previous")))
 	{
-		RCO->Server_Previous();
+		RCO->Server_Previous(BoomBox);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestPlayEntry(const UObject* WorldContext, int32 EntryId)
+void UBBPBlueprintLibrary::RequestPlayEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("PlayEntry")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("PlayEntry")))
 	{
-		RCO->Server_PlayEntry(EntryId);
+		RCO->Server_PlayEntry(BoomBox, EntryId);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestSeekTo(const UObject* WorldContext, float PositionSeconds)
+void UBBPBlueprintLibrary::RequestSeekTo(AFGBoomBoxPlayer* BoomBox, float PositionSeconds)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("SeekTo")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SeekTo")))
 	{
-		RCO->Server_SeekTo(PositionSeconds);
+		RCO->Server_SeekTo(BoomBox, PositionSeconds);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestSetShuffle(const UObject* WorldContext, bool bEnabled)
+void UBBPBlueprintLibrary::RequestSetShuffle(AFGBoomBoxPlayer* BoomBox, bool bEnabled)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("SetShuffle")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SetShuffle")))
 	{
-		RCO->Server_SetShuffle(bEnabled);
+		RCO->Server_SetShuffle(BoomBox, bEnabled);
 	}
 }
 
-void UBBPBlueprintLibrary::RequestSetRepeatMode(const UObject* WorldContext, EBBPRepeatMode Mode)
+void UBBPBlueprintLibrary::RequestSetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode)
 {
-	if (UBBPRemoteCallObject* RCO = GetLocalRCO(WorldContext, TEXT("SetRepeatMode")))
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SetRepeatMode")))
 	{
-		RCO->Server_SetRepeatMode(Mode);
+		RCO->Server_SetRepeatMode(BoomBox, Mode);
 	}
 }
 
-EBBPEntryAvailability UBBPBlueprintLibrary::GetEntryAvailability(const UObject* WorldContext, const FBBPQueueEntry& Entry)
+void UBBPBlueprintLibrary::RequestLinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code)
 {
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(WorldContext);
-	if (Playlist && Playlist->GetPlaybackState().CurrentEntryId == Entry.EntryId)
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("LinkBoomBox")))
+	{
+		RCO->Server_LinkBoomBox(BoomBox, Code);
+	}
+}
+
+void UBBPBlueprintLibrary::RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox)
+{
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("UnlinkBoomBox")))
+	{
+		RCO->Server_UnlinkBoomBox(BoomBox);
+	}
+}
+
+ABBPMusicChannel* UBBPBlueprintLibrary::GetChannel(const AFGBoomBoxPlayer* BoomBox)
+{
+	return ABBPPlaylistSubsystem::FindChannelFor(BoomBox);
+}
+
+EBBPEntryAvailability UBBPBlueprintLibrary::GetEntryAvailability(const ABBPMusicChannel* Channel, const FBBPQueueEntry& Entry)
+{
+	if (Channel && Channel->GetPlaybackState().CurrentEntryId == Entry.EntryId)
 	{
 		return EBBPEntryAvailability::Playing;
 	}
-	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const UWorld* World = Channel ? Channel->GetWorld() : nullptr;
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
 	if (Entry.Track.Source == EBBPTrackSource::Local && Library && !Library->HasTrack(Entry.Track.Id))
@@ -139,18 +166,17 @@ EBBPEntryAvailability UBBPBlueprintLibrary::GetEntryAvailability(const UObject* 
 	return EBBPEntryAvailability::Queued;
 }
 
-FString UBBPBlueprintLibrary::GetCurrentLyricLine(const UObject* WorldContext)
+FString UBBPBlueprintLibrary::GetCurrentLyricLine(const ABBPMusicChannel* Channel)
 {
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(WorldContext);
 	FBBPQueueEntry Entry;
-	if (!Playlist || !Playlist->GetCurrentEntry(Entry))
+	if (!Channel || !Channel->GetCurrentEntry(Entry))
 	{
 		return FString();
 	}
-	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const UWorld* World = Channel->GetWorld();
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	const UBBPLyricsSubsystem* Lyrics = GameInstance ? GameInstance->GetSubsystem<UBBPLyricsSubsystem>() : nullptr;
-	return Lyrics ? Lyrics->GetLineAt(Entry.Track.Id, Playlist->GetPlaybackPosition()) : FString();
+	return Lyrics ? Lyrics->GetLineAt(Entry.Track.Id, Channel->GetPlaybackPosition()) : FString();
 }
 
 FString UBBPBlueprintLibrary::FormatDuration(float Seconds)

@@ -4,6 +4,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "FGUnlockSubsystem.h"
 #include "Patching/NativeHookManager.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPMusicPage.h"
@@ -32,24 +33,25 @@ namespace
 		}
 	}
 
-	// Sends a Boom Box button press to the playlist: directly on the server, through the RCO on a client.
+	// Sends a Boom Box button press to its channel: directly on the server, through the RCO on a client.
 	void RouteTransport(AFGBoomBoxPlayer* BoomBox, EBBPTransportAction Action)
 	{
 		if (BoomBox->HasAuthority())
 		{
 			ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(BoomBox);
-			if (!Playlist)
+			ABBPMusicChannel* Channel = Playlist ? Playlist->GetOrCreateChannel(BoomBox) : nullptr;
+			if (!Channel)
 			{
-				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Hook: %s on server but playlist subsystem missing"), ToString(Action));
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Hook: %s on server but no channel for %s (subsystem %d)"), ToString(Action), *GetNameSafe(BoomBox), Playlist != nullptr);
 				return;
 			}
 			switch (Action)
 			{
-			case EBBPTransportAction::Play: Playlist->SetPlaying(true); break;
-			case EBBPTransportAction::Stop: Playlist->SetPlaying(false); break;
-			case EBBPTransportAction::Toggle: Playlist->SetPlaying(!Playlist->IsPlaying()); break;
-			case EBBPTransportAction::Next: Playlist->Skip(); break;
-			case EBBPTransportAction::Previous: Playlist->Previous(); break;
+			case EBBPTransportAction::Play: Channel->SetPlaying(true); break;
+			case EBBPTransportAction::Stop: Channel->SetPlaying(false); break;
+			case EBBPTransportAction::Toggle: Channel->SetPlaying(!Channel->IsPlaying()); break;
+			case EBBPTransportAction::Next: Channel->Skip(); break;
+			case EBBPTransportAction::Previous: Channel->Previous(); break;
 			}
 			return;
 		}
@@ -99,7 +101,7 @@ void InstallBBPHooks()
 		OutTapes.AddUnique(UBBPCustomMusicTape::StaticClass());
 	});
 
-	// Button presses: replace vanilla Wwise playback with the shared playlist while Custom Music is loaded.
+	// Button presses: replace vanilla Wwise playback with the Boom Box's channel while Custom Music is loaded.
 	SUBSCRIBE_METHOD(AFGBoomBoxPlayer::BeginPlaySequence, [](auto& Scope, AFGBoomBoxPlayer* Self, AFGCharacterPlayer* Instigator)
 	{
 		if (IsCustomMusic(Self, TEXT("BeginPlaySequence")))
@@ -188,8 +190,8 @@ void InstallBBPHooks()
 		}
 		FSongData Song;
 		FBBPQueueEntry Entry;
-		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(Self);
-		if (Playlist && Playlist->GetCurrentEntry(Entry))
+		const ABBPMusicChannel* Channel = ABBPPlaylistSubsystem::FindChannelFor(Self);
+		if (Channel && Channel->GetCurrentEntry(Entry))
 		{
 			Song.SongName = FName(*Entry.Track.Title.Left(NAME_SIZE - 1));
 			Song.ArtistName = FName(*Entry.Track.Artist.Left(NAME_SIZE - 1));

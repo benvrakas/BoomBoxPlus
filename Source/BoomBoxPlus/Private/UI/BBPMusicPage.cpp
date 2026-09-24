@@ -3,11 +3,15 @@
 #include "BoomBoxPlus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
-#include "Components/Button.h"
+#include "Components/Image.h"
+#include "Components/ScrollBoxSlot.h"
+#include "Components/SizeBox.h"
+#include "UI/BBPGameButton.h"
 #include "Components/EditableTextBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -16,6 +20,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPTrackRow.h"
@@ -53,6 +58,17 @@ void UBBPMusicPage::NotifyTapeChanged(AFGBoomBoxPlayer* BoomBox, TSubclassOf<UFG
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: Custom Music loaded into %s; bringing %d open page(s) forward"), *GetNameSafe(BoomBox), NumShown);
 }
 
+void UBBPMusicPage::NotifyLinkResult(AFGBoomBoxPlayer* BoomBox, const FString& Message)
+{
+	for (const TWeakObjectPtr<UBBPMusicPage>& Page : LivePages)
+	{
+		if (Page.IsValid() && Page->GetBoomBox() == BoomBox && Page->LinkMessageText)
+		{
+			Page->LinkMessageText->SetText(FText::FromString(Message));
+		}
+	}
+}
+
 void UBBPMusicPage::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -82,93 +98,184 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
 	if (OpenFolderButton) OpenFolderButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleOpenFolder);
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
+	if (LinkButton) LinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleLink);
+	if (UnlinkButton) UnlinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUnlink);
+	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
+	if (SeekSlider)
+	{
+		SeekSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
+		SeekSlider->OnMouseCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleSeekEnd);
+		SeekSlider->OnControllerCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
+		SeekSlider->OnControllerCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleSeekEnd);
+	}
 }
 
 void UBBPMusicPage::BuildDefaultLayout()
 {
-	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-	Panel->SetBrushColor(BBPWidgetStyle::PanelColor);
-	Panel->SetPadding(FMargin(12.f));
-	WidgetTree->RootWidget = Panel;
+	using namespace BBPWidgetStyle;
+
+	UBorder* Window = MakePanel(WidgetTree, PanelColor, FMargin(18.f, 14.f));
+	WidgetTree->RootWidget = Window;
 
 	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-	Panel->SetContent(Column);
+	Window->SetContent(Column);
 
-	auto AddRow = [this, Column](float TopPadding) -> UHorizontalBox*
+	auto AddRow = [this](UVerticalBox* Parent, float TopPadding) -> UHorizontalBox*
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Column->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
+		Parent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
 		return Row;
 	};
-	auto AddToRow = [](UHorizontalBox* Row, UWidget* Widget, bool bFill)
+	auto AddToRow = [](UHorizontalBox* Row, UWidget* Widget, bool bFill, float RightPadding = 6.f)
 	{
 		UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Widget);
 		Slot->SetVerticalAlignment(VAlign_Center);
-		Slot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		Slot->SetPadding(FMargin(0.f, 0.f, RightPadding, 0.f));
 		if (bFill)
 		{
 			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		}
 	};
+	auto AddFill = [this](UVerticalBox* Parent, UWidget* Widget, float TopPadding)
+	{
+		UVerticalBoxSlot* Slot = Parent->AddChildToVerticalBox(Widget);
+		Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
+		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	};
 
-	UHorizontalBox* Header = AddRow(0.f);
-	BackButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Back", "< Back"));
-	AddToRow(Header, BackButton, false);
-	TapesButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
-	AddToRow(Header, TapesButton, false);
-	AddToRow(Header, BBPWidgetStyle::MakeText(WidgetTree, 16, BBPWidgetStyle::AccentColor, LOCTEXT("PageTitle", "Custom Music")), true);
-	LibraryStatusText = BBPWidgetStyle::MakeText(WidgetTree, 10, BBPWidgetStyle::DimTextColor);
-	AddToRow(Header, LibraryStatusText, false);
-	OpenFolderButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("OpenFolder", "Open Folder"));
+	// Title bar: back, title, library status and folder buttons.
+	UHorizontalBox* Header = AddRow(Column, 0.f);
+	BackButton = MakeButton(WidgetTree, LOCTEXT("Back", "Back"));
+	AddToRow(Header, BackButton, false, 12.f);
+	AddToRow(Header, MakeText(WidgetTree, 22, AccentColor, LOCTEXT("PageTitle", "CUSTOM MUSIC"), EFontWeight::Bold), true);
+	LibraryStatusText = MakeText(WidgetTree, 11, DimTextColor);
+	AddToRow(Header, LibraryStatusText, false, 12.f);
+	OpenFolderButton = MakeButton(WidgetTree, LOCTEXT("OpenFolder", "Open Folder"));
 	AddToRow(Header, OpenFolderButton, false);
-	RescanButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
+	RescanButton = MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
 	AddToRow(Header, RescanButton, false);
+	TapesButton = MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
+	AddToRow(Header, TapesButton, false, 0.f);
 
-	UHorizontalBox* NotLoadedRow = AddRow(8.f);
-	NotLoadedText = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor,
-		LOCTEXT("NotLoaded", "This Boom Box isn't playing Custom Music. You can still manage the queue."));
+	UBorder* HeaderRule = MakePanel(WidgetTree, AccentColor, FMargin(0.f, 1.f));
+	Column->AddChildToVerticalBox(HeaderRule)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+
+	// Shown while this Boom Box has another tape in.
+	UHorizontalBox* NotLoadedRow = AddRow(Column, 10.f);
+	NotLoadedText = MakeText(WidgetTree, 12, AccentColor,
+		LOCTEXT("NotLoaded", "This Boom Box isn't playing Custom Music. You can still manage its queue."), EFontWeight::SemiBold);
 	AddToRow(NotLoadedRow, NotLoadedText, true);
-	UseBoomBoxButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("UseBoomBox", "Play through this Boom Box"));
-	AddToRow(NotLoadedRow, UseBoomBoxButton, false);
+	UseBoomBoxButton = MakeButton(WidgetTree, LOCTEXT("UseBoomBox", "Play Custom Music"));
+	AddToRow(NotLoadedRow, UseBoomBoxButton, false, 0.f);
 
-	UHorizontalBox* NowPlayingRow = AddRow(10.f);
-	NowPlayingText = BBPWidgetStyle::MakeText(WidgetTree, 14, BBPWidgetStyle::TextColor);
-	AddToRow(NowPlayingRow, NowPlayingText, true);
-	PositionText = BBPWidgetStyle::MakeText(WidgetTree, 12, BBPWidgetStyle::DimTextColor);
-	AddToRow(NowPlayingRow, PositionText, false);
+	// Now playing: track, position, lyric and transport.
+	UBorder* NowPlayingPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 10.f));
+	Column->AddChildToVerticalBox(NowPlayingPanel)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+	UVerticalBox* NowPlaying = WidgetTree->ConstructWidget<UVerticalBox>();
+	NowPlayingPanel->SetContent(NowPlaying);
 
-	LyricText = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor);
-	Column->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	NowPlaying->AddChildToVerticalBox(MakeText(WidgetTree, 10, DimTextColor, LOCTEXT("NowPlayingLabel", "NOW PLAYING"), EFontWeight::Bold));
+	NowPlayingText = MakeText(WidgetTree, 18, TextColor, FText::GetEmpty(), EFontWeight::Bold);
+	NowPlaying->AddChildToVerticalBox(NowPlayingText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	LyricText = MakeText(WidgetTree, 12, AccentColor);
+	NowPlaying->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 
-	UHorizontalBox* Transport = AddRow(8.f);
-	PreviousButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Previous", "Prev"));
+	UHorizontalBox* SeekRow = AddRow(NowPlaying, 8.f);
+	SeekSlider = WidgetTree->ConstructWidget<USlider>();
+	StyleSlider(SeekSlider);
+	AddToRow(SeekRow, SeekSlider, true, 10.f);
+	PositionText = MakeText(WidgetTree, 12, DimTextColor, FText::GetEmpty(), EFontWeight::SemiBold);
+	AddToRow(SeekRow, PositionText, false, 0.f);
+
+	UHorizontalBox* Transport = AddRow(NowPlaying, 8.f);
+	PreviousButton = MakeButton(WidgetTree, LOCTEXT("Previous", "Previous"));
 	AddToRow(Transport, PreviousButton, false);
-	PlayPauseButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Play", "Play"));
+	PlayPauseButton = MakeButton(WidgetTree, LOCTEXT("Play", "Play"));
 	AddToRow(Transport, PlayPauseButton, false);
-	NextButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Next", "Next"));
-	AddToRow(Transport, NextButton, false);
-	ShuffleButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Shuffle", "Shuffle: Off"));
+	NextButton = MakeButton(WidgetTree, LOCTEXT("Next", "Next"));
+	AddToRow(Transport, NextButton, false, 18.f);
+	ShuffleButton = MakeButton(WidgetTree, LOCTEXT("Shuffle", "Shuffle: Off"));
 	AddToRow(Transport, ShuffleButton, false);
-	RepeatButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("Repeat", "Repeat: All"));
+	RepeatButton = MakeButton(WidgetTree, LOCTEXT("Repeat", "Repeat: All"));
 	AddToRow(Transport, RepeatButton, false);
 
+	// Two columns: search and results on the left, the queue on the right.
+	UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>();
+	AddFill(Column, Columns, 12.f);
+
+	UVerticalBox* SearchColumn = WidgetTree->ConstructWidget<UVerticalBox>();
+	UHorizontalBoxSlot* SearchSlot = Columns->AddChildToHorizontalBox(SearchColumn);
+	SearchSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	SearchSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+	UTextBlock* ResultsTitle = nullptr;
+	SearchColumn->AddChildToVerticalBox(MakeSectionHeader(WidgetTree, LOCTEXT("Results", "Search"), ResultsTitle));
+	UHorizontalBox* SearchRow = AddRow(SearchColumn, 0.f);
+	if (UImage* Icon = MakeSearchIcon(WidgetTree))
+	{
+		AddToRow(SearchRow, Icon, false, 8.f);
+	}
 	SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music, or press Enter to search YouTube / SoundCloud. Links work too."));
-	Column->AddChildToVerticalBox(SearchBox)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+	StyleTextBox(SearchBox, 12);
+	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link."));
+	AddToRow(SearchRow, SearchBox, true, 0.f);
 
-	Column->AddChildToVerticalBox(BBPWidgetStyle::MakeText(WidgetTree, 12, BBPWidgetStyle::AccentColor, LOCTEXT("Results", "Results")))
-		->SetPadding(FMargin(0.f, 8.f, 0.f, 2.f));
+	UBorder* ResultsPanel = MakePanel(WidgetTree, InsetColor, FMargin(6.f));
+	AddFill(SearchColumn, ResultsPanel, 8.f);
 	ResultsList = WidgetTree->ConstructWidget<UScrollBox>();
-	Column->AddChildToVerticalBox(ResultsList)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	StyleScrollBox(ResultsList);
+	ResultsPanel->SetContent(ResultsList);
 
-	UHorizontalBox* QueueHeader = AddRow(8.f);
-	QueueHeaderText = BBPWidgetStyle::MakeText(WidgetTree, 12, BBPWidgetStyle::AccentColor, LOCTEXT("Queue", "Queue"));
-	AddToRow(QueueHeader, QueueHeaderText, true);
-	ClearQueueButton = BBPWidgetStyle::MakeButton(WidgetTree, LOCTEXT("ClearQueue", "Clear Queue"));
-	AddToRow(QueueHeader, ClearQueueButton, false);
+	UVerticalBox* QueueColumn = WidgetTree->ConstructWidget<UVerticalBox>();
+	UHorizontalBoxSlot* QueueSlot = Columns->AddChildToHorizontalBox(QueueColumn);
+	QueueSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	QueueSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 
+	UHorizontalBox* QueueHeader = AddRow(QueueColumn, 0.f);
+	UTextBlock* QueueTitle = nullptr;
+	AddToRow(QueueHeader, MakeSectionHeader(WidgetTree, LOCTEXT("Queue", "Queue"), QueueTitle), true);
+	QueueHeaderText = QueueTitle;
+	ClearQueueButton = MakeButton(WidgetTree, LOCTEXT("ClearQueue", "Clear Queue"));
+	AddToRow(QueueHeader, ClearQueueButton, false, 0.f);
+
+	UBorder* QueuePanel = MakePanel(WidgetTree, InsetColor, FMargin(6.f));
+	AddFill(QueueColumn, QueuePanel, 8.f);
 	QueueList = WidgetTree->ConstructWidget<UScrollBox>();
-	Column->AddChildToVerticalBox(QueueList)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	StyleScrollBox(QueueList);
+	QueuePanel->SetContent(QueueList);
+
+	// Linking: this Boom Box's code, and a field for another Boom Box's code.
+	UBorder* LinkPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 8.f));
+	Column->AddChildToVerticalBox(LinkPanel)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+	UVerticalBox* LinkColumn = WidgetTree->ConstructWidget<UVerticalBox>();
+	LinkPanel->SetContent(LinkColumn);
+	UHorizontalBox* LinkRow = AddRow(LinkColumn, 0.f);
+	LinkCodeText = MakeText(WidgetTree, 13, TextColor, FText::GetEmpty(), EFontWeight::SemiBold);
+	AddToRow(LinkRow, LinkCodeText, true, 10.f);
+	LinkCodeBox = WidgetTree->ConstructWidget<UEditableTextBox>();
+	StyleTextBox(LinkCodeBox, 13);
+	LinkCodeBox->SetHintText(LOCTEXT("LinkHint", "0000"));
+	USizeBox* CodeSize = WidgetTree->ConstructWidget<USizeBox>();
+	CodeSize->SetWidthOverride(90.f);
+	CodeSize->SetContent(LinkCodeBox);
+	AddToRow(LinkRow, CodeSize, false);
+	LinkButton = MakeButton(WidgetTree, LOCTEXT("Link", "Link"));
+	AddToRow(LinkRow, LinkButton, false);
+	UnlinkButton = MakeButton(WidgetTree, LOCTEXT("Unlink", "Unlink"));
+	AddToRow(LinkRow, UnlinkButton, false, 0.f);
+	LinkMessageText = MakeText(WidgetTree, 11, DimTextColor);
+	LinkColumn->AddChildToVerticalBox(LinkMessageText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+}
+
+void UBBPMusicPage::AddToList(UScrollBox* List, UWidget* Widget)
+{
+	if (List && Widget)
+	{
+		if (UScrollBoxSlot* ListSlot = Cast<UScrollBoxSlot>(List->AddChild(Widget)))
+		{
+			ListSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		}
+	}
 }
 
 void UBBPMusicPage::NativeConstruct()
@@ -181,15 +288,24 @@ void UBBPMusicPage::NativeConstruct()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page constructed for %s"), BoomBox ? *GetNameSafe(BoomBox) : TEXT("<Boom Box not found>"));
 
 	TryBindSources();
+	UpdateChannelBinding();
 	RefreshResults();
 	RefreshQueue();
 	RefreshTransport();
+	RefreshLink();
 }
 
 void UBBPMusicPage::NativeDestruct()
 {
 	CancelShowRequest();
 	LivePages.Remove(this);
+	if (ABBPMusicChannel* Channel = BoundChannel.Get())
+	{
+		Channel->OnQueueChanged.RemoveAll(this);
+		Channel->OnPlaybackChanged.RemoveAll(this);
+		Channel->OnMembersChanged.RemoveAll(this);
+	}
+	BoundChannel = nullptr;
 	Super::NativeDestruct();
 }
 
@@ -197,10 +313,11 @@ void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
-	if (!bBoundLibrary || !bBoundPlaylist)
+	if (!bBoundLibrary)
 	{
 		TryBindSources();
 	}
+	UpdateChannelBinding();
 
 	if (SearchDebounceTimer >= 0.f)
 	{
@@ -226,16 +343,37 @@ void UBBPMusicPage::TryBindSources()
 			RefreshResults();
 		}
 	}
-	if (!bBoundPlaylist)
+}
+
+void UBBPMusicPage::UpdateChannelBinding()
+{
+	ABBPMusicChannel* Channel = GetChannel();
+	if (Channel == BoundChannel.Get())
 	{
-		if (ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this))
-		{
-			Playlist->OnQueueChanged.AddUniqueDynamic(this, &UBBPMusicPage::HandleQueueChanged);
-			Playlist->OnPlaybackChanged.AddUniqueDynamic(this, &UBBPMusicPage::HandlePlaybackChanged);
-			bBoundPlaylist = true;
-			RefreshQueue();
-		}
+		return;
 	}
+	if (ABBPMusicChannel* Old = BoundChannel.Get())
+	{
+		Old->OnQueueChanged.RemoveAll(this);
+		Old->OnPlaybackChanged.RemoveAll(this);
+		Old->OnMembersChanged.RemoveAll(this);
+	}
+	BoundChannel = Channel;
+	if (Channel)
+	{
+		Channel->OnQueueChanged.AddUniqueDynamic(this, &UBBPMusicPage::HandleQueueChanged);
+		Channel->OnPlaybackChanged.AddUniqueDynamic(this, &UBBPMusicPage::HandlePlaybackChanged);
+		Channel->OnMembersChanged.AddUniqueDynamic(this, &UBBPMusicPage::HandleMembersChanged);
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page for %s now shows channel %04d"), *GetNameSafe(GetBoomBox()), Channel ? Channel->GetLinkCode() : 0);
+	RefreshQueue();
+	RefreshTransport();
+	RefreshLink();
+}
+
+ABBPMusicChannel* UBBPMusicPage::GetChannel() const
+{
+	return ABBPPlaylistSubsystem::FindChannelFor(GetBoomBox());
 }
 
 AFGBoomBoxPlayer* UBBPMusicPage::GetBoomBox() const
@@ -304,7 +442,7 @@ void UBBPMusicPage::ShowPage()
 	Switcher->SetActiveWidget(this);
 
 	// Gives gamepad navigation a starting point on this page.
-	UWidget* FocusTarget = PlayPauseButton ? static_cast<UWidget*>(PlayPauseButton) : static_cast<UWidget*>(SearchBox);
+	UWidget* FocusTarget = PlayPauseButton ? PlayPauseButton->GetFocusTarget() : static_cast<UWidget*>(SearchBox);
 	if (UFGInteractWidget* Window = GetTypedOuter<UFGInteractWidget>())
 	{
 		Window->SetDefaultFocusWidget(FocusTarget);
@@ -363,7 +501,12 @@ void UBBPMusicPage::HandleUseBoomBox()
 
 UBBPTrackRow* UBBPMusicPage::MakeRow()
 {
-	return CreateWidget<UBBPTrackRow>(this, TrackRowClass);
+	UBBPTrackRow* Row = CreateWidget<UBBPTrackRow>(this, TrackRowClass);
+	if (Row)
+	{
+		Row->SetBoomBox(GetBoomBox());
+	}
+	return Row;
 }
 
 void UBBPMusicPage::RefreshResults()
@@ -392,14 +535,14 @@ void UBBPMusicPage::RefreshResults()
 	if (Library->GetTrackCount() == 0)
 	{
 		const FText Empty = FText::Format(LOCTEXT("EmptyLibrary", "No music found. Put .mp3, .ogg or .wav files in:\n{0}"), FText::FromString(Library->GetMusicFolder()));
-		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, Empty));
+		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, Empty));
 		return;
 	}
 
 	const TArray<FBBPTrack> Results = Library->Search(SearchQuery, MaxResults);
 	if (Results.Num() == 0 && OnlineResults.Num() == 0 && OnlineStatus.IsEmpty())
 	{
-		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("NoResults", "No matches. Press Enter to search YouTube and SoundCloud.")));
+		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("NoResults", "No matches. Press Enter to search YouTube and SoundCloud.")));
 		return;
 	}
 	for (const FBBPTrack& Track : Results)
@@ -407,28 +550,28 @@ void UBBPMusicPage::RefreshResults()
 		if (UBBPTrackRow* Row = MakeRow())
 		{
 			Row->SetupAsResult(Track);
-			ResultsList->AddChild(Row);
+			AddToList(ResultsList, Row);
 		}
 	}
 
 	if (!OnlineStatus.IsEmpty())
 	{
-		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor, FText::FromString(OnlineStatus)));
+		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor, FText::FromString(OnlineStatus)));
 	}
 	if (OnlineResults.Num() > 0)
 	{
 		if (bOnlineIsCollection)
 		{
-			UButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num()));
+			UBBPGameButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num()));
 			AddAll->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
-			ResultsList->AddChild(AddAll);
+			AddToList(ResultsList, AddAll);
 		}
 		for (const FBBPTrack& Track : OnlineResults)
 		{
 			if (UBBPTrackRow* Row = MakeRow())
 			{
 				Row->SetupAsResult(Track);
-				ResultsList->AddChild(Row);
+				AddToList(ResultsList, Row);
 			}
 		}
 	}
@@ -436,34 +579,30 @@ void UBBPMusicPage::RefreshResults()
 
 void UBBPMusicPage::RefreshQueue()
 {
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-	const int32 QueueLength = Playlist ? Playlist->GetQueue().Num() : 0;
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	const int32 QueueLength = Channel ? Channel->GetQueue().Num() : 0;
 
 	if (QueueHeaderText)
 	{
-		QueueHeaderText->SetText(FText::Format(LOCTEXT("QueueHeader", "Queue ({0})"), QueueLength));
+		QueueHeaderText->SetText(FText::Format(LOCTEXT("QueueHeader", "QUEUE ({0})"), QueueLength));
 	}
 	if (!QueueList)
 	{
 		return;
 	}
 	QueueList->ClearChildren();
-	if (!Playlist)
-	{
-		return;
-	}
 	if (QueueLength == 0)
 	{
-		QueueList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("EmptyQueue", "The queue is empty. Add tracks with + Front or + End.")));
+		AddToList(QueueList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("EmptyQueue", "The queue is empty. Add tracks with Play Next or Add.")));
 		return;
 	}
-	const TArray<FBBPQueueEntry>& Queue = Playlist->GetQueue();
+	const TArray<FBBPQueueEntry>& Queue = Channel->GetQueue();
 	for (int32 i = 0; i < Queue.Num(); ++i)
 	{
 		if (UBBPTrackRow* Row = MakeRow())
 		{
-			Row->SetupAsQueueEntry(Queue[i], i, QueueLength, UBBPBlueprintLibrary::GetEntryAvailability(this, Queue[i]));
-			QueueList->AddChild(Row);
+			Row->SetupAsQueueEntry(Queue[i], i, QueueLength, UBBPBlueprintLibrary::GetEntryAvailability(Channel, Queue[i]));
+			AddToList(QueueList, Row);
 		}
 	}
 }
@@ -475,9 +614,9 @@ void UBBPMusicPage::RefreshTransport()
 	BBPWidgetStyle::SetShown(NotLoadedText, !bLoaded);
 	BBPWidgetStyle::SetShown(UseBoomBoxButton, !bLoaded);
 
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
 	FBBPQueueEntry Current;
-	const bool bHasCurrent = Playlist && Playlist->GetCurrentEntry(Current);
+	const bool bHasCurrent = Channel && Channel->GetCurrentEntry(Current);
 
 	if (NowPlayingText)
 	{
@@ -488,23 +627,124 @@ void UBBPMusicPage::RefreshTransport()
 	if (PositionText)
 	{
 		PositionText->SetText(bHasCurrent
-			? FText::FromString(FString::Printf(TEXT("%s / %s"), *UBBPBlueprintLibrary::FormatDuration(Playlist->GetPlaybackPosition()), *UBBPBlueprintLibrary::FormatDuration(Current.Track.Duration)))
+			? FText::FromString(FString::Printf(TEXT("%s / %s"), *UBBPBlueprintLibrary::FormatDuration(Channel->GetPlaybackPosition()), *UBBPBlueprintLibrary::FormatDuration(Current.Track.Duration)))
 			: FText::GetEmpty());
+	}
+	if (SeekSlider)
+	{
+		SeekSlider->SetIsEnabled(bHasCurrent && Current.Track.Duration > 0.f);
+		if (!bSeeking)
+		{
+			SeekSlider->SetValue(bHasCurrent && Current.Track.Duration > 0.f ? FMath::Clamp(Channel->GetPlaybackPosition() / Current.Track.Duration, 0.f, 1.f) : 0.f);
+		}
 	}
 	if (LyricText)
 	{
-		LyricText->SetText(FText::FromString(UBBPBlueprintLibrary::GetCurrentLyricLine(this)));
+		LyricText->SetText(FText::FromString(UBBPBlueprintLibrary::GetCurrentLyricLine(Channel)));
 	}
-	if (Playlist)
+	if (Channel)
 	{
-		const FBBPPlaybackState& State = Playlist->GetPlaybackState();
-		BBPWidgetStyle::SetButtonLabel(PlayPauseButton, Playlist->IsPlaying() ? LOCTEXT("Pause", "Pause") : LOCTEXT("Play", "Play"));
+		const FBBPPlaybackState& State = Channel->GetPlaybackState();
+		BBPWidgetStyle::SetButtonLabel(PlayPauseButton, Channel->IsPlaying() ? LOCTEXT("Pause", "Pause") : LOCTEXT("Play", "Play"));
 		BBPWidgetStyle::SetButtonLabel(ShuffleButton, State.bShuffle ? LOCTEXT("ShuffleOn", "Shuffle: On") : LOCTEXT("ShuffleOff", "Shuffle: Off"));
 		const FText Repeat = State.RepeatMode == EBBPRepeatMode::One ? LOCTEXT("RepeatOne", "Repeat: One")
 			: State.RepeatMode == EBBPRepeatMode::All ? LOCTEXT("RepeatAll", "Repeat: All")
 			: LOCTEXT("RepeatOff", "Repeat: Off");
 		BBPWidgetStyle::SetButtonLabel(RepeatButton, Repeat);
 	}
+}
+
+void UBBPMusicPage::RefreshLink()
+{
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	const int32 Shared = Channel ? Channel->GetMembers().Num() : 0;
+	if (LinkCodeText)
+	{
+		FText Text;
+		if (!Channel)
+		{
+			Text = LOCTEXT("NoLinkCode", "Link code: appears once this Boom Box plays or queues music");
+		}
+		else if (Shared > 1)
+		{
+			Text = FText::Format(LOCTEXT("LinkCodeShared", "Link code: {0}   (queue shared by {1} Boom Boxes)"),
+				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())), Shared);
+		}
+		else
+		{
+			Text = FText::Format(LOCTEXT("LinkCodeSolo", "Link code: {0}   (give it to a friend to share this queue)"),
+				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())));
+		}
+		LinkCodeText->SetText(Text);
+	}
+	BBPWidgetStyle::SetShown(UnlinkButton, Shared > 1);
+}
+
+void UBBPMusicPage::HandleMembersChanged()
+{
+	RefreshLink();
+}
+
+void UBBPMusicPage::HandleLinkCodeCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	if (CommitMethod == ETextCommit::OnEnter)
+	{
+		HandleLink();
+	}
+}
+
+void UBBPMusicPage::HandleLink()
+{
+	const FString Code = LinkCodeBox ? LinkCodeBox->GetText().ToString().TrimStartAndEnd() : FString();
+	bool bFourDigits = Code.Len() == 4;
+	for (const TCHAR Char : Code)
+	{
+		bFourDigits &= FChar::IsDigit(Char);
+	}
+	if (!bFourDigits)
+	{
+		if (LinkMessageText)
+		{
+			LinkMessageText->SetText(LOCTEXT("BadCode", "Enter the 4-digit code shown on the other Boom Box."));
+		}
+		return;
+	}
+	if (LinkMessageText)
+	{
+		LinkMessageText->SetText(LOCTEXT("Linking", "Linking..."));
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: linking %s to code %s"), *GetNameSafe(GetBoomBox()), *Code);
+	UBBPBlueprintLibrary::RequestLinkBoomBox(GetBoomBox(), FCString::Atoi(*Code));
+	LinkCodeBox->SetText(FText::GetEmpty());
+}
+
+void UBBPMusicPage::HandleUnlink()
+{
+	if (LinkMessageText)
+	{
+		LinkMessageText->SetText(LOCTEXT("Unlinking", "Unlinking..."));
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: unlinking %s"), *GetNameSafe(GetBoomBox()));
+	UBBPBlueprintLibrary::RequestUnlinkBoomBox(GetBoomBox());
+}
+
+void UBBPMusicPage::HandleSeekBegin()
+{
+	bSeeking = true;
+}
+
+void UBBPMusicPage::HandleSeekEnd()
+{
+	bSeeking = false;
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	FBBPQueueEntry Current;
+	if (!SeekSlider || !Channel || !Channel->GetCurrentEntry(Current) || Current.Track.Duration <= 0.f)
+	{
+		return;
+	}
+	const float Target = SeekSlider->GetValue() * Current.Track.Duration;
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: seeking '%s' to %.1f s"), *Current.Track.Title, Target);
+	UBBPBlueprintLibrary::RequestSeekTo(GetBoomBox(), Target);
 }
 
 void UBBPMusicPage::HandleSearchChanged(const FText& Text)
@@ -627,7 +867,7 @@ void UBBPMusicPage::HandleAddAllOnline()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: adding %d online tracks to the queue"), OnlineResults.Num());
 	for (const FBBPTrack& Track : OnlineResults)
 	{
-		UBBPBlueprintLibrary::RequestAddTrack(this, Track, false);
+		UBBPBlueprintLibrary::RequestAddTrack(GetBoomBox(), Track, false);
 	}
 }
 
@@ -650,38 +890,38 @@ void UBBPMusicPage::HandlePlaybackChanged()
 
 void UBBPMusicPage::HandlePlayPause()
 {
-	UBBPBlueprintLibrary::RequestTogglePlaying(this);
+	UBBPBlueprintLibrary::RequestTogglePlaying(GetBoomBox());
 }
 
 void UBBPMusicPage::HandleNext()
 {
-	UBBPBlueprintLibrary::RequestSkip(this);
+	UBBPBlueprintLibrary::RequestSkip(GetBoomBox());
 }
 
 void UBBPMusicPage::HandlePrevious()
 {
-	UBBPBlueprintLibrary::RequestPrevious(this);
+	UBBPBlueprintLibrary::RequestPrevious(GetBoomBox());
 }
 
 void UBBPMusicPage::HandleShuffle()
 {
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-	UBBPBlueprintLibrary::RequestSetShuffle(this, !(Playlist && Playlist->GetPlaybackState().bShuffle));
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	UBBPBlueprintLibrary::RequestSetShuffle(GetBoomBox(), !(Channel && Channel->GetPlaybackState().bShuffle));
 }
 
 void UBBPMusicPage::HandleRepeat()
 {
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-	const EBBPRepeatMode Current = Playlist ? Playlist->GetPlaybackState().RepeatMode : EBBPRepeatMode::All;
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	const EBBPRepeatMode Current = Channel ? Channel->GetPlaybackState().RepeatMode : EBBPRepeatMode::All;
 	const EBBPRepeatMode Next = Current == EBBPRepeatMode::All ? EBBPRepeatMode::One
 		: Current == EBBPRepeatMode::One ? EBBPRepeatMode::Off
 		: EBBPRepeatMode::All;
-	UBBPBlueprintLibrary::RequestSetRepeatMode(this, Next);
+	UBBPBlueprintLibrary::RequestSetRepeatMode(GetBoomBox(), Next);
 }
 
 void UBBPMusicPage::HandleClearQueue()
 {
-	UBBPBlueprintLibrary::RequestClearQueue(this);
+	UBBPBlueprintLibrary::RequestClearQueue(GetBoomBox());
 }
 
 void UBBPMusicPage::HandleOpenFolder()

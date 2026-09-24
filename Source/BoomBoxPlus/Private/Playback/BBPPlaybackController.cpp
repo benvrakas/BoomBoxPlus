@@ -7,9 +7,12 @@
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
+#include "FGBoomboxListenerInterface.h"
+#include "FGGameUserSettings.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
 #include "Net/BBPNetSubsystem.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/BBPHudOverlay.h"
@@ -22,6 +25,18 @@ namespace
 	constexpr float DriftTolerance = 0.25f;
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
+
+	// Unreal's mixer plays at full scale while the game's Wwise mix leaves headroom; this brings Custom Music in line.
+	constexpr float BaseGain = 0.3f;
+	constexpr float GameVolumeInterval = 1.f;
+	constexpr float VanillaPositionInterval = 0.25f;
+
+	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100.
+	float ReadVolumeOption(const UFGGameUserSettings& Settings, const TCHAR* Option)
+	{
+		const float Value = Settings.GetFloatOptionValue(Option);
+		return FMath::Clamp(Value > 1.f ? Value / 100.f : Value, 0.f, 1.f);
+	}
 }
 
 float UBBPPlaybackController::GetAudibleRange()
@@ -63,6 +78,12 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 		return;
 	}
 	EnsureHudOverlay();
+	GameVolumeTimer -= DeltaSeconds;
+	if (GameVolumeTimer <= 0.f)
+	{
+		GameVolumeTimer = GameVolumeInterval;
+		UpdateGameVolumeScale();
+	}
 	PrefetchTimer -= DeltaSeconds;
 	if (PrefetchTimer <= 0.f)
 	{
@@ -75,30 +96,116 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 		UpdateEmitter(Emitter, DeltaSeconds);
 	}
 	UpdateGameMusic(DeltaSeconds);
+	UpdateVanillaPages(DeltaSeconds);
 }
 
-bool UBBPPlaybackController::IsCustomMusicAudible() const
+void UBBPPlaybackController::UpdateGameVolumeScale()
 {
-	if (!Playlist->IsPlaying())
+	const UFGGameUserSettings* Settings = UFGGameUserSettings::GetFGGameUserSettings();
+	if (!Settings)
 	{
-		return false;
+		return;
 	}
-	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
+	const float Master = ReadVolumeOption(*Settings, TEXT("RTPC.Master_Bus_Volume"));
+	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
+	const float Scale = Master * BoomBox;
+	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f"), Master, BoomBox);
+		GameVolumeScale = Scale;
+	}
+}
+
+void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
+{
+	VanillaPositionTimer -= DeltaSeconds;
+	const bool bSendPosition = VanillaPositionTimer <= 0.f;
+	if (bSendPosition)
+	{
+		VanillaPositionTimer = VanillaPositionInterval;
+	}
+
+	TSet<UObject*> Seen;
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
+		if (!BoomBox || !Channel)
+		{
+			continue;
+		}
+		FBBPQueueEntry Current;
+		const bool bHasCurrent = Channel->GetCurrentEntry(Current);
+		const int32 EntryId = bHasCurrent ? Current.EntryId : INDEX_NONE;
+		const bool bPlaying = Channel->IsPlaying();
+
+		for (const TScriptInterface<IFGBoomboxListenerInterface>& Listener : BoomBox->GetmStateListeners())
+		{
+			UObject* Object = Listener.GetObject();
+			if (!IsValid(Object) || !Object->GetClass()->ImplementsInterface(UFGBoomboxListenerInterface::StaticClass()))
+			{
+				continue;
+			}
+			Seen.Add(Object);
+			FBBPVanillaPageState& Page = VanillaPages.FindOrAdd(Object);
+			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId)
+			{
+				const int32 Index = Channel->GetQueue().IndexOfByPredicate([EntryId](const FBBPQueueEntry& E) { return E.EntryId == EntryId; });
+				IFGBoomboxListenerInterface::Execute_CurrentSongChanged(Object, BoomBox->GetCurrentSong(), FMath::Max(0, Index));
+			}
+			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId || Page.bPlaying != bPlaying)
+			{
+				const int32 State = bPlaying ? static_cast<int32>(EBoomBoxPlaybackStateBitfield::MayActuallyPlay) : 0;
+				IFGBoomboxListenerInterface::Execute_PlaybackStateChanged(Object, State);
+				UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: told %s entry %d, %s"), *GetNameSafe(Object), EntryId, bPlaying ? TEXT("playing") : TEXT("paused"));
+			}
+			Page.Channel = Channel;
+			Page.EntryId = EntryId;
+			Page.bPlaying = bPlaying;
+			if (bSendPosition && bHasCurrent)
+			{
+				IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Channel->GetPlaybackPosition(), Current.Track.Duration);
+			}
+		}
+	}
+	for (auto It = VanillaPages.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid() || !Seen.Contains(It.Key().Get()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+}
+
+const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireSound) const
+{
+	const APawn* Pawn = Playlist ? UGameplayStatics::GetPlayerPawn(Playlist, 0) : nullptr;
 	if (!Pawn)
 	{
-		return false;
+		return nullptr;
 	}
-	const float RangeSquared = FMath::Square(GetAudibleRange());
+	const ABBPMusicChannel* Nearest = nullptr;
+	float NearestDistanceSquared = FMath::Square(GetAudibleRange());
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
 		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
-		if (BoomBox && Emitter.Wave && !Emitter.Wave->HasFailed() && Emitter.AppliedVolume > 0.f
-			&& FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= RangeSquared)
+		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
+		if (!BoomBox || !Channel || !Channel->IsPlaying())
 		{
-			return true;
+			continue;
+		}
+		if (bRequireSound && (!Emitter.Wave || Emitter.Wave->HasFailed() || Emitter.AppliedVolume <= 0.f))
+		{
+			continue;
+		}
+		const float DistanceSquared = FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
+		if (DistanceSquared <= NearestDistanceSquared)
+		{
+			NearestDistanceSquared = DistanceSquared;
+			Nearest = Channel;
 		}
 	}
-	return false;
+	return Nearest;
 }
 
 void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
@@ -106,7 +213,7 @@ void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
 	const bool bFadeEnabled = UBBPConfig::GetBool(Playlist, UBBPConfig::FadeGameMusicKey, true);
 	const float Level = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicLevelKey, 0.f);
 	const float FadeSeconds = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicFadeTimeKey, 2.f);
-	GameMusicFader.Update(bFadeEnabled && IsCustomMusicAudible(), Level, FadeSeconds, DeltaSeconds);
+	GameMusicFader.Update(bFadeEnabled && GetAudibleChannel(true) != nullptr, Level, FadeSeconds, DeltaSeconds);
 }
 
 void UBBPPlaybackController::EnsureHudOverlay()
@@ -136,18 +243,31 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
 	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
-	if (!Net || !Library || Playlist->GetActiveBoomBoxes().Num() == 0)
+	if (!Net || !Library)
 	{
 		return;
 	}
-	const TArray<FBBPQueueEntry>& Queue = Playlist->GetQueue();
-	const int32 CurrentIndex = FMath::Max(0, Queue.IndexOfByPredicate([this](const FBBPQueueEntry& E) { return E.EntryId == Playlist->GetPlaybackState().CurrentEntryId; }));
-	for (int32 i = CurrentIndex; i < Queue.Num() && i <= CurrentIndex + PrefetchAhead; ++i)
+	// Only channels some Boom Box is playing need their tracks on disk.
+	TSet<const ABBPMusicChannel*> Heard;
+	for (const FBBPEmitter& Emitter : Emitters)
 	{
-		const FBBPTrack& Track = Queue[i].Track;
-		if (Track.Source != EBBPTrackSource::Local && !Library->HasTrack(Track.Id))
+		if (const ABBPMusicChannel* Channel = Playlist->FindChannel(Emitter.BoomBox.Get()))
 		{
-			Net->EnsureDownloaded(Track);
+			Heard.Add(Channel);
+		}
+	}
+	for (const ABBPMusicChannel* Channel : Heard)
+	{
+		const TArray<FBBPQueueEntry>& Queue = Channel->GetQueue();
+		const int32 CurrentEntryId = Channel->GetPlaybackState().CurrentEntryId;
+		const int32 CurrentIndex = FMath::Max(0, Queue.IndexOfByPredicate([CurrentEntryId](const FBBPQueueEntry& E) { return E.EntryId == CurrentEntryId; }));
+		for (int32 i = CurrentIndex; i < Queue.Num() && i <= CurrentIndex + PrefetchAhead; ++i)
+		{
+			const FBBPTrack& Track = Queue[i].Track;
+			if (Track.Source != EBBPTrackSource::Local && !Library->HasTrack(Track.Id))
+			{
+				Net->EnsureDownloaded(Track);
+			}
 		}
 	}
 }
@@ -155,7 +275,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.8f), 0.f, 1.f);
+	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.8f), 0.f, 1.f) * GameVolumeScale * BaseGain;
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{
@@ -180,11 +300,11 @@ void UBBPPlaybackController::SyncEmitters()
 		if (FBBPEmitter* Existing = Emitters.FindByPredicate([BoomBox](const FBBPEmitter& E) { return E.BoomBox == BoomBox; }))
 		{
 			const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
-			if (Existing->Component && Existing->AppliedVolume != Volume)
+			if (Existing->Component && !FMath::IsNearlyEqual(Existing->AppliedVolume, Volume, 0.001f))
 			{
 				Existing->AppliedVolume = Volume;
 				Existing->Component->SetVolumeMultiplier(Volume);
-				UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: volume %.2f on %s (Boom Box %.2f x music %.2f)"),
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x mod setting/game sliders/headroom %.3f)"),
 					Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
 			}
 			continue;
@@ -233,7 +353,22 @@ UAudioComponent* UBBPPlaybackController::CreateAudioComponent(AFGBoomBoxPlayer* 
 
 void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeconds)
 {
-	const FBBPPlaybackState& State = Playlist->GetPlaybackState();
+	ABBPMusicChannel* Channel = Playlist->FindChannel(Emitter.BoomBox.Get());
+	if (Channel != Emitter.Channel.Get())
+	{
+		// Linked, unlinked, or given its first channel: entry ids belong to the old channel, so start over.
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s now plays channel %04d"), *GetNameSafe(Emitter.BoomBox.Get()), Channel ? Channel->GetLinkCode() : 0);
+		StopTrack(Emitter);
+		Emitter.Channel = Channel;
+		Emitter.AppliedRevision = -1;
+		Emitter.bWaitingForFile = false;
+	}
+	if (!Channel)
+	{
+		return;
+	}
+
+	const FBBPPlaybackState& State = Channel->GetPlaybackState();
 
 	if (State.CurrentEntryId == INDEX_NONE)
 	{
@@ -245,11 +380,11 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		return;
 	}
 
-	const float Expected = Playlist->GetPlaybackPosition();
+	const float Expected = Channel->GetPlaybackPosition();
 
 	if (Emitter.EntryId != State.CurrentEntryId)
 	{
-		StartTrack(Emitter, State.CurrentEntryId, Expected);
+		StartTrack(Emitter, *Channel, State.CurrentEntryId, Expected);
 		Emitter.AppliedRevision = State.Revision;
 		if (Emitter.Component && Emitter.Wave)
 		{
@@ -264,10 +399,10 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 		const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
 		FBBPQueueEntry Entry;
-		if (Library && Playlist->GetCurrentEntry(Entry) && Library->HasTrack(Entry.Track.Id))
+		if (Library && Channel->GetCurrentEntry(Entry) && Library->HasTrack(Entry.Track.Id))
 		{
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: '%s' is now available; joining at %.2f s"), *Entry.Track.Title, Expected);
-			StartTrack(Emitter, State.CurrentEntryId, Expected);
+			StartTrack(Emitter, *Channel, State.CurrentEntryId, Expected);
 			Emitter.AppliedRevision = State.Revision;
 			if (Emitter.Component && Emitter.Wave)
 			{
@@ -329,7 +464,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	}
 }
 
-void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, float Position)
+void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicChannel& Channel, int32 EntryId, float Position)
 {
 	StopTrack(Emitter);
 	Emitter.EntryId = EntryId;
@@ -338,7 +473,7 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, flo
 	Emitter.DriftCheckTimer = DriftCheckInterval;
 
 	FBBPQueueEntry Entry;
-	if (!Playlist->GetCurrentEntry(Entry))
+	if (!Channel.GetCurrentEntry(Entry))
 	{
 		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: entry %d not replicated yet; waiting"), EntryId);
 		Emitter.EntryId = INDEX_NONE;

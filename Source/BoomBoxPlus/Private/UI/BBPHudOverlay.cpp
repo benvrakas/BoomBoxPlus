@@ -9,6 +9,7 @@
 #include "Components/VerticalBox.h"
 #include "FGBoomBoxPlayer.h"
 #include "Playback/BBPPlaybackController.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "UI/BBPWidgetStyle.h"
 
@@ -61,47 +62,36 @@ void UBBPHudOverlay::BuildDefaultLayout()
 	BoxSlot->SetAutoSize(true);
 }
 
-bool UBBPHudOverlay::IsInEarshot() const
+const ABBPMusicChannel* UBBPHudOverlay::GetHeardChannel() const
 {
 	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-	const APawn* Pawn = GetOwningPlayerPawn();
-	if (!Playlist || !Pawn)
-	{
-		return false;
-	}
-	const float RangeSquared = FMath::Square(UBBPPlaybackController::GetAudibleRange());
-	for (const FBBPActiveBoomBox& Active : Playlist->GetActiveBoomBoxes())
-	{
-		if (Active.BoomBox && FVector::DistSquared(Active.BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= RangeSquared)
-		{
-			return true;
-		}
-	}
-	return false;
+	const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+	return Controller ? Controller->GetAudibleChannel(false) : nullptr;
 }
 
 void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
-	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	const ABBPMusicChannel* Channel = GetHeardChannel();
 	FBBPQueueEntry Current;
-	const bool bPlaying = Playlist && Playlist->IsPlaying() && Playlist->GetCurrentEntry(Current);
-	const bool bAudible = bPlaying && IsInEarshot();
+	const bool bPlaying = Channel && Channel->GetCurrentEntry(Current);
 	bShowLyrics = UBBPConfig::GetBool(this, UBBPConfig::ShowLyricsKey, true);
 	bShowNowPlaying = UBBPConfig::GetBool(this, UBBPConfig::ShowNowPlayingKey, true);
 
 	if (LyricText)
 	{
-		const FString Line = (bAudible && bShowLyrics) ? UBBPBlueprintLibrary::GetCurrentLyricLine(this) : FString();
+		const FString Line = (bPlaying && bShowLyrics) ? UBBPBlueprintLibrary::GetCurrentLyricLine(Channel) : FString();
 		LyricText->SetText(FText::FromString(Line));
 	}
 
+	// Entry ids are per channel, so a different channel counts as a different track.
 	const int32 EntryId = bPlaying ? Current.EntryId : INDEX_NONE;
-	if (EntryId != LastEntryId)
+	if (EntryId != LastEntryId || Channel != LastChannel.Get())
 	{
 		LastEntryId = EntryId;
-		if (bAudible && bShowNowPlaying)
+		LastChannel = Channel;
+		if (bPlaying && bShowNowPlaying)
 		{
 			NowPlayingTimeLeft = NowPlayingSeconds;
 			if (NowPlayingTitleText) NowPlayingTitleText->SetText(FText::FromString(Current.Track.Title));

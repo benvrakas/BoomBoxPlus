@@ -6,7 +6,9 @@
 #include "Library/BBPTrack.h"
 #include "BBPTrackRow.generated.h"
 
-class UButton;
+class AFGBoomBoxPlayer;
+class UBBPGameButton;
+class UBorder;
 class UTextBlock;
 
 // One track in the search results or the queue, with the buttons that act on it.
@@ -16,6 +18,9 @@ class BOOMBOXPLUS_API UBBPTrackRow : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	// Sets the Boom Box whose queue this row's buttons act on.
+	void SetBoomBox(AFGBoomBoxPlayer* InBoomBox);
+
 	// Shows a library/search result with +Front and +End.
 	void SetupAsResult(const FBBPTrack& InTrack);
 
@@ -25,6 +30,18 @@ public:
 protected:
 	virtual void NativeOnInitialized() override;
 
+	// Row background; tinted while the row's track is playing.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> RowBackground;
+
+	// Orange marker at the row's left edge, shown while the row's track is playing.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> PlayingMarker;
+
+	// "YOUTUBE" / "SOUNDCLOUD" tag for online tracks.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> SourceText;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TitleText;
 
@@ -32,26 +49,31 @@ protected:
 	TObjectPtr<UTextBlock> DetailText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> AddFrontButton;
+	TObjectPtr<UBBPGameButton> AddFrontButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> AddEndButton;
+	TObjectPtr<UBBPGameButton> AddEndButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> PlayButton;
+	TObjectPtr<UBBPGameButton> PlayButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> MoveUpButton;
+	TObjectPtr<UBBPGameButton> MoveUpButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> MoveDownButton;
+	TObjectPtr<UBBPGameButton> MoveDownButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> RemoveButton;
+	TObjectPtr<UBBPGameButton> RemoveButton;
 
 private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
 	void BuildDefaultLayout();
+
+	TWeakObjectPtr<AFGBoomBoxPlayer> BoomBox;
+
+	// Shows the online source of Track, or hides the tag for local files.
+	void ShowSourceTag();
 
 	UFUNCTION()
 	void HandleAddFront();

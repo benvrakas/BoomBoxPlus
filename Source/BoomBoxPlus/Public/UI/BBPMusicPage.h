@@ -6,8 +6,11 @@
 #include "Containers/Ticker.h"
 #include "BBPMusicPage.generated.h"
 
+class ABBPMusicChannel;
 class AFGBoomBoxPlayer;
-class UButton;
+class USlider;
+class UBBPGameButton;
+class UScrollBox;
 class UEditableTextBox;
 class UFGTapeData;
 class UScrollBox;
@@ -23,6 +26,9 @@ class BOOMBOXPLUS_API UBBPMusicPage : public UUserWidget
 public:
 	// Shows this page on every open Boom Box window for BoomBox when Custom Music has just been loaded into it.
 	static void NotifyTapeChanged(AFGBoomBoxPlayer* BoomBox, TSubclassOf<UFGTapeData> NewTape);
+
+	// Shows the server's reply to a link or unlink request on open pages for BoomBox.
+	static void NotifyLinkResult(AFGBoomBoxPlayer* BoomBox, const FString& Message);
 
 	// Makes this page the visible page of its Boom Box window.
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus|UI")
@@ -42,6 +48,10 @@ public:
 	// Returns the Boom Box this window belongs to, or null if it can't be found.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
 	AFGBoomBoxPlayer* GetBoomBox() const;
+
+	// Returns the channel this page's Boom Box plays, or null if it has none yet.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
+	ABBPMusicChannel* GetChannel() const;
 
 protected:
 	virtual void NativeOnInitialized() override;
@@ -78,42 +88,64 @@ protected:
 	TObjectPtr<UTextBlock> LibraryStatusText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> PlayPauseButton;
+	TObjectPtr<UBBPGameButton> PlayPauseButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> NextButton;
+	TObjectPtr<UBBPGameButton> NextButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> PreviousButton;
+	TObjectPtr<UBBPGameButton> PreviousButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> ShuffleButton;
+	TObjectPtr<UBBPGameButton> ShuffleButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> RepeatButton;
+	TObjectPtr<UBBPGameButton> RepeatButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> ClearQueueButton;
+	TObjectPtr<UBBPGameButton> ClearQueueButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> TapesButton;
+	TObjectPtr<UBBPGameButton> TapesButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> BackButton;
+	TObjectPtr<UBBPGameButton> BackButton;
 
 	// Loads the Custom Music tape into this Boom Box; shown only while it isn't loaded.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> UseBoomBoxButton;
+	TObjectPtr<UBBPGameButton> UseBoomBoxButton;
 
 	// Explains that this Boom Box won't play the queue until Custom Music is loaded.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> NotLoadedText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> OpenFolderButton;
+	TObjectPtr<UBBPGameButton> OpenFolderButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> RescanButton;
+	TObjectPtr<UBBPGameButton> RescanButton;
+
+	// Track position; dragging it seeks.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USlider> SeekSlider;
+
+	// This Boom Box's link code and how many Boom Boxes share its queue.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> LinkCodeText;
+
+	// Where the player types another Boom Box's link code.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UEditableTextBox> LinkCodeBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> LinkButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> UnlinkButton;
+
+	// Result of the last link or unlink.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> LinkMessageText;
 
 private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
@@ -122,9 +154,13 @@ private:
 	void RefreshResults();
 	void RefreshQueue();
 	void RefreshTransport();
+	void RefreshLink();
 
-	// Binds to library and playlist change events once they exist.
+	// Binds to library change events once the library exists.
 	void TryBindSources();
+
+	// Rebinds to this Boom Box's channel when it gets one or changes (link/unlink).
+	void UpdateChannelBinding();
 
 	UFUNCTION()
 	void HandleSearchChanged(const FText& Text);
@@ -177,10 +213,31 @@ private:
 	UFUNCTION()
 	void HandleUseBoomBox();
 
+	UFUNCTION()
+	void HandleLink();
+
+	UFUNCTION()
+	void HandleUnlink();
+
+	UFUNCTION()
+	void HandleLinkCodeCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleMembersChanged();
+
+	UFUNCTION()
+	void HandleSeekBegin();
+
+	UFUNCTION()
+	void HandleSeekEnd();
+
 	// Switches to the first switcher page whose class name contains NameFragment.
 	bool ShowSiblingPage(const TCHAR* NameFragment);
 
 	UBBPTrackRow* MakeRow();
+
+	// Adds a row or message to a list with the spacing between rows.
+	void AddToList(UScrollBox* List, UWidget* Widget);
 
 	// Re-shows this page while a show request is active. Runs on the core ticker, which ticks even while this page is hidden.
 	bool TickShowRequest(float DeltaTime);
@@ -202,7 +259,12 @@ private:
 	int32 SearchGeneration = 0;
 	float SearchDebounceTimer = -1.f;
 	bool bBoundLibrary = false;
-	bool bBoundPlaylist = false;
+
+	// Channel whose change events this page is bound to.
+	TWeakObjectPtr<ABBPMusicChannel> BoundChannel;
+
+	// True while the player is dragging the seek slider, so playback updates don't move it.
+	bool bSeeking = false;
 
 	// Every constructed page, so tape changes can bring the right ones forward.
 	static TArray<TWeakObjectPtr<UBBPMusicPage>> LivePages;

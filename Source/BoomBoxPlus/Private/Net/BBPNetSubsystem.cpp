@@ -15,6 +15,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Net/BBPProcess.h"
+#include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -619,9 +620,12 @@ void UBBPNetSubsystem::EvictOldDownloads()
 	const UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (const ABBPPlaylistSubsystem* Playlist = World ? ABBPPlaylistSubsystem::Get(World) : nullptr)
 	{
-		for (const FBBPQueueEntry& Entry : Playlist->GetQueue())
+		for (const ABBPMusicChannel* Channel : Playlist->GetChannels())
 		{
-			Protected.Add(Entry.Track.Id);
+			for (const FBBPQueueEntry& Entry : Channel ? Channel->GetQueue() : TArray<FBBPQueueEntry>())
+			{
+				Protected.Add(Entry.Track.Id);
+			}
 		}
 	}
 
