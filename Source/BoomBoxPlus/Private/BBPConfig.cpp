@@ -15,6 +15,9 @@ const FString UBBPConfig::ShowLyricsKey = TEXT("ShowLyrics");
 const FString UBBPConfig::ShowNowPlayingKey = TEXT("ShowNowPlaying");
 const FString UBBPConfig::HostOnlyControlKey = TEXT("HostOnlyControl");
 const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
+const FString UBBPConfig::FadeGameMusicKey = TEXT("FadeGameMusic");
+const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
+const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
 
 namespace
 {
@@ -83,6 +86,27 @@ UBBPConfig::UBBPConfig()
 	MaxCachedSongs->DefaultValue = 50;
 	MaxCachedSongs->Value = 50;
 	RootSection->SectionProperties.Add(MaxCachedSongsKey, MaxCachedSongs);
+
+	UConfigPropertyBool* FadeGameMusic = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("FadeGameMusic"));
+	FadeGameMusic->DisplayName = LOCTEXT("FadeGameMusic", "Fade game music");
+	FadeGameMusic->Tooltip = LOCTEXT("FadeGameMusicTip", "Turn the game's own music down while you can hear Custom Music, and back up when it stops.");
+	FadeGameMusic->DefaultValue = true;
+	FadeGameMusic->Value = true;
+	RootSection->SectionProperties.Add(FadeGameMusicKey, FadeGameMusic);
+
+	UConfigPropertyFloat* GameMusicLevel = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("GameMusicLevel"));
+	GameMusicLevel->DisplayName = LOCTEXT("GameMusicLevel", "Game music level while playing");
+	GameMusicLevel->Tooltip = LOCTEXT("GameMusicLevelTip", "How loud the game's music stays while Custom Music plays, 0 (silent) to 1 (unchanged), relative to your Music volume setting.");
+	GameMusicLevel->DefaultValue = 0.f;
+	GameMusicLevel->Value = 0.f;
+	RootSection->SectionProperties.Add(GameMusicLevelKey, GameMusicLevel);
+
+	UConfigPropertyFloat* GameMusicFadeTime = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("GameMusicFadeTime"));
+	GameMusicFadeTime->DisplayName = LOCTEXT("GameMusicFadeTime", "Game music fade time");
+	GameMusicFadeTime->Tooltip = LOCTEXT("GameMusicFadeTimeTip", "Seconds the game's music takes to fade out and back in.");
+	GameMusicFadeTime->DefaultValue = 2.f;
+	GameMusicFadeTime->Value = 2.f;
+	RootSection->SectionProperties.Add(GameMusicFadeTimeKey, GameMusicFadeTime);
 }
 
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)

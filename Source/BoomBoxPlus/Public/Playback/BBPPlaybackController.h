@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "Playback/BBPGameMusicFader.h"
 #include "BBPPlaybackController.generated.h"
 
 class ABBPPlaylistSubsystem;
@@ -77,6 +78,17 @@ private:
 
 	// Starts downloads for the current and next few network tracks in the queue.
 	void PrefetchNetworkTracks();
+
+	// Returns true if Custom Music is playing on a Boom Box within earshot of the local player.
+	bool IsCustomMusicAudible() const;
+
+	// Lowers or restores the game's music depending on whether Custom Music is audible.
+	void UpdateGameMusic(float DeltaSeconds);
+
+	FBBPGameMusicFader GameMusicFader;
+
+	// True once the missing audio device has been reported.
+	bool bReportedNoAudioDevice = false;
 
 	float PrefetchTimer = 0.f;
 

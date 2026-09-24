@@ -1,5 +1,7 @@
 #include "Playback/BBPPlaybackController.h"
+#include "Audio/BBPAudioDevice.h"
 #include "Audio/BBPStreamingSoundWave.h"
+#include "AudioDevice.h"
 #include "BoomBoxPlus.h"
 #include "BBPConfig.h"
 #include "Components/AudioComponent.h"
@@ -30,7 +32,8 @@ float UBBPPlaybackController::GetAudibleRange()
 void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
 {
 	Playlist = InPlaylist;
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback controller ready"));
+	const bool bHasAudio = BBPAudioDevice::EnsureAvailable();
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback controller ready (Unreal audio device %s)"), bHasAudio ? TEXT("available") : TEXT("MISSING"));
 }
 
 void UBBPPlaybackController::Shutdown()
@@ -44,6 +47,7 @@ void UBBPPlaybackController::Shutdown()
 		}
 	}
 	Emitters.Empty();
+	GameMusicFader.Restore();
 	if (HudOverlay)
 	{
 		HudOverlay->RemoveFromParent();
@@ -70,6 +74,39 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	{
 		UpdateEmitter(Emitter, DeltaSeconds);
 	}
+	UpdateGameMusic(DeltaSeconds);
+}
+
+bool UBBPPlaybackController::IsCustomMusicAudible() const
+{
+	if (!Playlist->IsPlaying())
+	{
+		return false;
+	}
+	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
+	if (!Pawn)
+	{
+		return false;
+	}
+	const float RangeSquared = FMath::Square(GetAudibleRange());
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+		if (BoomBox && Emitter.Wave && !Emitter.Wave->HasFailed() && Emitter.AppliedVolume > 0.f
+			&& FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= RangeSquared)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
+{
+	const bool bFadeEnabled = UBBPConfig::GetBool(Playlist, UBBPConfig::FadeGameMusicKey, true);
+	const float Level = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicLevelKey, 0.f);
+	const float FadeSeconds = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicFadeTimeKey, 2.f);
+	GameMusicFader.Update(bFadeEnabled && IsCustomMusicAudible(), Level, FadeSeconds, DeltaSeconds);
 }
 
 void UBBPPlaybackController::EnsureHudOverlay()
@@ -346,6 +383,11 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, flo
 	Emitter.Wave = Wave;
 	Emitter.Component->SetSound(Wave);
 	Emitter.Component->Play();
+	if (!Emitter.Component->GetAudioDevice() && !bReportedNoAudioDevice)
+	{
+		bReportedNoAudioDevice = true;
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("Playback: no Unreal audio device for %s; the track is streaming but nothing will be heard"), *GetNameSafe(Emitter.BoomBox.Get()));
+	}
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: playing '%s' on %s from %.2f s"), *Entry.Track.Title, *GetNameSafe(Emitter.BoomBox.Get()), Position);
 }
 

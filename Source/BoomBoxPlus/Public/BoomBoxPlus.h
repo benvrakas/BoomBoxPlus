@@ -9,7 +9,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogBoomBoxPlus, Log, All);
 class FBoomBoxPlusModule : public IModuleInterface
 {
 public:
-	// Registers native hooks when the module loads.
+	// Enables engine audio and registers native hooks when the module loads.
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 };

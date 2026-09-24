@@ -19,6 +19,9 @@ public:
 	static const FString ShowNowPlayingKey;
 	static const FString HostOnlyControlKey;
 	static const FString MaxCachedSongsKey;
+	static const FString FadeGameMusicKey;
+	static const FString GameMusicLevelKey;
+	static const FString GameMusicFadeTimeKey;
 
 	// Returns a boolean setting, or Fallback if the configuration isn't available.
 	static bool GetBool(const UObject* WorldContext, const FString& Key, bool Fallback);
