@@ -11,6 +11,32 @@ PEAK mod sPEAKer.
 - Discord announcement: [`Docs/Release/Discord.md`](Docs/Release/Discord.md)
 - Developer documentation: [`Docs/`](Docs/Architecture.md), starting with Architecture.md
 
+## Screenshots
+
+The Custom Music page: now playing with a seek bar, search results from your own music, YouTube and
+SoundCloud, the queue, and the link code for sharing a queue.
+
+![The Custom Music page](Docs/Images/music-page.png)
+
+The current lyric line while a Boom Box plays nearby.
+
+![Lyrics on screen near a Boom Box](Docs/Images/lyrics-in-world.png)
+
+The Boom Box's own screen with the added **Custom Music** button, next to Change Tape.
+
+![The vanilla Boom Box screen with the Custom Music button](Docs/Images/vanilla-boombox-page.png)
+
+Pasting a Spotify playlist: songs are matched on YouTube as you watch, and **Add all** queues them as
+they're found.
+
+![A Spotify playlist being matched](Docs/Images/spotify-matching.png)
+
+![Matching while the Spotify sign-in is open in the browser](Docs/Images/spotify-sign-in.png)
+
+**Connect Spotify** appears once a Spotify Client ID and Secret are set in the mod settings.
+
+![The Connect Spotify button](Docs/Images/connect-spotify.png)
+
 ## Building
 
 1. Run `Tools/FetchTools.ps1` to download the pinned yt-dlp and FFmpeg into `Resources/Tools/` (not

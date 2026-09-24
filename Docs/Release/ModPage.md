@@ -20,8 +20,11 @@ hears the same song at the same moment.
 
 Inspired by the PEAK mod sPEAKer.
 
-[screenshot: the Custom Music page]
-[screenshot: a Boom Box playing with the lyric line on screen]
+![The Custom Music page: now playing, search results and the queue](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+
+![A Boom Box playing, with the current lyric line on screen](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-in-world.png)
+
+![The Boom Box's own screen, with the Custom Music button](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/vanilla-boombox-page.png)
 
 ### Features
 
@@ -84,6 +87,13 @@ To read whole playlists you own (up to 1000 songs):
 4. In game, open **Mods → BoomBoxPlus** and paste them into **Spotify Client ID** and **Spotify Client
    Secret**.
 5. On the Custom Music page, press **Connect Spotify** and approve in your browser. You only do this once.
+
+![The Connect Spotify button under the search box](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/connect-spotify.png)
+
+Pasting a playlist link shows the matches as they're found; **Add all** starts playing right away and
+keeps adding the rest in order:
+
+![A Spotify playlist being matched on YouTube](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-matching.png)
 
 Use the Spotify account that created the app. The mod only asks for permission to read playlists. The
 Client Secret is only ever sent to Spotify. Spotify albums work with just the Client ID and Secret, with
