@@ -97,7 +97,7 @@ Typing searches the local library live. **Enter** runs the online part:
 |---|---|
 | Plain text | YouTube (8) + SoundCloud (4) search, appended under local results with `[YouTube]`/`[SoundCloud]` tags |
 | YouTube/SoundCloud track link | Shows that track |
-| YouTube playlist / SoundCloud set | Lists up to 500 tracks, with an "Add all N to queue" button |
+| YouTube playlist (any link with `list=`, including `watch?v=...&list=...`) / SoundCloud set, artist or likes page | Lists up to 500 tracks, with an "Add all N to queue" button that queues exactly those tracks (no matching) |
 | Spotify track link | Replaces the text with `Title PrimaryArtist`, then searches |
 | Spotify playlist/album | Starts a background match job (below); results appear as they're matched |
 
@@ -166,6 +166,11 @@ current track and the next two of every channel a nearby Boom Box plays, one at 
 queued download that is no longer among those (`SetWantedDownloads`) — so skipping through a 400-song
 queue never builds up a backlog. Finished downloads are kept up to `MaxCachedSongs` (default 50), least
 recently used deleted first.
+
+Any YouTube/SoundCloud link that lists more than one track gets "Add all"; the first version only did this
+for links it classified as playlists, so a video opened from a playlist (`watch?v=...&list=...`) listed 53
+tracks with no way to add them all. Playlist placeholders (`[Deleted video]`, `[Private video]`,
+`[Unavailable video]`) are dropped when parsing.
 
 Each search bumps a generation counter; responses to older searches are dropped, so a slow Spotify playlist
 match can't overwrite a newer search.

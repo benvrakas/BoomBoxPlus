@@ -118,6 +118,11 @@ namespace
 		{
 			return false;
 		}
+		// Playlist placeholders for videos that can't be played.
+		if (Title == TEXT("[Deleted video]") || Title == TEXT("[Private video]") || Title == TEXT("[Unavailable video]"))
+		{
+			return false;
+		}
 
 		const bool bSoundCloud = Extractor.Contains(TEXT("Soundcloud"), ESearchCase::IgnoreCase);
 		OutTrack.Source = bSoundCloud ? EBBPTrackSource::SoundCloud : EBBPTrackSource::YouTube;
@@ -376,8 +381,8 @@ EBBPLinkKind UBBPNetSubsystem::ClassifyLink(const FString& Text)
 	const FString Host = GetHost(Url);
 	if (Host == TEXT("youtube.com") || Host == TEXT("m.youtube.com") || Host == TEXT("music.youtube.com") || Host == TEXT("youtu.be"))
 	{
-		const bool bHasVideo = Url.Contains(TEXT("v=")) || Host == TEXT("youtu.be") || Url.Contains(TEXT("/shorts/"));
-		return (Url.Contains(TEXT("list=")) && !bHasVideo) || Url.Contains(TEXT("/playlist")) ? EBBPLinkKind::YouTubePlaylist : EBBPLinkKind::YouTubeVideo;
+		// A video opened from a playlist (watch?v=...&list=...) counts as the playlist.
+		return Url.Contains(TEXT("list=")) || Url.Contains(TEXT("/playlist")) ? EBBPLinkKind::YouTubePlaylist : EBBPLinkKind::YouTubeVideo;
 	}
 	if (Host == TEXT("soundcloud.com") || Host == TEXT("m.soundcloud.com") || Host == TEXT("on.soundcloud.com"))
 	{

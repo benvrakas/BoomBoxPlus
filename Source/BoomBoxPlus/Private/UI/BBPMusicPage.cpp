@@ -972,14 +972,13 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 	case EBBPLinkKind::SoundCloudTrack:
 	case EBBPLinkKind::SoundCloudSet:
 	{
-		const EBBPLinkKind Kind = UBBPNetSubsystem::ClassifyLink(Text);
-		const bool bCollection = Kind == EBBPLinkKind::YouTubePlaylist || Kind == EBBPLinkKind::SoundCloudSet;
 		OnlineStatus = TEXT("Reading link...");
-		Net->ResolveLink(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation, bCollection](const TArray<FBBPTrack>& Tracks, const FString& Error)
+		Net->ResolveLink(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation](const TArray<FBBPTrack>& Tracks, const FString& Error)
 		{
 			if (UBBPMusicPage* This = WeakThis.Get())
 			{
-				This->ShowOnlineResults(Generation, Tracks, Error, bCollection);
+				// Any link that lists more than one track (playlist, set, artist or likes page) gets "Add all".
+				This->ShowOnlineResults(Generation, Tracks, Error, true);
 			}
 		}));
 		break;
