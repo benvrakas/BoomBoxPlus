@@ -3,6 +3,7 @@
 #include "Configuration/ConfigManager.h"
 #include "Configuration/Properties/ConfigPropertyBool.h"
 #include "Configuration/Properties/ConfigPropertyFloat.h"
+#include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertySection.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -13,6 +14,7 @@ const FString UBBPConfig::MusicVolumeKey = TEXT("MusicVolume");
 const FString UBBPConfig::ShowLyricsKey = TEXT("ShowLyrics");
 const FString UBBPConfig::ShowNowPlayingKey = TEXT("ShowNowPlaying");
 const FString UBBPConfig::HostOnlyControlKey = TEXT("HostOnlyControl");
+const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
 
 namespace
 {
@@ -74,6 +76,13 @@ UBBPConfig::UBBPConfig()
 	HostOnlyControl->DefaultValue = false;
 	HostOnlyControl->Value = false;
 	RootSection->SectionProperties.Add(HostOnlyControlKey, HostOnlyControl);
+
+	UConfigPropertyInteger* MaxCachedSongs = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("MaxCachedSongs"));
+	MaxCachedSongs->DisplayName = LOCTEXT("MaxCachedSongs", "Downloaded songs to keep");
+	MaxCachedSongs->Tooltip = LOCTEXT("MaxCachedSongsTip", "How many YouTube/SoundCloud downloads to keep on disk. The oldest unused ones are deleted first; songs in the queue are never deleted.");
+	MaxCachedSongs->DefaultValue = 50;
+	MaxCachedSongs->Value = 50;
+	RootSection->SectionProperties.Add(MaxCachedSongsKey, MaxCachedSongs);
 }
 
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
@@ -93,6 +102,16 @@ float UBBPConfig::GetFloat(const UObject* WorldContext, const FString& Key, floa
 		return Property->Value;
 	}
 	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Config: '%s' unavailable, using %.2f"), *Key, Fallback);
+	return Fallback;
+}
+
+int32 UBBPConfig::GetInt(const UObject* WorldContext, const FString& Key, int32 Fallback)
+{
+	if (const UConfigPropertyInteger* Property = Cast<UConfigPropertyInteger>(FindProperty(WorldContext, Key)))
+	{
+		return Property->Value;
+	}
+	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Config: '%s' unavailable, using %d"), *Key, Fallback);
 	return Fallback;
 }
 

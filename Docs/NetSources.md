@@ -61,3 +61,45 @@ yt-dlp <url> -f bestaudio -x --audio-format vorbis --audio-quality 5
 Resolved over HTTP with no credentials (see the plan): oEmbed for a track's title, `og:description` for its
 primary artist (text before the first comma), and the embed page's `trackList` for playlists/albums. The
 resolved `Title Artist` text goes **into the search box** for the user to see, per the design decision.
+
+## Implementation
+
+All in the core module under `Net/` (not a separate plugin — the plan split it out only so the core could
+ship without a downloader, which bundling makes moot; the folder boundary keeps a later split easy).
+
+- `BBPProcess` — `BBPRunProcess` wraps `FPlatformProcess::ExecProcess` (which uses `DETACHED_PROCESS`, so
+  no console windows, and passes parameters verbatim); `BBPQuoteArg` quotes each argument by the
+  `CommandLineToArgvW` rules (cross-checked against Python's `subprocess.list2cmdline`). Refuses to run on
+  the game thread.
+- `UBBPNetSubsystem` (`UGameInstanceSubsystem`) — `Search`, `ResolveLink`, `ResolveSpotifyTrack`,
+  `ResolveSpotifyCollection`, `EnsureDownloaded`. Every callback lands on the game thread. Downloads run one
+  at a time.
+- Track ids are `yt:<videoId>` / `sc:<trackId>` so every client derives the same id; `SourceRef` is the URL
+  handed back to yt-dlp. YouTube titles of the form `Artist - Title (Official Video)` are split and cleaned,
+  which gives LRCLIB a much better chance of finding lyrics.
+- Downloads land in `<Saved>/BoomBoxPlus/Cache/` with an index `NetCache.json`; finished files are handed to
+  `UBBPLibrarySubsystem::RegisterExternalFile`, which probes them and keeps the source id (unlike scanned
+  files, whose id is a content hash). Least-recently-used downloads beyond `MaxCachedSongs` (config, default
+  50) are deleted, never touching anything in the current queue.
+
+## How network tracks play in multiplayer
+
+Every client downloads a queued network track **itself** (`UBBPPlaybackController::PrefetchNetworkTracks`
+fetches the current track and the next three). A client without the file yet stays silent, then — as soon
+as the file is registered — starts the stream **at the synced position** and joins everyone mid-song. The
+same late-join path covers local tracks that appear after a library rescan.
+
+## UI
+
+Typing searches the local library live. **Enter** runs the online part:
+
+| Search box contains | Enter does |
+|---|---|
+| Plain text | YouTube (8) + SoundCloud (4) search, appended under local results with `[YouTube]`/`[SoundCloud]` tags |
+| YouTube/SoundCloud track link | Shows that track |
+| YouTube playlist / SoundCloud set | Lists up to 100 tracks, with an "Add all N to queue" button |
+| Spotify track link | Replaces the text with `Title PrimaryArtist`, then searches |
+| Spotify playlist/album | Matches each track on YouTube (closest duration of the top 3), then "Add all" |
+
+Each search bumps a generation counter; responses to older searches are dropped, so a slow Spotify playlist
+match can't overwrite a newer search.

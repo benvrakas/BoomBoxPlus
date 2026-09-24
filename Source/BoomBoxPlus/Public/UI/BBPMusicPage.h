@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Library/BBPTrack.h"
 #include "BBPMusicPage.generated.h"
 
 class AFGBoomBoxPlayer;
@@ -110,6 +111,18 @@ private:
 	void HandleSearchChanged(const FText& Text);
 
 	UFUNCTION()
+	void HandleSearchCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleAddAllOnline();
+
+	// Starts an online search, or resolves a pasted link, for the search box text.
+	void RunOnlineSearch(const FString& Text);
+
+	// Stores online results for the current search generation and refreshes the list.
+	void ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>& Tracks, const FString& Error, bool bIsCollection);
+
+	UFUNCTION()
 	void HandleLibraryChanged();
 
 	UFUNCTION()
@@ -145,6 +158,14 @@ private:
 	UBBPTrackRow* MakeRow();
 
 	FString SearchQuery;
+
+	// Results from YouTube/SoundCloud for the last committed search.
+	TArray<FBBPTrack> OnlineResults;
+	FString OnlineStatus;
+	bool bOnlineIsCollection = false;
+
+	// Increments on every new search so late responses to older searches are ignored.
+	int32 SearchGeneration = 0;
 	float SearchDebounceTimer = -1.f;
 	bool bShowRequested = false;
 	bool bBoundLibrary = false;

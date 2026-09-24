@@ -38,6 +38,9 @@ struct FBBPEmitter
 
 	// True once the missing-track or failure warning has been logged for EntryId.
 	bool bReportedProblem = false;
+
+	// True while EntryId has no local file yet; playback starts at the synced position once it appears.
+	bool bWaitingForFile = false;
 };
 
 // Plays the shared queue through every Boom Box that has Custom Music loaded, kept in sync with the server clock.
@@ -71,6 +74,11 @@ private:
 
 	// Creates the lyric/now-playing overlay once a local player controller exists.
 	void EnsureHudOverlay();
+
+	// Starts downloads for the current and next few network tracks in the queue.
+	void PrefetchNetworkTracks();
+
+	float PrefetchTimer = 0.f;
 
 	UPROPERTY()
 	TObjectPtr<ABBPPlaylistSubsystem> Playlist;

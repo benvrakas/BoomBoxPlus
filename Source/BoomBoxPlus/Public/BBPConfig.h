@@ -18,10 +18,14 @@ public:
 	static const FString ShowLyricsKey;
 	static const FString ShowNowPlayingKey;
 	static const FString HostOnlyControlKey;
+	static const FString MaxCachedSongsKey;
 
 	// Returns a boolean setting, or Fallback if the configuration isn't available.
 	static bool GetBool(const UObject* WorldContext, const FString& Key, bool Fallback);
 
 	// Returns a number setting, or Fallback if the configuration isn't available.
 	static float GetFloat(const UObject* WorldContext, const FString& Key, float Fallback);
+
+	// Returns a whole-number setting, or Fallback if the configuration isn't available.
+	static int32 GetInt(const UObject* WorldContext, const FString& Key, int32 Fallback);
 };

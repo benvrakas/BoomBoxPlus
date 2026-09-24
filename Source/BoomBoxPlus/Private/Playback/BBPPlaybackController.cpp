@@ -7,6 +7,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
+#include "Net/BBPNetSubsystem.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/BBPHudOverlay.h"
@@ -14,6 +15,8 @@
 namespace
 {
 	constexpr float DriftCheckInterval = 1.f;
+	constexpr float PrefetchInterval = 1.f;
+	constexpr int32 PrefetchAhead = 3;
 	constexpr float DriftTolerance = 0.25f;
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
@@ -56,6 +59,12 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 		return;
 	}
 	EnsureHudOverlay();
+	PrefetchTimer -= DeltaSeconds;
+	if (PrefetchTimer <= 0.f)
+	{
+		PrefetchTimer = PrefetchInterval;
+		PrefetchNetworkTracks();
+	}
 	SyncEmitters();
 	for (FBBPEmitter& Emitter : Emitters)
 	{
@@ -82,6 +91,28 @@ void UBBPPlaybackController::EnsureHudOverlay()
 	}
 	HudOverlay->AddToViewport(-10);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: lyric/now-playing overlay added to viewport"));
+}
+
+void UBBPPlaybackController::PrefetchNetworkTracks()
+{
+	const UWorld* World = Playlist->GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
+	if (!Net || !Library || Playlist->GetActiveBoomBoxes().Num() == 0)
+	{
+		return;
+	}
+	const TArray<FBBPQueueEntry>& Queue = Playlist->GetQueue();
+	const int32 CurrentIndex = FMath::Max(0, Queue.IndexOfByPredicate([this](const FBBPQueueEntry& E) { return E.EntryId == Playlist->GetPlaybackState().CurrentEntryId; }));
+	for (int32 i = CurrentIndex; i < Queue.Num() && i <= CurrentIndex + PrefetchAhead; ++i)
+	{
+		const FBBPTrack& Track = Queue[i].Track;
+		if (Track.Source != EBBPTrackSource::Local && !Library->HasTrack(Track.Id))
+		{
+			Net->EnsureDownloaded(Track);
+		}
+	}
 }
 
 void UBBPPlaybackController::SyncEmitters()
@@ -190,6 +221,25 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		return;
 	}
 
+	if (!Emitter.Wave && Emitter.bWaitingForFile)
+	{
+		const UWorld* World = Playlist->GetWorld();
+		const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+		const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
+		FBBPQueueEntry Entry;
+		if (Library && Playlist->GetCurrentEntry(Entry) && Library->HasTrack(Entry.Track.Id))
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: '%s' is now available; joining at %.2f s"), *Entry.Track.Title, Expected);
+			StartTrack(Emitter, State.CurrentEntryId, Expected);
+			Emitter.AppliedRevision = State.Revision;
+			if (Emitter.Component && Emitter.Wave)
+			{
+				Emitter.Component->SetPaused(State.bPaused);
+			}
+		}
+		return;
+	}
+
 	if (!Emitter.Wave || !Emitter.Component)
 	{
 		return;
@@ -247,6 +297,7 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, flo
 	StopTrack(Emitter);
 	Emitter.EntryId = EntryId;
 	Emitter.bReportedProblem = false;
+	Emitter.bWaitingForFile = false;
 	Emitter.DriftCheckTimer = DriftCheckInterval;
 
 	FBBPQueueEntry Entry;
@@ -268,8 +319,20 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, flo
 	if (!Local)
 	{
 		Emitter.bReportedProblem = true;
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: '%s' - '%s' (id %s) is not in this machine's library; staying silent for this track"),
-			*Entry.Track.Artist, *Entry.Track.Title, *Entry.Track.Id);
+		Emitter.bWaitingForFile = true;
+		if (Entry.Track.Source != EBBPTrackSource::Local)
+		{
+			if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+			{
+				Net->EnsureDownloaded(Entry.Track);
+			}
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: '%s' not downloaded yet; silent until it is"), *Entry.Track.Title);
+		}
+		else
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: '%s' - '%s' (id %s) is not in this machine's library; staying silent for this track"),
+				*Entry.Track.Artist, *Entry.Track.Title, *Entry.Track.Id);
+		}
 		return;
 	}
 

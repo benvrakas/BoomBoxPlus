@@ -63,7 +63,8 @@ void UBBPTrackRow::SetupAsResult(const FBBPTrack& InTrack)
 	Index = INDEX_NONE;
 
 	if (TitleText) TitleText->SetText(FText::FromString(Track.Title));
-	if (DetailText) DetailText->SetText(FText::FromString(FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
+	const TCHAR* SourceTag = Track.Source == EBBPTrackSource::YouTube ? TEXT("[YouTube]  ") : Track.Source == EBBPTrackSource::SoundCloud ? TEXT("[SoundCloud]  ") : TEXT("");
+	if (DetailText) DetailText->SetText(FText::FromString(FString::Printf(TEXT("%s%s   %s"), SourceTag, *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
 
 	BBPWidgetStyle::SetShown(AddFrontButton, true);
 	BBPWidgetStyle::SetShown(AddEndButton, true);

@@ -250,8 +250,19 @@ TArray<FBBPTrack> UBBPLibrarySubsystem::Search(const FString& Query, int32 MaxRe
 	Query.ParseIntoArrayWS(Words);
 
 	TArray<FBBPTrack> Results;
+	TArray<const FBBPLocalTrack*> Candidates;
+	Candidates.Reserve(Tracks.Num() + ExternalTracks.Num());
 	for (const FBBPLocalTrack& Local : Tracks)
 	{
+		Candidates.Add(&Local);
+	}
+	for (const TPair<FString, FBBPLocalTrack>& External : ExternalTracks)
+	{
+		Candidates.Add(&External.Value);
+	}
+	for (const FBBPLocalTrack* LocalPtr : Candidates)
+	{
+		const FBBPLocalTrack& Local = *LocalPtr;
 		if (Results.Num() >= MaxResults)
 		{
 			break;
@@ -271,13 +282,65 @@ TArray<FBBPTrack> UBBPLibrarySubsystem::Search(const FString& Query, int32 MaxRe
 
 bool UBBPLibrarySubsystem::HasTrack(const FString& TrackId) const
 {
-	return TrackIndexById.Contains(TrackId);
+	return TrackIndexById.Contains(TrackId) || ExternalTracks.Contains(TrackId);
 }
 
 const FBBPLocalTrack* UBBPLibrarySubsystem::FindLocalTrack(const FString& TrackId) const
 {
-	const int32* Index = TrackIndexById.Find(TrackId);
-	return Index ? &Tracks[*Index] : nullptr;
+	if (const int32* Index = TrackIndexById.Find(TrackId))
+	{
+		return &Tracks[*Index];
+	}
+	return ExternalTracks.Find(TrackId);
+}
+
+void UBBPLibrarySubsystem::RegisterExternalFile(const FBBPTrack& Track, const FString& FilePath)
+{
+	TWeakObjectPtr<UBBPLibrarySubsystem> WeakThis(this);
+	Async(EAsyncExecution::ThreadPool, [WeakThis, Track, FilePath]()
+	{
+		FBBPLocalTrack Local;
+		TArray<uint8> Bytes;
+		FBBPDecoder Decoder;
+		const bool bOk = FFileHelper::LoadFileToArray(Bytes, *FilePath) && Decoder.Open(MoveTemp(Bytes));
+		if (bOk)
+		{
+			Local.Track = Track;
+			Local.FilePath = FilePath;
+			Local.SampleRate = Decoder.GetSampleRate();
+			Local.Channels = Decoder.GetChannels();
+			if (Local.Track.Duration <= 0.f)
+			{
+				Local.Track.Duration = Decoder.GetDurationSeconds();
+			}
+		}
+		const FString Error = bOk ? FString() : Decoder.GetLastError();
+		AsyncTask(ENamedThreads::GameThread, [WeakThis, Local = MoveTemp(Local), bOk, Error, FilePath]() mutable
+		{
+			UBBPLibrarySubsystem* This = WeakThis.Get();
+			if (!This)
+			{
+				return;
+			}
+			if (!bOk)
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: downloaded file '%s' is not playable: %s"), *FilePath, *Error);
+				return;
+			}
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: registered download '%s' (%s)"), *Local.Track.Title, *Local.Track.Id);
+			This->ExternalTracks.Add(Local.Track.Id, MoveTemp(Local));
+			This->OnLibraryChanged.Broadcast();
+		});
+	});
+}
+
+void UBBPLibrarySubsystem::UnregisterExternalFile(const FString& TrackId)
+{
+	if (ExternalTracks.Remove(TrackId) > 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Library: unregistered download %s"), *TrackId);
+		OnLibraryChanged.Broadcast();
+	}
 }
 
 FString UBBPLibrarySubsystem::GetMusicFolder() const

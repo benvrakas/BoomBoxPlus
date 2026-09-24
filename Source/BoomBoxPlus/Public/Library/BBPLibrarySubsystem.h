@@ -58,6 +58,12 @@ public:
 	// Returns the local file for a track id, or null if it isn't on this machine.
 	const FBBPLocalTrack* FindLocalTrack(const FString& TrackId) const;
 
+	// Adds a file downloaded for Track (keeping Track.Id) once it has been probed on a background thread.
+	void RegisterExternalFile(const FBBPTrack& Track, const FString& FilePath);
+
+	// Removes a previously registered downloaded file.
+	void UnregisterExternalFile(const FString& TrackId);
+
 	// Broadcast on the game thread after a scan completes.
 	UPROPERTY(BlueprintAssignable, Category = "BoomBoxPlus|Library")
 	FBBPOnLibraryChanged OnLibraryChanged;
@@ -71,6 +77,9 @@ private:
 
 	TArray<FBBPLocalTrack> Tracks;
 	TMap<FString, int32> TrackIndexById;
+
+	// Downloaded network tracks, keyed by their source id rather than a content hash.
+	TMap<FString, FBBPLocalTrack> ExternalTracks;
 	bool bScanning = false;
 	bool bRescanQueued = false;
 };

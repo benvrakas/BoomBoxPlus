@@ -15,6 +15,7 @@
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "Library/BBPLibrarySubsystem.h"
+#include "Net/BBPNetSubsystem.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPTrackRow.h"
@@ -63,7 +64,11 @@ void UBBPMusicPage::NativeOnInitialized()
 		BuildDefaultLayout();
 	}
 
-	if (SearchBox) SearchBox->OnTextChanged.AddDynamic(this, &UBBPMusicPage::HandleSearchChanged);
+	if (SearchBox)
+	{
+		SearchBox->OnTextChanged.AddDynamic(this, &UBBPMusicPage::HandleSearchChanged);
+		SearchBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleSearchCommitted);
+	}
 	if (PlayPauseButton) PlayPauseButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandlePlayPause);
 	if (NextButton) NextButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleNext);
 	if (PreviousButton) PreviousButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandlePrevious);
@@ -135,7 +140,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, RepeatButton, false);
 
 	SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music..."));
+	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music, or press Enter to search YouTube / SoundCloud. Links work too."));
 	Column->AddChildToVerticalBox(SearchBox)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 
 	Column->AddChildToVerticalBox(BBPWidgetStyle::MakeText(WidgetTree, 12, BBPWidgetStyle::AccentColor, LOCTEXT("Results", "Results")))
@@ -321,9 +326,9 @@ void UBBPMusicPage::RefreshResults()
 	}
 
 	const TArray<FBBPTrack> Results = Library->Search(SearchQuery, MaxResults);
-	if (Results.Num() == 0)
+	if (Results.Num() == 0 && OnlineResults.Num() == 0 && OnlineStatus.IsEmpty())
 	{
-		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("NoResults", "No matches.")));
+		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("NoResults", "No matches. Press Enter to search YouTube and SoundCloud.")));
 		return;
 	}
 	for (const FBBPTrack& Track : Results)
@@ -332,6 +337,28 @@ void UBBPMusicPage::RefreshResults()
 		{
 			Row->SetupAsResult(Track);
 			ResultsList->AddChild(Row);
+		}
+	}
+
+	if (!OnlineStatus.IsEmpty())
+	{
+		ResultsList->AddChild(BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor, FText::FromString(OnlineStatus)));
+	}
+	if (OnlineResults.Num() > 0)
+	{
+		if (bOnlineIsCollection)
+		{
+			UButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num()));
+			AddAll->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
+			ResultsList->AddChild(AddAll);
+		}
+		for (const FBBPTrack& Track : OnlineResults)
+		{
+			if (UBBPTrackRow* Row = MakeRow())
+			{
+				Row->SetupAsResult(Track);
+				ResultsList->AddChild(Row);
+			}
 		}
 	}
 }
@@ -408,6 +435,124 @@ void UBBPMusicPage::HandleSearchChanged(const FText& Text)
 {
 	SearchQuery = Text.ToString();
 	SearchDebounceTimer = SearchDebounceSeconds;
+	if (UBBPNetSubsystem::ClassifyLink(SearchQuery) != EBBPLinkKind::None)
+	{
+		// A pasted link would match nothing locally; searching waits for Enter.
+		SearchQuery.Reset();
+	}
+}
+
+void UBBPMusicPage::HandleSearchCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	if (CommitMethod == ETextCommit::OnEnter)
+	{
+		RunOnlineSearch(Text.ToString().TrimStartAndEnd());
+	}
+}
+
+void UBBPMusicPage::RunOnlineSearch(const FString& Text)
+{
+	const UGameInstance* GameInstance = GetGameInstance();
+	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	if (!Net || Text.Len() < 2)
+	{
+		return;
+	}
+
+	const int32 Generation = ++SearchGeneration;
+	OnlineResults.Reset();
+	bOnlineIsCollection = false;
+	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
+
+	switch (UBBPNetSubsystem::ClassifyLink(Text))
+	{
+	case EBBPLinkKind::SpotifyTrack:
+		OnlineStatus = TEXT("Reading Spotify link...");
+		Net->ResolveSpotifyTrack(Text, FBBPOnNetText::CreateLambda([WeakThis, Generation](const FString& SearchText, const FString& Error)
+		{
+			UBBPMusicPage* This = WeakThis.Get();
+			if (!This || Generation != This->SearchGeneration)
+			{
+				return;
+			}
+			if (!Error.IsEmpty())
+			{
+				This->ShowOnlineResults(Generation, {}, Error, false);
+				return;
+			}
+			if (This->SearchBox)
+			{
+				This->SearchBox->SetText(FText::FromString(SearchText));
+			}
+			This->RunOnlineSearch(SearchText);
+		}));
+		break;
+	case EBBPLinkKind::SpotifyCollection:
+		OnlineStatus = TEXT("Matching the Spotify playlist on YouTube (can take a minute)...");
+		Net->ResolveSpotifyCollection(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation](const TArray<FBBPTrack>& Tracks, const FString& Error)
+		{
+			if (UBBPMusicPage* This = WeakThis.Get())
+			{
+				This->ShowOnlineResults(Generation, Tracks, Error, true);
+			}
+		}));
+		break;
+	case EBBPLinkKind::YouTubeVideo:
+	case EBBPLinkKind::YouTubePlaylist:
+	case EBBPLinkKind::SoundCloudTrack:
+	case EBBPLinkKind::SoundCloudSet:
+	{
+		const EBBPLinkKind Kind = UBBPNetSubsystem::ClassifyLink(Text);
+		const bool bCollection = Kind == EBBPLinkKind::YouTubePlaylist || Kind == EBBPLinkKind::SoundCloudSet;
+		OnlineStatus = TEXT("Reading link...");
+		Net->ResolveLink(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation, bCollection](const TArray<FBBPTrack>& Tracks, const FString& Error)
+		{
+			if (UBBPMusicPage* This = WeakThis.Get())
+			{
+				This->ShowOnlineResults(Generation, Tracks, Error, bCollection);
+			}
+		}));
+		break;
+	}
+	default:
+		OnlineStatus = Net->AreToolsAvailable() ? TEXT("Searching YouTube and SoundCloud...") : TEXT("YouTube/SoundCloud unavailable: the mod's download tools are missing.");
+		if (Net->AreToolsAvailable())
+		{
+			Net->Search(Text, FBBPOnNetTracks::CreateLambda([WeakThis, Generation](const TArray<FBBPTrack>& Tracks, const FString& Error)
+			{
+				if (UBBPMusicPage* This = WeakThis.Get())
+				{
+					This->ShowOnlineResults(Generation, Tracks, Error, false);
+				}
+			}));
+		}
+		break;
+	}
+	RefreshResults();
+}
+
+void UBBPMusicPage::ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>& Tracks, const FString& Error, bool bIsCollection)
+{
+	if (Generation != SearchGeneration)
+	{
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("UI: dropping results of an older search"));
+		return;
+	}
+	OnlineResults = Tracks;
+	bOnlineIsCollection = bIsCollection && Tracks.Num() > 1;
+	OnlineStatus = !Error.IsEmpty() ? FString::Printf(TEXT("Online search failed: %s"), *Error)
+		: Tracks.Num() == 0 ? FString(TEXT("Nothing found online."))
+		: FString(TEXT("From YouTube / SoundCloud:"));
+	RefreshResults();
+}
+
+void UBBPMusicPage::HandleAddAllOnline()
+{
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: adding %d online tracks to the queue"), OnlineResults.Num());
+	for (const FBBPTrack& Track : OnlineResults)
+	{
+		UBBPBlueprintLibrary::RequestAddTrack(this, Track, false);
+	}
 }
 
 void UBBPMusicPage::HandleLibraryChanged()
