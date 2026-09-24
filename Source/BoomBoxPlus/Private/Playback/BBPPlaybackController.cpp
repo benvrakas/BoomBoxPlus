@@ -123,7 +123,8 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	{
 		return;
 	}
-	const float Master = ReadVolumeOption(*Settings, TEXT("RTPC.Master_Bus_Volume"));
+	// The Master slider is stored as "RTPC.Menu_Volume_Master"; "RTPC.Master_Bus_Volume" is not a saved option.
+	const float Master = ReadVolumeOption(*Settings, TEXT("RTPC.Menu_Volume_Master"));
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
 	const float Scale = Master * BoomBox;
 	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
@@ -302,7 +303,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.6f), 0.f, 1.f) * GameVolumeScale * BaseGain;
+	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.8f), 0.f, 1.f) * GameVolumeScale * BaseGain;
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{

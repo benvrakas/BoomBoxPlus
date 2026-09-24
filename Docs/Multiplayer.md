@@ -111,8 +111,8 @@ Final volume of a Boom Box's audio =
 
 ```
 Boom Box's own volume (mState.mVolume, replicated via ActiveBoomBoxes)
-x MusicVolume (mod config, default 0.6)
-x the game's Master and Boom Box volume sliders (RTPC.Master_Bus_Volume, RTPC.Boombox_Bus_Volume options)
+x MusicVolume (mod config, default 0.8)
+x the game's Master and Boom Box volume sliders (options RTPC.Menu_Volume_Master, RTPC.Boombox_Bus_Volume)
 x 0.3 headroom (BaseGain in BBPPlaybackController.cpp)
 ```
 
@@ -120,6 +120,10 @@ The headroom exists because Unreal's mixer plays at full scale while the game's 
 the first in-game test at 0.8 was far too loud. The game sliders are read from `UFGGameUserSettings` once a
 second as variants; values above 1 are treated as 0-100 and divided, and an option that can't be read
 counts as full volume (the first version read a missing Master option as 0 and muted everything).
+The Master slider's saved option id is `RTPC.Menu_Volume_Master` (seen in `GameUserSettings.ini` as
+`mFloatValues=(("RTPC.Menu_Volume_Master", 0.1), ...)`). The options menu asset also names
+`RTPC.Master_Bus_Volume`, but that id is never stored, so reading it always failed and Custom Music
+ignored the Master slider — at 10% Master it played far louder than the game.
 
 ## Controls
 
