@@ -64,6 +64,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
 	static EBBPEntryAvailability GetEntryAvailability(const UObject* WorldContext, const FBBPQueueEntry& Entry);
 
+	// Returns the lyric line for the current track at the current position, or an empty string.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus", meta = (WorldContext = "WorldContext"))
+	static FString GetCurrentLyricLine(const UObject* WorldContext);
+
 	// Formats seconds as m:ss.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
 	static FString FormatDuration(float Seconds);

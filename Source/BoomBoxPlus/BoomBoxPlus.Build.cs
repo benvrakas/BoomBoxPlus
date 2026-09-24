@@ -79,6 +79,7 @@ public class BoomBoxPlus : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"Projects",
 			"AudioExtensions",
+			"HTTP",
 		});
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] {

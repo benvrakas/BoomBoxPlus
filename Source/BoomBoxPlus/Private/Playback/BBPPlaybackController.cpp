@@ -5,6 +5,7 @@
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "Library/BBPLibrarySubsystem.h"
+#include "Lyrics/BBPLyricsSubsystem.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 
 namespace
@@ -216,6 +217,10 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, int32 EntryId, flo
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
 	const FBBPLocalTrack* Local = Library ? Library->FindLocalTrack(Entry.Track.Id) : nullptr;
+	if (UBBPLyricsSubsystem* Lyrics = GameInstance ? GameInstance->GetSubsystem<UBBPLyricsSubsystem>() : nullptr)
+	{
+		Lyrics->RequestLyrics(Entry.Track, Local ? Local->FilePath : FString());
+	}
 	if (!Local)
 	{
 		Emitter.bReportedProblem = true;

@@ -4,6 +4,7 @@
 #include "FGPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Library/BBPLibrarySubsystem.h"
+#include "Lyrics/BBPLyricsSubsystem.h"
 #include "Network/BBPRemoteCallObject.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 
@@ -136,6 +137,20 @@ EBBPEntryAvailability UBBPBlueprintLibrary::GetEntryAvailability(const UObject* 
 		return EBBPEntryAvailability::NotInLibrary;
 	}
 	return EBBPEntryAvailability::Queued;
+}
+
+FString UBBPBlueprintLibrary::GetCurrentLyricLine(const UObject* WorldContext)
+{
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(WorldContext);
+	FBBPQueueEntry Entry;
+	if (!Playlist || !Playlist->GetCurrentEntry(Entry))
+	{
+		return FString();
+	}
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	const UBBPLyricsSubsystem* Lyrics = GameInstance ? GameInstance->GetSubsystem<UBBPLyricsSubsystem>() : nullptr;
+	return Lyrics ? Lyrics->GetLineAt(Entry.Track.Id, Playlist->GetPlaybackPosition()) : FString();
 }
 
 FString UBBPBlueprintLibrary::FormatDuration(float Seconds)
