@@ -209,10 +209,16 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	{
 		Emitter.AppliedRevision = State.Revision;
 		Emitter.Component->SetPaused(State.bPaused);
-		Emitter.Wave->Seek(Expected);
-		Emitter.DriftCheckTimer = DriftCheckInterval;
-		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: applied state rev %d (%s at %.2f s)"),
-			State.Revision, State.bPaused ? TEXT("paused") : TEXT("playing"), Expected);
+		// Only seek when the change moved the position (seek/restart), not for shuffle or repeat changes.
+		const float Actual = Emitter.Wave->GetPlaybackSeconds();
+		const bool bNeedsSeek = FMath::Abs(Actual - Expected) > DriftTolerance;
+		if (bNeedsSeek)
+		{
+			Emitter.Wave->Seek(Expected);
+			Emitter.DriftCheckTimer = DriftCheckInterval;
+		}
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: applied state rev %d (%s at %.2f s%s)"),
+			State.Revision, State.bPaused ? TEXT("paused") : TEXT("playing"), Expected, bNeedsSeek ? TEXT(", seeked") : TEXT(""));
 		return;
 	}
 

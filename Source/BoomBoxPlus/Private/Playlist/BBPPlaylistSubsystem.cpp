@@ -8,6 +8,9 @@
 #include "Subsystem/SubsystemActorManager.h"
 #include "Tape/BBPCustomMusicTape.h"
 
+// Returns early (with the given value) and logs when a server-only function is called on a client.
+#define BBP_REQUIRE_AUTHORITY(ReturnValue) 	if (!HasAuthority()) 	{ 		UE_LOG(LogBoomBoxPlus, Error, TEXT("Playlist: %s called without authority; ignored"), ANSI_TO_TCHAR(__FUNCTION__)); 		return ReturnValue; 	}
+
 namespace
 {
 	constexpr int32 MaxQueueLength = 1000;
@@ -145,7 +148,7 @@ int32 ABBPPlaylistSubsystem::FindEntryIndex(int32 EntryId) const
 
 bool ABBPPlaylistSubsystem::AddTrack(const FBBPTrack& Track, bool bFront, const FString& AddedBy)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY(false)
 	if (!Track.IsValid())
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playlist: rejected track with no id from %s"), *AddedBy);
@@ -178,7 +181,7 @@ bool ABBPPlaylistSubsystem::AddTrack(const FBBPTrack& Track, bool bFront, const 
 
 bool ABBPPlaylistSubsystem::RemoveEntry(int32 EntryId)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY(false)
 	const int32 Index = FindEntryIndex(EntryId);
 	if (Index == INDEX_NONE)
 	{
@@ -204,7 +207,7 @@ bool ABBPPlaylistSubsystem::RemoveEntry(int32 EntryId)
 
 bool ABBPPlaylistSubsystem::MoveEntry(int32 EntryId, int32 NewIndex)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY(false)
 	const int32 Index = FindEntryIndex(EntryId);
 	if (Index == INDEX_NONE)
 	{
@@ -222,7 +225,7 @@ bool ABBPPlaylistSubsystem::MoveEntry(int32 EntryId, int32 NewIndex)
 
 void ABBPPlaylistSubsystem::ClearQueue()
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: clearing %d entries"), Queue.Num());
 	Queue.Empty();
 	PlayHistory.Empty();
@@ -233,7 +236,7 @@ void ABBPPlaylistSubsystem::ClearQueue()
 
 void ABBPPlaylistSubsystem::SetPlaying(bool bPlay)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	if (PlaybackState.CurrentEntryId == INDEX_NONE)
 	{
 		if (bPlay && Queue.Num() > 0)
@@ -268,7 +271,7 @@ void ABBPPlaylistSubsystem::SetPlaying(bool bPlay)
 
 void ABBPPlaylistSubsystem::Skip()
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	const double Now = GetServerTime();
 	if (Now - LastSkipTime < SkipDebounceSeconds)
 	{
@@ -281,7 +284,7 @@ void ABBPPlaylistSubsystem::Skip()
 
 void ABBPPlaylistSubsystem::Previous()
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	if (PlaybackState.CurrentEntryId == INDEX_NONE)
 	{
 		return;
@@ -304,7 +307,7 @@ void ABBPPlaylistSubsystem::Previous()
 
 bool ABBPPlaylistSubsystem::PlayEntry(int32 EntryId)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY(false)
 	if (FindEntryIndex(EntryId) == INDEX_NONE)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playlist: play failed, no entry %d"), EntryId);
@@ -316,7 +319,7 @@ bool ABBPPlaylistSubsystem::PlayEntry(int32 EntryId)
 
 void ABBPPlaylistSubsystem::SeekTo(float PositionSeconds)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	if (PlaybackState.CurrentEntryId == INDEX_NONE)
 	{
 		return;
@@ -336,7 +339,7 @@ void ABBPPlaylistSubsystem::SeekTo(float PositionSeconds)
 
 void ABBPPlaylistSubsystem::SetShuffle(bool bEnabled)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	if (PlaybackState.bShuffle == bEnabled)
 	{
 		return;
@@ -353,7 +356,7 @@ void ABBPPlaylistSubsystem::SetShuffle(bool bEnabled)
 
 void ABBPPlaylistSubsystem::SetRepeatMode(EBBPRepeatMode Mode)
 {
-	check(HasAuthority());
+	BBP_REQUIRE_AUTHORITY()
 	PlaybackState.RepeatMode = Mode;
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: repeat mode %d"), (int32)Mode);
 	MarkPlaybackChanged();
@@ -504,3 +507,5 @@ void ABBPPlaylistSubsystem::OnRep_PlaybackState()
 		PlaybackState.Revision, PlaybackState.CurrentEntryId, PlaybackState.bPaused ? TEXT("paused") : TEXT("playing"));
 	OnPlaybackChanged.Broadcast();
 }
+
+#undef BBP_REQUIRE_AUTHORITY

@@ -46,3 +46,17 @@ LogBoomBoxPlus: Hook: GetUnlockedTapes fired for the first time (...)   (when th
 | Silence when a track should play | `Streaming '...'` then `Decode thread opened '...'`? A `Could not decode` / `changed format since it was scanned` warning explains it |
 | Choppy audio | Underrun count in the `Stopping stream` line |
 | Wrong position after joining / skipping | `Seek '...' to x s (was at y s)` at Verbose; `Seek to frame ... failed` warnings |
+
+## Never use `check()` in this mod
+
+Satisfactory's build sets **`ChecksInShipping: True`** (visible in the UBT log), so `check`, `checkf`,
+`verify` and `checkNoEntry` stay active in the shipped game and a failure **crashes the player's game**.
+Use a logged early return instead (see `BBP_REQUIRE_AUTHORITY` in `BBPPlaylistSubsystem.cpp`). `ensure` is
+acceptable for "should never happen" diagnostics since it only logs.
+
+## Things confirmed from source (so you don't need to re-check)
+
+- A pure C++ `UUserWidget` always ticks (`UUserWidget::UpdateCanTick`: `bCanTick |= !WidgetBPClass || ...`),
+  so `NativeTick` on the page/overlay runs without a Blueprint subclass.
+- SML creates the injected page with `UUserWidget::CreateWidgetInstance(*BPW_BoomBox, ...)`, so the page's
+  outer chain reaches the `BPW_BoomBox` instance — that's how `GetBoomBox()` finds `mBoomBox`.

@@ -46,8 +46,10 @@ real audio) with the expected position once a second, and seeks when they differ
 logs every correction with the drift and underrun count — frequent corrections are the first sign of a
 sync problem.
 
-A new state `Revision` (pause/resume/seek/restart) is applied immediately with a seek, then drift checks
-resume a second later so the seek has time to land.
+A new state `Revision` is applied immediately: the pause state is set, and the stream is seeked **only if**
+its position differs from the expected one by more than the tolerance. `Revision` increments on every change
+— shuffle and repeat toggles included — so seeking unconditionally would put an audible hiccup on every
+client whenever someone toggled shuffle. After a seek, drift checks wait a second so it has time to land.
 
 ## Shuffle and repeat
 
