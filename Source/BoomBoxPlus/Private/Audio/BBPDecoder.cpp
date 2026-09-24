@@ -315,7 +315,33 @@ namespace
 		}
 	}
 
-	// Reads TIT2/TPE1 from an ID3v2.3 or ID3v2.4 tag at the start of the file.
+	// Reads TT2/TP1 from an ID3v2.2 tag (3-character frame ids, 3-byte sizes, no frame flags).
+	void ReadId3v22(const TArray<uint8>& Bytes, FString& OutTitle, FString& OutArtist)
+	{
+		const uint8* B = Bytes.GetData();
+		const int32 End = FMath::Min<int32>(Bytes.Num(), 10 + (int32)ReadSynchsafe32(B + 6));
+		int32 Pos = 10;
+		while (Pos + 6 <= End && B[Pos] != 0)
+		{
+			const int32 FrameSize = ((int32)B[Pos + 3] << 16) | ((int32)B[Pos + 4] << 8) | (int32)B[Pos + 5];
+			const int32 DataStart = Pos + 6;
+			if (FrameSize == 0 || (int64)DataStart + FrameSize > End)
+			{
+				break;
+			}
+			if (FMemory::Memcmp(B + Pos, "TT2", 3) == 0 && OutTitle.IsEmpty())
+			{
+				OutTitle = DecodeId3Text(B + DataStart, FrameSize);
+			}
+			else if (FMemory::Memcmp(B + Pos, "TP1", 3) == 0 && OutArtist.IsEmpty())
+			{
+				OutArtist = DecodeId3Text(B + DataStart, FrameSize);
+			}
+			Pos = DataStart + FrameSize;
+		}
+	}
+
+	// Reads TIT2/TPE1 from an ID3v2.3 or ID3v2.4 tag at the start of the file (v2.2 is delegated).
 	void ReadId3v2(const TArray<uint8>& Bytes, FString& OutTitle, FString& OutArtist)
 	{
 		const uint8* B = Bytes.GetData();
@@ -324,6 +350,11 @@ namespace
 			return;
 		}
 		const uint8 Version = B[3];
+		if (Version == 2)
+		{
+			ReadId3v22(Bytes, OutTitle, OutArtist);
+			return;
+		}
 		if (Version != 3 && Version != 4)
 		{
 			return;

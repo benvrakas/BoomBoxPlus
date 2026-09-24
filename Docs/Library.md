@@ -50,5 +50,13 @@ In order of preference:
 2. File name `Artist - Title.ext`.
 3. The file name as the title.
 
-ID3 limitations: ID3v2.2 (3-character frame ids) is ignored; whole-tag unsynchronisation isn't undone
-(rare); multi-value v2.4 frames yield only the first value.
+ID3v2.2 (`TT2`/`TP1`, 3-byte frame sizes) is supported — the bundled demo track uses it. Limitations:
+whole-tag unsynchronisation isn't undone (rare); multi-value v2.4 frames yield only the first value.
+
+## Bundled demo track
+
+`Resources/Music/Monkeys Spinning Monkeys.mp3` — Kevin MacLeod, **CC BY 4.0**, credit in
+`Resources/Music/CREDITS.txt` and the README. Licence confirmed via Wikipedia's article on MacLeod (his
+catalogue is CC BY); incompetech's standard credit line names version 4.0. Any replacement must be
+redistributable: the user's first pick (Portal's radio tune) was rejected because it's Valve's copyrighted
+audio.
