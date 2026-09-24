@@ -683,7 +683,7 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 			if (Note.IsEmpty() && Tracks.Num() >= SpotifyEmbedLimit)
 			{
 				Note = !bHasApp ? FString(TEXT("Spotify only shares the first 100 songs without signing in. Add a Spotify Client ID and Secret in the mod settings, then press Connect Spotify."))
-					: !bSignedIn ? FString(TEXT("Only the first 100 songs: press Connect Spotify to read whole playlists."))
+					: !bSignedIn ? FString(TEXT("Only the first 100 songs. Press the \"Connect Spotify\" button below once to read whole playlists."))
 					: FString();
 			}
 			This->BeginMatching(JobId, MoveTemp(Tracks), Note);

@@ -239,7 +239,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
 	SearchColumn->AddChildToVerticalBox(ResultsMessageText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-	SpotifyButton = MakeButton(WidgetTree, LOCTEXT("ConnectSpotify", "Connect Spotify"));
+	SpotifyButton = MakeButton(WidgetTree, LOCTEXT("ConnectSpotify", "Connect Spotify (read whole playlists)"));
 	SpotifyButton->SetVisibility(ESlateVisibility::Collapsed);
 	UVerticalBoxSlot* SpotifySlot = SearchColumn->AddChildToVerticalBox(SpotifyButton);
 	SpotifySlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
@@ -1049,7 +1049,7 @@ void UBBPMusicPage::RefreshSpotifyButton()
 	{
 		SpotifyButton->SetLabel(Auth->IsLoginInProgress()
 			? LOCTEXT("SpotifyWaiting", "Waiting for Spotify sign-in in your browser...")
-			: LOCTEXT("ConnectSpotify", "Connect Spotify"));
+			: LOCTEXT("ConnectSpotify", "Connect Spotify (read whole playlists)"));
 	}
 }
 

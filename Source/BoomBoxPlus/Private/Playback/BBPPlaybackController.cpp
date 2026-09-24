@@ -510,7 +510,9 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
 	const FBBPLocalTrack* Local = Library ? Library->FindLocalTrack(Entry.Track.Id) : nullptr;
-	if (UBBPLyricsSubsystem* Lyrics = GameInstance ? GameInstance->GetSubsystem<UBBPLyricsSubsystem>() : nullptr)
+	// With lyrics turned off, nothing is looked up (no LRCLIB requests).
+	UBBPLyricsSubsystem* Lyrics = GameInstance ? GameInstance->GetSubsystem<UBBPLyricsSubsystem>() : nullptr;
+	if (Lyrics && UBBPConfig::GetBool(Playlist, UBBPConfig::ShowLyricsKey, true))
 	{
 		Lyrics->RequestLyrics(Entry.Track, Local ? Local->FilePath : FString());
 	}

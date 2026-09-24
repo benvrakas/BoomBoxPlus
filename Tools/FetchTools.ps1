@@ -37,5 +37,12 @@ Remove-Item -Recurse -Force $FfmpegOut -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $FfmpegOut | Out-Null
 Get-ChildItem (Join-Path $TempDir "$FfmpegAsset\bin") | Where-Object { $_.Name -ne 'ffplay.exe' } | Copy-Item -Destination $FfmpegOut
 Copy-Item (Join-Path $TempDir "$FfmpegAsset\LICENSE.txt") (Join-Path $FfmpegOut 'LICENSE.txt') -ErrorAction SilentlyContinue
+# Where the matching FFmpeg source and build scripts are, as the LGPL asks.
+Set-Content -Encoding utf8 -Path (Join-Path $FfmpegOut 'SOURCE.txt') -Value @(
+    'FFmpeg n8.1.3, LGPL v3 (built with --enable-version3), shared build by BtbN/FFmpeg-Builds.',
+    'FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/n8.1.3',
+    'Build scripts and release: https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-09-23-14-55',
+    'yt-dlp 2026.08.19 (Unlicense): https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19'
+)
 
 Write-Host "Tools ready in $ToolsDir"
