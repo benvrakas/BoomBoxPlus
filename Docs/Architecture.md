@@ -83,17 +83,31 @@ The icon currently reuses the game's `TXUI_Tape_EmptyTape` texture; a proper ico
 
 ## Configuration
 
-`UBBPConfig` is a native `UModConfiguration` (registered in `UBBPGameInstanceModule::ModConfigurations`),
-so it appears in SMM and the in-game mod config without an editor asset. Its root section and properties
-are `Instanced` default subobjects built in the constructor. Read values with `UBBPConfig::GetBool/GetFloat`,
-which fall back to a default (and log at Verbose) if SML's `UConfigManager` hasn't registered it yet.
+`UBBPConfig` is a native `UModConfiguration` (registered in `UBBPGameInstanceModule::ModConfigurations`).
+Its root section and properties are default subobjects built in the constructor. Read values with
+`UBBPConfig::GetBool/GetFloat/GetInt/GetString`, which fall back to a default (and log at Verbose) if SML's
+`UConfigManager` hasn't registered it yet.
+
+**Settings must use SML's Blueprint property classes to be editable in-game.** SML's native
+`UConfigProperty::CreateEditorWidget` returns null; the editor widgets live in its Blueprint subclasses
+(`/SML/Interface/UI/Menu/Mods/ConfigProperties/BP_ConfigPropertyBool`, `...Float`, `...Integer`,
+`...String`, `...Section`). A config built only from the C++ classes loads and saves fine but shows **no
+fields** in the Mods menu — which is how the first versions shipped. Assets can't be loaded reliably while
+the config's default object is constructed, so `UBBPGameInstanceModule::DispatchLifecycleEvent` calls
+`UBBPConfig::UseSMLEditorClasses()` at `INITIALIZATION`, just before SML registers the configuration
+(SML copies the default object at registration). It rebuilds the default root section with instances of
+the Blueprint classes, copying every property value, and logs `Config: N of M settings use SML's editor
+widgets`. A missing Blueprint class leaves that one setting on its C++ class (still saved, not shown).
 
 | Key | Default | Used by |
 |---|---|---|
-| `MusicVolume` | 0.8 | Playback controller — multiplied with each Boom Box's own volume. Needed because Unreal audio ignores the game's Wwise volume sliders. |
+| `MusicVolume` | 0.8 | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom |
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
+| `MaxCachedSongs` | 50 | Download cache eviction |
+| `FadeGameMusic` / `GameMusicLevel` / `GameMusicFadeTime` | on / 0 / 2 s | Game music fader |
+| `SpotifyClientId` / `SpotifyClientSecret` | empty | Reading whole Spotify playlists through the Web API |
 
 ## `GetCurrentSong` override
 

@@ -25,6 +25,10 @@ public:
 	static const FString SpotifyClientIdKey;
 	static const FString SpotifyClientSecretKey;
 
+	// Rebuilds the default configuration with SML's Blueprint property classes, which carry the editor widgets
+	// SML's Mods menu shows. Call before SML registers the configuration.
+	static void UseSMLEditorClasses();
+
 	// Returns a boolean setting, or Fallback if the configuration isn't available.
 	static bool GetBool(const UObject* WorldContext, const FString& Key, bool Fallback);
 

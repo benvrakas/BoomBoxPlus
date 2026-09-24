@@ -122,6 +122,71 @@ UBBPConfig::UBBPConfig()
 	RootSection->SectionProperties.Add(SpotifyClientSecretKey, SpotifyClientSecret);
 }
 
+namespace
+{
+	const TCHAR* SMLPropertyPath = TEXT("/SML/Interface/UI/Menu/Mods/ConfigProperties/");
+
+	// Loads SML's Blueprint subclass of a config property class, e.g. BP_ConfigPropertyBool for UConfigPropertyBool.
+	UClass* LoadEditorClass(const UClass* NativeClass)
+	{
+		const FString Name = TEXT("BP_") + NativeClass->GetName();
+		const FString Path = FString::Printf(TEXT("%s%s.%s_C"), SMLPropertyPath, *Name, *Name);
+		UClass* Loaded = LoadClass<UConfigProperty>(nullptr, *Path);
+		if (!Loaded || !Loaded->IsChildOf(NativeClass))
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: SML editor class %s not found; that setting won't be editable in the Mods menu"), *Path);
+			return nullptr;
+		}
+		return Loaded;
+	}
+
+	// Creates an instance of EditorClass under Outer with every property value of Source.
+	UConfigProperty* CloneAs(const UConfigProperty* Source, UClass* EditorClass, UObject* Outer)
+	{
+		UConfigProperty* Clone = NewObject<UConfigProperty>(Outer, EditorClass, NAME_None, RF_Public);
+		for (TFieldIterator<FProperty> It(Source->GetClass()); It; ++It)
+		{
+			It->CopyCompleteValue_InContainer(Clone, Source);
+		}
+		return Clone;
+	}
+}
+
+void UBBPConfig::UseSMLEditorClasses()
+{
+	UBBPConfig* Defaults = GetMutableDefault<UBBPConfig>();
+	UConfigPropertySection* OldRoot = Defaults->RootSection;
+	UClass* SectionClass = OldRoot ? LoadEditorClass(UConfigPropertySection::StaticClass()) : nullptr;
+	if (!SectionClass)
+	{
+		return;
+	}
+	if (OldRoot->GetClass() == SectionClass)
+	{
+		return;
+	}
+
+	UConfigPropertySection* NewRoot = Cast<UConfigPropertySection>(CloneAs(OldRoot, SectionClass, Defaults));
+	NewRoot->SectionProperties.Reset();
+	int32 Converted = 0;
+	for (const TPair<FString, TObjectPtr<UConfigProperty>>& Pair : OldRoot->SectionProperties)
+	{
+		UConfigProperty* Old = Pair.Value;
+		UClass* EditorClass = Old ? LoadEditorClass(Old->GetClass()) : nullptr;
+		if (EditorClass)
+		{
+			NewRoot->SectionProperties.Add(Pair.Key, CloneAs(Old, EditorClass, NewRoot));
+			++Converted;
+		}
+		else
+		{
+			NewRoot->SectionProperties.Add(Pair.Key, Old);
+		}
+	}
+	Defaults->RootSection = NewRoot;
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Config: %d of %d settings use SML's editor widgets"), Converted, OldRoot->SectionProperties.Num());
+}
+
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
 {
 	if (const UConfigPropertyBool* Property = Cast<UConfigPropertyBool>(FindProperty(WorldContext, Key)))

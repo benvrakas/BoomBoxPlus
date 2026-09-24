@@ -12,4 +12,6 @@ class BOOMBOXPLUS_API UBBPGameInstanceModule : public UGameInstanceModule
 
 public:
 	UBBPGameInstanceModule();
+
+	virtual void DispatchLifecycleEvent(ELifecyclePhase Phase) override;
 };
