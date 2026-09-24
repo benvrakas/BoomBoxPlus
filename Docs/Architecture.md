@@ -106,7 +106,7 @@ widgets`. A missing Blueprint class leaves that one setting on its C++ class (st
 | `ShowNowPlaying` | on | HUD overlay |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
 | `MaxCachedSongs` | 50 | Download cache eviction |
-| `FadeGameMusic` / `GameMusicLevel` / `GameMusicFadeTime` | on / 0 / 2 s | Game music fader |
+| `GameMusicLevel` / `GameMusicFadeTime` | 0 / 2 s | Game music fader; level 1 leaves the game's music alone |
 | `SpotifyClientId` / `SpotifyClientSecret` | empty | Reading whole Spotify playlists through the Web API |
 
 ## `GetCurrentSong` override
@@ -139,4 +139,5 @@ producing Custom Music, using Wwise's own interpolation for the fade. It reads t
 and scales it by the "Game music level" setting (default 0), so no assumption about the parameter's range
 is needed. If the value changes while lowered (the player moved the slider), that becomes the new base.
 After fading back up, it calls `UFGGameUserSettings::UpdateAudioOption` so the game re-applies the
-player's exact setting. Settings: Fade game music (on), Game music level (0), Game music fade time (2 s).
+player's exact setting. Settings: Game music level while playing (0 = fade out, 1 = leave alone; the
+separate on/off toggle was dropped as redundant) and Game music fade time (2 s).

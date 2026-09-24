@@ -227,10 +227,11 @@ const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireS
 
 void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
 {
-	const bool bFadeEnabled = UBBPConfig::GetBool(Playlist, UBBPConfig::FadeGameMusicKey, true);
-	const float Level = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicLevelKey, 0.f);
+	const float Level = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicLevelKey, 0.f), 0.f, 1.f);
 	const float FadeSeconds = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicFadeTimeKey, 2.f);
-	GameMusicFader.Update(bFadeEnabled && GetAudibleChannel(true) != nullptr, Level, FadeSeconds, DeltaSeconds);
+	// A level of 1 means "leave the game's music alone", so it's never lowered at all.
+	const bool bLower = Level < 1.f && GetAudibleChannel(true) != nullptr;
+	GameMusicFader.Update(bLower, Level, FadeSeconds, DeltaSeconds);
 }
 
 void UBBPPlaybackController::EnsureHudOverlay()

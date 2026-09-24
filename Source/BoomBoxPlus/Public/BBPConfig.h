@@ -19,7 +19,6 @@ public:
 	static const FString ShowNowPlayingKey;
 	static const FString HostOnlyControlKey;
 	static const FString MaxCachedSongsKey;
-	static const FString FadeGameMusicKey;
 	static const FString GameMusicLevelKey;
 	static const FString GameMusicFadeTimeKey;
 	static const FString SpotifyClientIdKey;
