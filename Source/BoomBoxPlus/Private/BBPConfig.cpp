@@ -56,9 +56,9 @@ UBBPConfig::UBBPConfig()
 
 	UConfigPropertyFloat* MusicVolume = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("MusicVolume"));
 	MusicVolume->DisplayName = LOCTEXT("MusicVolume", "Music volume");
-	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0.0 (silent) to 2.0 (twice as loud). 1.0 is normal. It also follows the game's Master and Boom Box volume sliders.");
-	MusicVolume->DefaultValue = 1.f;
-	MusicVolume->Value = 1.f;
+	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 1 (full). Multiplied with the game's Master and Boom Box volume sliders and each Boom Box's own volume.");
+	MusicVolume->DefaultValue = 0.5f;
+	MusicVolume->Value = 0.5f;
 	RootSection->SectionProperties.Add(MusicVolumeKey, MusicVolume);
 
 	UConfigPropertyBool* ShowLyrics = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("ShowLyrics"));

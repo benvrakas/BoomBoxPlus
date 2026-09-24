@@ -47,7 +47,7 @@ LogBoomBoxPlus: Hook: GetUnlockedTapes fired for the first time (...)   (when th
 | Choppy audio | Underrun count in the `Stopping stream` line |
 | Streams start but nothing is heard; drift is exactly -1.0 s every check | No Unreal audio device. Satisfactory ships with `[Audio] AudioMixerModuleName` empty, so the engine logs `Audio Device Manager Initialization Failed!`. The module sets it to `AudioMixerXAudio2` at startup (`Audio: set engine audio mixer module ...`); look for that line, `Playback controller ready (Unreal audio device available)`, and any `LogAudio` / `LogAudioMixer` errors |
 | Game music doesn't fade | `GameMusic: lowering 'Music_Bus_Volume' from X to Y`. X of 0 means the Wwise parameter name is wrong or unset |
-| Custom Music too loud/quiet | `Playback: volume ... (Boom Box ... x mod setting/game sliders/headroom ...)` and `Playback: game volume sliders Master ... x Boom Box ...` |
+| Custom Music too loud/quiet | `Playback: volume ... (Boom Box ... x music volume setting x game sliders ...)` and `Playback: game volume sliders Master ... x Boom Box ...` |
 | Linking | `Playlist: ... linked to channel NNNN`, `Channel NNNN: zipper-merged ...`, and on the requesting client `Link result for ...` |
 | Wrong position after joining / skipping | `Seek '...' to x s (was at y s)` at Verbose; `Seek to frame ... failed` warnings |
 

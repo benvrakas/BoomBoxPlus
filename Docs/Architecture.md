@@ -101,7 +101,7 @@ widgets`. A missing Blueprint class leaves that one setting on its C++ class (st
 
 | Key | Default | Used by |
 |---|---|---|
-| `MusicVolume` | 1.0 (range 0.0–2.0, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom |
+| `MusicVolume` | 0.5 (range 0–1, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom |
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |

@@ -26,8 +26,6 @@ namespace
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
 
-	// Unreal's mixer plays at full scale while the game's Wwise mix leaves headroom; this brings Custom Music in line.
-	constexpr float BaseGain = 0.3f;
 	constexpr float GameVolumeInterval = 1.f;
 	constexpr float VanillaPositionInterval = 0.25f;
 
@@ -303,7 +301,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f) * GameVolumeScale * BaseGain;
+	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.5f), 0.f, 1.f) * GameVolumeScale;
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{
@@ -332,7 +330,7 @@ void UBBPPlaybackController::SyncEmitters()
 			{
 				Existing->AppliedVolume = Volume;
 				Existing->Component->SetVolumeMultiplier(Volume);
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x mod setting/game sliders/headroom %.3f)"),
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x music volume setting x game sliders %.3f)"),
 					Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
 			}
 			continue;

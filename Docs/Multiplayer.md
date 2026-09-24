@@ -107,17 +107,18 @@ client joins mid-song as soon as its download finishes.
 
 ## Volume
 
-Final volume of a Boom Box's audio =
+Final volume of a Boom Box's audio is the product of four sliders, each 0–1:
 
 ```
-Boom Box's own volume (mState.mVolume, replicated via ActiveBoomBoxes)
-x MusicVolume (mod config, default 1.0, clamped to 0.0–2.0)
-x the game's Master and Boom Box volume sliders (options RTPC.Menu_Volume_Master, RTPC.Boombox_Bus_Volume)
-x 0.3 headroom (BaseGain in BBPPlaybackController.cpp)
+game Master volume              (option RTPC.Menu_Volume_Master, per player)
+x game Boom Box volume          (option RTPC.Boombox_Bus_Volume, per player)
+x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
+x Music volume (mod setting)    (default 0.5, clamped to 0–1)
 ```
 
-The headroom exists because Unreal's mixer plays at full scale while the game's Wwise mix is much quieter;
-the first in-game test at 0.8 was far too loud. The game sliders are read from `UFGGameUserSettings` once a
+There is no hidden gain. An earlier fixed 0.3 "headroom" factor was removed: it was tuned while the
+Master slider was being ignored (see below), and the mod's Music volume setting is the one place to
+compensate for Unreal audio being louder or quieter than the game's own Wwise mix. The game sliders are read from `UFGGameUserSettings` once a
 second as variants; values above 1 are treated as 0-100 and divided, and an option that can't be read
 counts as full volume (the first version read a missing Master option as 0 and muted everything).
 The Master slider's saved option id is `RTPC.Menu_Volume_Master` (seen in `GameUserSettings.ini` as
