@@ -49,6 +49,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
 	AFGBoomBoxPlayer* GetBoomBox() const;
 
+	// Loads the Custom Music tape into this page's Boom Box if another tape (or none) is in.
+	void EnsureCustomMusicLoaded();
+
 	// Returns the channel this page's Boom Box plays, or null if it has none yet.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
 	ABBPMusicChannel* GetChannel() const;
@@ -265,6 +268,13 @@ private:
 
 	// True while the player is dragging the seek slider, so playback updates don't move it.
 	bool bSeeking = false;
+
+	// Shows a link message under the link field for a few seconds.
+	void SetLinkMessage(const FText& Message);
+
+	// Last link message and when it was set (platform seconds).
+	FText LinkMessage;
+	double LinkMessageTime = -1.0;
 
 	// Every constructed page, so tape changes can bring the right ones forward.
 	static TArray<TWeakObjectPtr<UBBPMusicPage>> LivePages;

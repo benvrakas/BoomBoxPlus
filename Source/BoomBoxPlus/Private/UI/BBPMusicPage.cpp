@@ -18,6 +18,7 @@
 #include "Components/WidgetSwitcher.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
+#include "GameFramework/GameStateBase.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
 #include "Playlist/BBPMusicChannel.h"
@@ -34,6 +35,14 @@ namespace
 {
 	constexpr float SearchDebounceSeconds = 0.25f;
 	constexpr float ShowEnforceSeconds = 0.5f;
+	constexpr double LinkMessageSeconds = 8.0;
+
+	// Formats seconds left as m:ss.
+	FText FormatTimeLeft(double Seconds)
+	{
+		const int32 Total = FMath::Max(0, FMath::CeilToInt(Seconds));
+		return FText::FromString(FString::Printf(TEXT("%d:%02d"), Total / 60, Total % 60));
+	}
 	constexpr int32 MaxResults = 100;
 	const FName BoomBoxPropertyName(TEXT("mBoomBox"));
 }
@@ -62,9 +71,9 @@ void UBBPMusicPage::NotifyLinkResult(AFGBoomBoxPlayer* BoomBox, const FString& M
 {
 	for (const TWeakObjectPtr<UBBPMusicPage>& Page : LivePages)
 	{
-		if (Page.IsValid() && Page->GetBoomBox() == BoomBox && Page->LinkMessageText)
+		if (Page.IsValid() && Page->GetBoomBox() == BoomBox)
 		{
-			Page->LinkMessageText->SetText(FText::FromString(Message));
+			Page->SetLinkMessage(FText::FromString(Message));
 		}
 	}
 }
@@ -329,6 +338,7 @@ void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	}
 
 	RefreshTransport();
+	RefreshLink();
 }
 
 void UBBPMusicPage::TryBindSources()
@@ -484,6 +494,15 @@ bool UBBPMusicPage::ShowSiblingPage(const TCHAR* NameFragment)
 	}
 	UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: no page matching '%s' among %d switcher pages"), NameFragment, Switcher->GetNumWidgets());
 	return false;
+}
+
+void UBBPMusicPage::EnsureCustomMusicLoaded()
+{
+	const AFGBoomBoxPlayer* BoomBox = GetBoomBox();
+	if (BoomBox && !UBBPCustomMusicTape::IsCustomMusicTape(BoomBox->GetCurrentTape()))
+	{
+		HandleUseBoomBox();
+	}
 }
 
 void UBBPMusicPage::HandleUseBoomBox()
@@ -672,12 +691,53 @@ void UBBPMusicPage::RefreshLink()
 		}
 		else
 		{
-			Text = FText::Format(LOCTEXT("LinkCodeSolo", "Link code: {0}   (give it to a friend to share this queue)"),
+			Text = FText::Format(LOCTEXT("LinkCodeSolo", "Link code: {0}   (to share a queue, both Boom Boxes enter each other's code within 3 minutes)"),
 				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())));
 		}
 		LinkCodeText->SetText(Text);
 	}
 	BBPWidgetStyle::SetShown(UnlinkButton, Shared > 1);
+
+	if (!LinkMessageText)
+	{
+		return;
+	}
+	// Pending requests take priority: they carry a countdown both players need to see.
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	if (Channel && Playlist && GameState)
+	{
+		const double Now = GameState->GetServerWorldTimeSeconds();
+		const int32 OwnCode = Channel->GetLinkCode();
+		for (const FBBPLinkRequest& Request : Playlist->GetLinkRequests())
+		{
+			const FText Code = FText::FromString(FString::Printf(TEXT("%04d"), Request.FromCode == OwnCode ? Request.ToCode : Request.FromCode));
+			if (Request.FromCode == OwnCode)
+			{
+				LinkMessageText->SetText(FText::Format(LOCTEXT("LinkWaiting", "Waiting for Boom Box {0} to enter {1}. {2} left."),
+					Code, FText::FromString(FString::Printf(TEXT("%04d"), OwnCode)), FormatTimeLeft(Request.ExpiresAt - Now)));
+				LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::AccentColor);
+				return;
+			}
+			if (Request.ToCode == OwnCode)
+			{
+				LinkMessageText->SetText(FText::Format(LOCTEXT("LinkIncoming", "Boom Box {0} wants to link. Enter {0} within {1} to merge queues."),
+					Code, FormatTimeLeft(Request.ExpiresAt - Now)));
+				LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::AccentColor);
+				return;
+			}
+		}
+	}
+	const bool bRecent = LinkMessageTime >= 0.0 && FPlatformTime::Seconds() - LinkMessageTime < LinkMessageSeconds;
+	LinkMessageText->SetText(bRecent ? LinkMessage : FText::GetEmpty());
+	LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::DimTextColor);
+}
+
+void UBBPMusicPage::SetLinkMessage(const FText& Message)
+{
+	LinkMessage = Message;
+	LinkMessageTime = FPlatformTime::Seconds();
+	RefreshLink();
 }
 
 void UBBPMusicPage::HandleMembersChanged()
@@ -703,16 +763,10 @@ void UBBPMusicPage::HandleLink()
 	}
 	if (!bFourDigits)
 	{
-		if (LinkMessageText)
-		{
-			LinkMessageText->SetText(LOCTEXT("BadCode", "Enter the 4-digit code shown on the other Boom Box."));
-		}
+		SetLinkMessage(LOCTEXT("BadCode", "Enter the 4-digit code shown on the other Boom Box."));
 		return;
 	}
-	if (LinkMessageText)
-	{
-		LinkMessageText->SetText(LOCTEXT("Linking", "Linking..."));
-	}
+	SetLinkMessage(LOCTEXT("Linking", "Sending link request..."));
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: linking %s to code %s"), *GetNameSafe(GetBoomBox()), *Code);
 	UBBPBlueprintLibrary::RequestLinkBoomBox(GetBoomBox(), FCString::Atoi(*Code));
 	LinkCodeBox->SetText(FText::GetEmpty());
@@ -720,10 +774,7 @@ void UBBPMusicPage::HandleLink()
 
 void UBBPMusicPage::HandleUnlink()
 {
-	if (LinkMessageText)
-	{
-		LinkMessageText->SetText(LOCTEXT("Unlinking", "Unlinking..."));
-	}
+	SetLinkMessage(LOCTEXT("Unlinking", "Unlinking..."));
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: unlinking %s"), *GetNameSafe(GetBoomBox()));
 	UBBPBlueprintLibrary::RequestUnlinkBoomBox(GetBoomBox());
 }
@@ -865,6 +916,7 @@ void UBBPMusicPage::ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>&
 void UBBPMusicPage::HandleAddAllOnline()
 {
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: adding %d online tracks to the queue"), OnlineResults.Num());
+	EnsureCustomMusicLoaded();
 	for (const FBBPTrack& Track : OnlineResults)
 	{
 		UBBPBlueprintLibrary::RequestAddTrack(GetBoomBox(), Track, false);
@@ -890,6 +942,11 @@ void UBBPMusicPage::HandlePlaybackChanged()
 
 void UBBPMusicPage::HandlePlayPause()
 {
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	if (!(Channel && Channel->IsPlaying()))
+	{
+		EnsureCustomMusicLoaded();
+	}
 	UBBPBlueprintLibrary::RequestTogglePlaying(GetBoomBox());
 }
 

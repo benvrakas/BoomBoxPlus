@@ -19,20 +19,29 @@ Each Boom Box has its own queue and audio by default: the server gives it a **ch
 has Custom Music loaded, or the first time someone sends a request for it (so a queue can be built before
 the tape goes in). Every channel gets a random, unused **4-digit link code**, shown on the music page.
 
-Typing another Boom Box's code into the page's Link field moves this Boom Box onto that channel: both then
-play the same queue in sync and anyone at either can edit it. **Unlink** puts the Boom Box back on a
-channel of its own, starting from a copy of the shared queue and playback (so the music doesn't cut out).
+**Linking is mutual and time-limited.** Typing another Boom Box's code into the page's Link field sends a
+link request (`FBBPLinkRequest`: from-code, to-code, expiry), replicated on the subsystem. The link only
+happens when someone at the other Boom Box enters this one's code **within 3 minutes**
+(`ABBPPlaylistSubsystem::LinkWindowSeconds`); otherwise the request lapses. Both pages show the pending
+request with a countdown ("Waiting for Boom Box 1234 to enter 5678. 2:41 left." / "Boom Box 5678 wants to
+link. Enter 5678 within 2:41 to merge queues."). A channel has at most one outgoing request; entering a new
+code replaces it. When the second code arrives in time, the whole second channel (every Boom Box on it) is
+merged into the first requester's channel (`MergeChannels`) and all requests involving either code are
+dropped. **Unlink** puts one Boom Box back on a channel of its own, starting from a copy of the shared queue
+and playback (so the music doesn't cut out).
 
 **Zipper merge on link.** When the linking Boom Box was the only one on its channel, its queue is merged
 into the target's (`ABBPMusicChannel::MergeFrom`): the target's history and current track stay where they
 are, then the upcoming tracks interleave — target, joiner, target, joiner. The joiner's queue is taken from
 its current track onward, then its earlier tracks. Merged entries get new entry ids from the target. If the
 target was idle and the joiner was playing, the joiner's track starts. The queue cap (1000) still applies.
-If the linking Boom Box was already sharing a channel with others, it just leaves; the others keep that
-queue and nothing is merged.
 
-A channel with no Boom Boxes left (all linked away or destroyed) is destroyed. A channel none of whose Boom
-Boxes has Custom Music loaded is **paused**, so it doesn't run through its queue in silence.
+A channel with no Boom Boxes left (all linked away or destroyed) is destroyed. When the **last** Boom Box
+on a channel that had Custom Music loaded switches to another tape, the channel is paused so it doesn't run
+through its queue in silence (`bWasHeard`). A channel that never had the tape loaded is left alone: the
+first version paused those too, which paused every Play press on a Boom Box whose tape wasn't in yet.
+Pressing Play, Play Next or Add on the music page now also loads the Custom Music tape if another tape is
+in.
 
 Channels are session state only — nothing is saved. Codes are re-rolled each session.
 
@@ -104,7 +113,8 @@ x 0.3 headroom (BaseGain in BBPPlaybackController.cpp)
 
 The headroom exists because Unreal's mixer plays at full scale while the game's Wwise mix is much quieter;
 the first in-game test at 0.8 was far too loud. The game sliders are read from `UFGGameUserSettings` once a
-second; values above 1 are treated as 0-100 and divided.
+second as variants; values above 1 are treated as 0-100 and divided, and an option that can't be read
+counts as full volume (the first version read a missing Master option as 0 and muted everything).
 
 ## Controls
 

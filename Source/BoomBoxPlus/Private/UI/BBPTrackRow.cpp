@@ -5,6 +5,7 @@
 #include "Components/Border.h"
 #include "Components/Spacer.h"
 #include "UI/BBPGameButton.h"
+#include "UI/BBPMusicPage.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
@@ -136,17 +137,20 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 void UBBPTrackRow::HandleAddFront()
 {
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: +Front '%s'"), *Track.Title);
+	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
 	UBBPBlueprintLibrary::RequestAddTrack(BoomBox.Get(), Track, true);
 }
 
 void UBBPTrackRow::HandleAddEnd()
 {
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: +End '%s'"), *Track.Title);
+	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
 	UBBPBlueprintLibrary::RequestAddTrack(BoomBox.Get(), Track, false);
 }
 
 void UBBPTrackRow::HandlePlay()
 {
+	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
 	UBBPBlueprintLibrary::RequestPlayEntry(BoomBox.Get(), EntryId);
 }
 

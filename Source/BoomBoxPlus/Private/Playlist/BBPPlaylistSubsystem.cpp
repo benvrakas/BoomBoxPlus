@@ -2,6 +2,7 @@
 #include "BoomBoxPlus.h"
 #include "EngineUtils.h"
 #include "FGBoomBoxPlayer.h"
+#include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 #include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
@@ -63,6 +64,7 @@ void ABBPPlaylistSubsystem::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ABBPPlaylistSubsystem, ActiveBoomBoxes);
 	DOREPLIFETIME(ABBPPlaylistSubsystem, Channels);
+	DOREPLIFETIME(ABBPPlaylistSubsystem, LinkRequests);
 }
 
 void ABBPPlaylistSubsystem::Tick(float DeltaSeconds)
@@ -84,6 +86,17 @@ void ABBPPlaylistSubsystem::Tick(float DeltaSeconds)
 	{
 		PlaybackController->Tick(DeltaSeconds);
 	}
+}
+
+double ABBPPlaylistSubsystem::GetServerTime() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.0;
+	}
+	const AGameStateBase* GameState = World->GetGameState();
+	return GameState ? GameState->GetServerWorldTimeSeconds() : World->GetTimeSeconds();
 }
 
 ABBPMusicChannel* ABBPPlaylistSubsystem::FindChannel(const AFGBoomBoxPlayer* BoomBox) const
@@ -141,32 +154,89 @@ bool ABBPPlaylistSubsystem::LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code, F
 		UE_LOG(LogBoomBoxPlus, Error, TEXT("Playlist: LinkBoomBox needs authority and a Boom Box"));
 		return false;
 	}
+	ABBPMusicChannel* Own = GetOrCreateChannel(BoomBox);
 	ABBPMusicChannel* Target = FindChannelByCode(Code);
+	if (!Own)
+	{
+		OutMessage = TEXT("Linking failed.");
+		return false;
+	}
 	if (!Target)
 	{
 		OutMessage = FString::Printf(TEXT("No Boom Box uses code %04d."), Code);
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: %s tried unknown code %04d"), *GetNameSafe(BoomBox), Code);
 		return false;
 	}
-	ABBPMusicChannel* Current = FindChannel(BoomBox);
-	if (Current == Target)
+	if (Target == Own)
 	{
-		OutMessage = TEXT("This Boom Box already uses that code.");
+		OutMessage = TEXT("That's this Boom Box's own code (or it's already linked to it).");
 		return false;
 	}
-	if (Current)
+
+	PruneLinkRequests();
+	const int32 OwnCode = Own->GetLinkCode();
+	const int32 Matching = LinkRequests.IndexOfByPredicate([OwnCode, Code](const FBBPLinkRequest& Request)
 	{
-		// Only the last Boom Box on a channel brings its queue along; others keep playing it.
-		if (Current->GetMembers().Num() == 1)
-		{
-			Target->MergeFrom(*Current);
-		}
-		LeaveChannel(Current, BoomBox);
+		return Request.FromCode == Code && Request.ToCode == OwnCode;
+	});
+
+	if (Matching == INDEX_NONE)
+	{
+		// First side: wait for the other Boom Box to enter this one's code.
+		LinkRequests.RemoveAll([OwnCode](const FBBPLinkRequest& Request) { return Request.FromCode == OwnCode; });
+		FBBPLinkRequest& Request = LinkRequests.AddDefaulted_GetRef();
+		Request.FromCode = OwnCode;
+		Request.ToCode = Code;
+		Request.ExpiresAt = GetServerTime() + LinkWindowSeconds;
+		ForceNetUpdate();
+		OutMessage = FString::Printf(TEXT("Request sent. Someone at Boom Box %04d must enter %04d within 3 minutes."), Code, OwnCode);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d asked to link with %04d; waiting up to %.0f s"), OwnCode, Code, LinkWindowSeconds);
+		return true;
 	}
-	Target->AddMember(BoomBox);
-	OutMessage = FString::Printf(TEXT("Linked. %d Boom Boxes now share one queue; both queues were merged."), Target->GetMembers().Num());
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: %s linked to channel %04d"), *GetNameSafe(BoomBox), Code);
+
+	// Second side: both have entered each other's code in time. The side that asked first keeps its channel.
+	LinkRequests.RemoveAll([OwnCode, Code](const FBBPLinkRequest& Request)
+	{
+		return Request.FromCode == OwnCode || Request.FromCode == Code || Request.ToCode == OwnCode || Request.ToCode == Code;
+	});
+	ForceNetUpdate();
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channels %04d and %04d entered each other's codes; linking"), OwnCode, Code);
+	MergeChannels(Target, Own);
+	OutMessage = FString::Printf(TEXT("Linked with Boom Box %04d. %d Boom Boxes now share one merged queue."), Code, Target->GetMembers().Num());
 	return true;
+}
+
+void ABBPPlaylistSubsystem::MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChannel* Absorbed)
+{
+	Kept->MergeFrom(*Absorbed);
+	const TArray<TObjectPtr<AFGBoomBoxPlayer>> Moving = Absorbed->GetMembers();
+	for (AFGBoomBoxPlayer* Member : Moving)
+	{
+		Absorbed->RemoveMember(Member);
+		Kept->AddMember(Member);
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d merged into %04d (%d Boom Box(es))"), Absorbed->GetLinkCode(), Kept->GetLinkCode(), Kept->GetMembers().Num());
+	Channels.Remove(Absorbed);
+	Absorbed->Destroy();
+	ForceNetUpdate();
+}
+
+void ABBPPlaylistSubsystem::PruneLinkRequests()
+{
+	const double Now = GetServerTime();
+	const int32 Removed = LinkRequests.RemoveAll([this, Now](const FBBPLinkRequest& Request)
+	{
+		const bool bExpired = Request.ExpiresAt <= Now;
+		if (bExpired)
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: link request %04d -> %04d expired"), Request.FromCode, Request.ToCode);
+		}
+		return bExpired || !FindChannelByCode(Request.FromCode) || !FindChannelByCode(Request.ToCode);
+	});
+	if (Removed > 0)
+	{
+		ForceNetUpdate();
+	}
 }
 
 bool ABBPPlaylistSubsystem::UnlinkBoomBox(AFGBoomBoxPlayer* BoomBox, FString& OutMessage)
@@ -250,6 +320,8 @@ void ABBPPlaylistSubsystem::LeaveChannel(ABBPMusicChannel* Channel, AFGBoomBoxPl
 
 void ABBPPlaylistSubsystem::MaintainChannels()
 {
+	PruneLinkRequests();
+
 	for (int32 i = Channels.Num() - 1; i >= 0; --i)
 	{
 		ABBPMusicChannel* Channel = Channels[i];
@@ -268,16 +340,18 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 			ForceNetUpdate();
 			continue;
 		}
-		// A channel no Boom Box is playing would otherwise run through its queue in silence.
+		// When the last Boom Box playing a channel switches to another tape, pause rather than run through the queue in silence.
+		// A channel that never had one (queue built before the tape went in) keeps its state.
 		const bool bHeard = Channel->GetMembers().ContainsByPredicate([this](const TObjectPtr<AFGBoomBoxPlayer>& Member)
 		{
 			return ActiveBoomBoxes.ContainsByPredicate([&Member](const FBBPActiveBoomBox& Active) { return Active.BoomBox == Member; });
 		});
-		if (!bHeard && Channel->IsPlaying())
+		if (Channel->bWasHeard && !bHeard && Channel->IsPlaying())
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: no Boom Box on channel %04d has Custom Music loaded; pausing it"), Channel->GetLinkCode());
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: Custom Music was taken out of the last Boom Box on channel %04d; pausing it"), Channel->GetLinkCode());
 			Channel->SetPlaying(false);
 		}
+		Channel->bWasHeard = bHeard;
 	}
 
 	for (const FBBPActiveBoomBox& Active : ActiveBoomBoxes)

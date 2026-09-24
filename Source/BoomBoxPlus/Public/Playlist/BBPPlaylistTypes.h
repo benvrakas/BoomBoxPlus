@@ -80,3 +80,22 @@ struct BOOMBOXPLUS_API FBBPPlaybackState
 	UPROPERTY()
 	int32 Revision = 0;
 };
+
+// A Boom Box's request to link with another; completes when the other enters this one's code before it expires.
+USTRUCT(BlueprintType)
+struct BOOMBOXPLUS_API FBBPLinkRequest
+{
+	GENERATED_BODY()
+
+	// Link code of the requesting channel.
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	int32 FromCode = 0;
+
+	// Link code the requester entered.
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	int32 ToCode = 0;
+
+	// Server time after which the request lapses.
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	double ExpiresAt = 0.0;
+};

@@ -32,10 +32,14 @@ public:
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeConstruct() override;
 
 private:
 	UFUNCTION()
 	void HandleClicked();
+
+	// Hides the arrow icon the game's button draws beside its label.
+	void HideGameButtonIcon();
 
 	// The game's button widget, or null when using the fallback.
 	UPROPERTY()

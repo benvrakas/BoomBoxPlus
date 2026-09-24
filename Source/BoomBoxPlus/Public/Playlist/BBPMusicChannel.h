@@ -72,6 +72,9 @@ public:
 	// Server only. Drops Boom Boxes that no longer exist.
 	void PruneMembers();
 
+	// Server only. True while one of this channel's Boom Boxes had Custom Music loaded at the last check.
+	bool bWasHeard = false;
+
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|Playlist")
 	const TArray<FBBPQueueEntry>& GetQueue() const { return Queue; }
 

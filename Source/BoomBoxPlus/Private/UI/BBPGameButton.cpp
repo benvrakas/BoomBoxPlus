@@ -10,6 +10,8 @@ const TCHAR* UBBPGameButton::GameButtonClassPath = TEXT("/Game/FactoryGame/Inter
 namespace
 {
 	const FName InnerButtonName(TEXT("mButton"));
+	const FName IconWidgetName(TEXT("mIconObject"));
+	const FName IconPropertyName(TEXT("mIcon"));
 }
 
 void UBBPGameButton::NativeOnInitialized()
@@ -29,6 +31,10 @@ void UBBPGameButton::NativeOnInitialized()
 		GameButton = Game;
 		InnerButton = Inner;
 		WidgetTree->RootWidget = Game;
+		if (FObjectProperty* Icon = FindFProperty<FObjectProperty>(Game->GetClass(), IconPropertyName))
+		{
+			Icon->SetObjectPropertyValue_InContainer(Game, nullptr);
+		}
 	}
 	else
 	{
@@ -47,6 +53,30 @@ void UBBPGameButton::NativeOnInitialized()
 		WidgetTree->RootWidget = InnerButton;
 	}
 	InnerButton->OnClicked.AddDynamic(this, &UBBPGameButton::HandleClicked);
+}
+
+void UBBPGameButton::NativeConstruct()
+{
+	Super::NativeConstruct();
+	HideGameButtonIcon();
+}
+
+void UBBPGameButton::HideGameButtonIcon()
+{
+	UWidget* Icon = GameButton ? GameButton->GetWidgetFromName(IconWidgetName) : nullptr;
+	if (Icon)
+	{
+		Icon->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	else if (GameButton)
+	{
+		static bool bLogged = false;
+		if (!bLogged)
+		{
+			bLogged = true;
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: game button has no '%s' widget; its icon can't be hidden"), *IconWidgetName.ToString());
+		}
+	}
 }
 
 void UBBPGameButton::SetLabel(const FText& InLabel)

@@ -64,7 +64,8 @@ no Blueprint, they build their layout in C++ from the **game's own assets**, loa
 Every asset load falls back to a plain look and logs once if the asset is missing, so a game update that
 moves an asset degrades the style instead of breaking the page.
 
-`UBBPGameButton` finds the tileable button's inner `mButton` (`UButton`) and re-broadcasts its `OnClicked`,
+`UBBPGameButton` hides the arrow icon the tileable button draws by default (clears `mIcon`, collapses the
+`mIconObject` widget on construct), finds its inner `mButton` (`UButton`) and re-broadcasts its `OnClicked`,
 and sets the label through the widget's `mText` property plus its `SetText` Blueprint function
 (`ProcessEvent`, checked to take exactly one `FText`).
 
@@ -100,7 +101,8 @@ later, but the mod page slider covers the need.
 ## Link panel
 
 Shows this Boom Box's channel code and how many Boom Boxes share it, a 4-digit code field, Link and Unlink
-(Unlink only while shared). See Multiplayer.md.
+(Unlink only while shared). The line under it shows a pending link request with its countdown, or the
+server's last reply for 8 s. See Multiplayer.md.
 
 ## Controls in v1
 

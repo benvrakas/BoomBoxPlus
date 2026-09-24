@@ -40,8 +40,18 @@ public:
 	// Server only. Returns BoomBox's channel, giving it a new one of its own if it has none.
 	ABBPMusicChannel* GetOrCreateChannel(AFGBoomBoxPlayer* BoomBox);
 
-	// Server only. Moves BoomBox onto the channel with the given code, zipper-merging its queue in. Returns false with a reason if it can't.
+	// Server only. Asks to link BoomBox's channel with the channel using Code. The link happens once both sides have entered
+	// each other's code within LinkWindowSeconds; the two queues are then zipper-merged. Returns false with a reason if it can't.
 	bool LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code, FString& OutMessage);
+
+	// Seconds both sides have to enter each other's code.
+	static constexpr double LinkWindowSeconds = 180.0;
+
+	// Link requests waiting for the other side.
+	const TArray<FBBPLinkRequest>& GetLinkRequests() const { return LinkRequests; }
+
+	// Returns the server's clock, in seconds.
+	double GetServerTime() const;
 
 	// Server only. Gives BoomBox its own channel again, keeping a copy of the queue it was playing. Returns false with a reason if it can't.
 	bool UnlinkBoomBox(AFGBoomBoxPlayer* BoomBox, FString& OutMessage);
@@ -71,11 +81,20 @@ private:
 	// Server only. Removes BoomBox from Channel, destroying the channel if nobody is left on it.
 	void LeaveChannel(ABBPMusicChannel* Channel, AFGBoomBoxPlayer* BoomBox);
 
+	// Server only. Moves every Boom Box on Absorbed onto Kept, merges Absorbed's queue into Kept's and destroys Absorbed.
+	void MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChannel* Absorbed);
+
+	// Server only. Drops expired requests and requests naming codes no channel uses any more.
+	void PruneLinkRequests();
+
 	UPROPERTY(Replicated)
 	TArray<FBBPActiveBoomBox> ActiveBoomBoxes;
 
 	UPROPERTY(Replicated)
 	TArray<TObjectPtr<ABBPMusicChannel>> Channels;
+
+	UPROPERTY(Replicated)
+	TArray<FBBPLinkRequest> LinkRequests;
 
 	// Plays audio on this machine; null on dedicated servers.
 	UPROPERTY(Transient)

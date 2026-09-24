@@ -31,10 +31,27 @@ namespace
 	constexpr float GameVolumeInterval = 1.f;
 	constexpr float VanillaPositionInterval = 0.25f;
 
-	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100.
+	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100. An option that can't be read counts as 1.
 	float ReadVolumeOption(const UFGGameUserSettings& Settings, const TCHAR* Option)
 	{
-		const float Value = Settings.GetFloatOptionValue(Option);
+		const FVariant Raw = Settings.GetOptionValue(Option);
+		float Value = 1.f;
+		switch (Raw.GetType())
+		{
+		case EVariantTypes::Float: Value = Raw.GetValue<float>(); break;
+		case EVariantTypes::Double: Value = (float)Raw.GetValue<double>(); break;
+		case EVariantTypes::Int32: Value = (float)Raw.GetValue<int32>(); break;
+		default:
+		{
+			static TSet<FString> Reported;
+			if (!Reported.Contains(Option))
+			{
+				Reported.Add(Option);
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: game option '%s' unreadable (variant type %d); treating it as full volume"), Option, (int32)Raw.GetType());
+			}
+			return 1.f;
+		}
+		}
 		return FMath::Clamp(Value > 1.f ? Value / 100.f : Value, 0.f, 1.f);
 	}
 }
