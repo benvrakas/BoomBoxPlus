@@ -80,6 +80,7 @@ public class BoomBoxPlus : ModuleRules
 			"Projects",
 			"AudioExtensions",
 			"HTTP",
+			"HTTPServer",
 		});
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] {

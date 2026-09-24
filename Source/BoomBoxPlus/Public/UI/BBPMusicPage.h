@@ -184,6 +184,15 @@ private:
 	UFUNCTION()
 	void HandleAddAllOnline();
 
+	UFUNCTION()
+	void HandleConnectSpotify();
+
+	// Shows or hides the Connect Spotify button for the current sign-in state.
+	void RefreshSpotifyButton();
+
+	// Last text sent to the online search, rerun after connecting Spotify.
+	FString LastOnlineQuery;
+
 	// Starts an online search, or resolves a pasted link, for the search box text.
 	void RunOnlineSearch(const FString& Text);
 
@@ -277,6 +286,10 @@ private:
 	// Status line above the results (library empty, no matches, online search progress).
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ResultsMessageText;
+
+	// Signs in to Spotify so whole playlists can be read; shown while the app key is set but not signed in.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> SpotifyButton;
 
 	// "Add all" for playlist results.
 	UPROPERTY(meta = (BindWidgetOptional))

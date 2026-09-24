@@ -24,6 +24,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/Base64.h"
+#include "Net/BBPHttp.h"
+#include "Net/BBPSpotifyAuth.h"
 
 namespace
 {
@@ -281,37 +283,6 @@ namespace
 		}
 	}
 
-	// Sends a request with extra headers and body; calls back on the game thread with the body and HTTP code.
-	void HttpSend(const FString& Verb, const FString& Url, const TMap<FString, FString>& Headers, const FString& Body,
-		TFunction<void(const FString& Body, int32 Code, const FString& Error)> OnDone)
-	{
-		TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
-		Request->SetURL(Url);
-		Request->SetVerb(Verb);
-		for (const TPair<FString, FString>& Header : Headers)
-		{
-			Request->SetHeader(Header.Key, Header.Value);
-		}
-		if (!Body.IsEmpty())
-		{
-			Request->SetContentAsString(Body);
-		}
-		Request->SetTimeout(HttpTimeoutSeconds);
-		Request->OnProcessRequestComplete().BindLambda([OnDone](FHttpRequestPtr, FHttpResponsePtr Response, bool bSucceeded)
-		{
-			if (!bSucceeded || !Response.IsValid())
-			{
-				OnDone(FString(), 0, TEXT("network error"));
-				return;
-			}
-			OnDone(Response->GetContentAsString(), Response->GetResponseCode(), FString());
-		});
-		if (!Request->ProcessRequest())
-		{
-			OnDone(FString(), 0, TEXT("could not start request"));
-		}
-	}
-
 	// Splits an open.spotify.com playlist/album URL into its kind ("playlist" or "album") and id.
 	bool ParseSpotifyCollectionUrl(const FString& Url, FString& OutKind, FString& OutId)
 	{
@@ -542,98 +513,129 @@ namespace
 		return true;
 	}
 
-	// Reads every track of a playlist or album through the Spotify Web API, following pagination.
-	void FetchSpotifyApiTracks(const FString& Kind, const FString& Id, const FString& ClientId, const FString& ClientSecret,
-		TFunction<void(TArray<FBBPWantedTrack>&& Tracks, const FString& Error)> OnDone)
+	// Reads every page of a Spotify Web API track listing, following "next". Calls back with the tracks and, if none, the HTTP code.
+	void FetchSpotifyPages(const FString& AccessToken, const FString& FirstPage, TFunction<void(TArray<FBBPWantedTrack>&& Tracks, int32 FailCode)> OnDone)
 	{
-		const FString Credentials = FBase64::Encode(ClientId + TEXT(":") + ClientSecret);
-		TMap<FString, FString> TokenHeaders;
-		TokenHeaders.Add(TEXT("Authorization"), TEXT("Basic ") + Credentials);
-		TokenHeaders.Add(TEXT("Content-Type"), TEXT("application/x-www-form-urlencoded"));
-		HttpSend(TEXT("POST"), TEXT("https://accounts.spotify.com/api/token"), TokenHeaders, TEXT("grant_type=client_credentials"),
-			[Kind, Id, OnDone](const FString& TokenBody, int32 TokenCode, const FString& TokenError)
+		TSharedRef<TArray<FBBPWantedTrack>> Collected = MakeShared<TArray<FBBPWantedTrack>>();
+		TSharedRef<TFunction<void(const FString&)>> FetchPage = MakeShared<TFunction<void(const FString&)>>();
+		TWeakPtr<TFunction<void(const FString&)>> WeakFetchPage = FetchPage;
+		*FetchPage = [AccessToken, Collected, WeakFetchPage, OnDone](const FString& PageUrl)
 		{
-			FString AccessToken;
-			TSharedPtr<FJsonObject> TokenJson;
-			if (TokenCode == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TokenBody), TokenJson) && TokenJson.IsValid())
+			TMap<FString, FString> Headers;
+			Headers.Add(TEXT("Authorization"), TEXT("Bearer ") + AccessToken);
+			// The page callback holds the fetcher alive until the last page is done.
+			TSharedPtr<TFunction<void(const FString&)>> Self = WeakFetchPage.Pin();
+			BBPHttp::Send(TEXT("GET"), PageUrl, Headers, FString(), [Collected, Self, OnDone](const FString& Body, int32 Code, const FString& Error)
 			{
-				TokenJson->TryGetStringField(TEXT("access_token"), AccessToken);
+				TSharedPtr<FJsonObject> Json;
+				if (Code != 200 || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Body), Json) || !Json.IsValid())
+				{
+					UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify API page failed (HTTP %d%s%s) after %d tracks: %s"),
+						Code, Error.IsEmpty() ? TEXT("") : TEXT(", "), *Error, Collected->Num(), *Body.Left(200));
+					OnDone(MoveTemp(*Collected), Code);
+					return;
+				}
+				const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
+				if (Json->TryGetArrayField(TEXT("items"), Items))
+				{
+					for (const TSharedPtr<FJsonValue>& Item : *Items)
+					{
+						const TSharedPtr<FJsonObject>* ItemObject = nullptr;
+						if (!Item.IsValid() || !Item->TryGetObject(ItemObject))
+						{
+							continue;
+						}
+						// Playlist items wrap the track in "item" (or "track" in the older format); album items are the track.
+						const TSharedPtr<FJsonObject>* TrackObject = ItemObject;
+						const TSharedPtr<FJsonObject>* Wrapped = nullptr;
+						if ((*ItemObject)->TryGetObjectField(TEXT("item"), Wrapped) || (*ItemObject)->TryGetObjectField(TEXT("track"), Wrapped))
+						{
+							TrackObject = Wrapped;
+						}
+						FBBPWantedTrack Wanted;
+						if (ReadApiTrack(*TrackObject, Wanted))
+						{
+							Collected->Add(MoveTemp(Wanted));
+						}
+					}
+				}
+				FString Next;
+				if (Collected->Num() < MaxSpotifyTracks && Json->TryGetStringField(TEXT("next"), Next) && !Next.IsEmpty() && Self.IsValid())
+				{
+					(*Self)(Next);
+					return;
+				}
+				if (Collected->Num() > MaxSpotifyTracks)
+				{
+					Collected->SetNum(MaxSpotifyTracks);
+				}
+				OnDone(MoveTemp(*Collected), 0);
+			});
+		};
+		(*FetchPage)(FirstPage);
+	}
+
+	// Gets an app-only (client credentials) token. Spotify accepts it for albums but not for playlist songs.
+	void GetAppToken(const FString& ClientId, const FString& ClientSecret, TFunction<void(const FString& Token, int32 Code)> OnDone)
+	{
+		TMap<FString, FString> Headers;
+		Headers.Add(TEXT("Authorization"), BBPHttp::BasicAuth(ClientId, ClientSecret));
+		Headers.Add(TEXT("Content-Type"), TEXT("application/x-www-form-urlencoded"));
+		BBPHttp::Send(TEXT("POST"), TEXT("https://accounts.spotify.com/api/token"), Headers, TEXT("grant_type=client_credentials"),
+			[OnDone](const FString& Body, int32 Code, const FString& Error)
+		{
+			FString Token;
+			TSharedPtr<FJsonObject> Json;
+			if (Code == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Body), Json) && Json.IsValid())
+			{
+				Json->TryGetStringField(TEXT("access_token"), Token);
 			}
-			if (AccessToken.IsEmpty())
+			if (Token.IsEmpty())
 			{
-				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify token request failed (HTTP %d%s%s)"), TokenCode, TokenError.IsEmpty() ? TEXT("") : TEXT(", "), *TokenError);
-				OnDone({}, TokenCode == 400 || TokenCode == 401 ? TEXT("Spotify rejected the Client ID/Secret in the mod settings") : TEXT("Couldn't reach Spotify"));
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify app token request failed (HTTP %d%s%s)"), Code, Error.IsEmpty() ? TEXT("") : TEXT(", "), *Error);
+			}
+			OnDone(Token, Code);
+		});
+	}
+
+	// Reads the first 100 songs of a playlist or album from Spotify's public embed page (no account needed).
+	void FetchSpotifyEmbed(const FString& Url, TFunction<void(TArray<FBBPWantedTrack>&& Tracks, const FString& Error)> OnDone)
+	{
+		FString EmbedUrl = Url.TrimStartAndEnd().Replace(TEXT("open.spotify.com/"), TEXT("open.spotify.com/embed/"));
+		int32 QueryStart = INDEX_NONE;
+		if (EmbedUrl.FindChar(TEXT('?'), QueryStart))
+		{
+			EmbedUrl.LeftInline(QueryStart);
+		}
+		HttpGet(EmbedUrl, [OnDone](const FString& Body, const FString& Error)
+		{
+			const FString TrackListJson = Error.IsEmpty() ? ExtractJsonArray(Body, TEXT("trackList")) : FString();
+			TArray<TSharedPtr<FJsonValue>> Items;
+			if (TrackListJson.IsEmpty() || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TrackListJson), Items))
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify trackList not found (%s)"), Error.IsEmpty() ? TEXT("page format changed") : *Error);
+				OnDone({}, TEXT("Couldn't read that Spotify playlist"));
 				return;
 			}
-
-			const bool bPlaylist = Kind == TEXT("playlist");
-			const FString FirstPage = bPlaylist
-				? FString::Printf(TEXT("https://api.spotify.com/v1/playlists/%s/tracks?limit=100&fields=%s"), *Id,
-					*FGenericPlatformHttp::UrlEncode(TEXT("next,items(track(name,duration_ms,artists(name)))")))
-				: FString::Printf(TEXT("https://api.spotify.com/v1/albums/%s/tracks?limit=50"), *Id);
-
-			TSharedRef<TArray<FBBPWantedTrack>> Collected = MakeShared<TArray<FBBPWantedTrack>>();
-			TSharedRef<TFunction<void(const FString&)>> FetchPage = MakeShared<TFunction<void(const FString&)>>();
-			TWeakPtr<TFunction<void(const FString&)>> WeakFetchPage = FetchPage;
-			*FetchPage = [AccessToken, bPlaylist, Collected, WeakFetchPage, OnDone](const FString& PageUrl)
+			TArray<FBBPWantedTrack> Wanted;
+			for (const TSharedPtr<FJsonValue>& Item : Items)
 			{
-				TMap<FString, FString> Headers;
-				Headers.Add(TEXT("Authorization"), TEXT("Bearer ") + AccessToken);
-				// The page callback holds the fetcher alive until the last page is done.
-				TSharedPtr<TFunction<void(const FString&)>> Self = WeakFetchPage.Pin();
-				HttpSend(TEXT("GET"), PageUrl, Headers, FString(), [bPlaylist, Collected, Self, OnDone](const FString& Body, int32 Code, const FString& Error)
+				const TSharedPtr<FJsonObject>* Object = nullptr;
+				if (!Item.IsValid() || !Item->TryGetObject(Object))
 				{
-					TSharedPtr<FJsonObject> Json;
-					if (Code != 200 || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Body), Json) || !Json.IsValid())
-					{
-						UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify API page failed (HTTP %d%s%s) after %d tracks"), Code, Error.IsEmpty() ? TEXT("") : TEXT(", "), *Error, Collected->Num());
-						if (Collected->Num() > 0)
-						{
-							OnDone(MoveTemp(*Collected), FString());
-						}
-						else
-						{
-							OnDone({}, Code == 404 ? TEXT("Spotify couldn't find that playlist (private playlists can't be read)") : TEXT("Couldn't read that Spotify playlist"));
-						}
-						return;
-					}
-					const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
-					if (Json->TryGetArrayField(TEXT("items"), Items))
-					{
-						for (const TSharedPtr<FJsonValue>& Item : *Items)
-						{
-							const TSharedPtr<FJsonObject>* ItemObject = nullptr;
-							if (!Item.IsValid() || !Item->TryGetObject(ItemObject))
-							{
-								continue;
-							}
-							// Playlist items wrap the track; album items are the track.
-							const TSharedPtr<FJsonObject>* TrackObject = ItemObject;
-							if (bPlaylist && !(*ItemObject)->TryGetObjectField(TEXT("track"), TrackObject))
-							{
-								continue;
-							}
-							FBBPWantedTrack Wanted;
-							if (ReadApiTrack(*TrackObject, Wanted))
-							{
-								Collected->Add(MoveTemp(Wanted));
-							}
-						}
-					}
-					FString Next;
-					if (Collected->Num() < MaxSpotifyTracks && Json->TryGetStringField(TEXT("next"), Next) && !Next.IsEmpty() && Self.IsValid())
-					{
-						(*Self)(Next);
-						return;
-					}
-					if (Collected->Num() > MaxSpotifyTracks)
-					{
-						Collected->SetNum(MaxSpotifyTracks);
-					}
-					OnDone(MoveTemp(*Collected), FString());
-				});
-			};
-			(*FetchPage)(FirstPage);
+					continue;
+				}
+				FString Title, Subtitle;
+				double DurationMs = 0.0;
+				(*Object)->TryGetStringField(TEXT("title"), Title);
+				(*Object)->TryGetStringField(TEXT("subtitle"), Subtitle);
+				(*Object)->TryGetNumberField(TEXT("duration"), DurationMs);
+				if (!Title.IsEmpty())
+				{
+					Wanted.Add({ FString::Printf(TEXT("%s %s"), *Title, *PrimaryArtist(Subtitle)), (float)(DurationMs / 1000.0) });
+				}
+			}
+			OnDone(MoveTemp(Wanted), FString());
 		});
 	}
 }
@@ -658,73 +660,92 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 	MatchJobs.Add(JobId, Job);
 	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
 
-	FString Kind, Id;
-	const FString ClientId = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientIdKey, FString()).TrimStartAndEnd();
-	const FString ClientSecret = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientSecretKey, FString()).TrimStartAndEnd();
-	if (!ClientId.IsEmpty() && !ClientSecret.IsEmpty() && ParseSpotifyCollectionUrl(Url, Kind, Id))
+	UBBPSpotifyAuth* Auth = GetGameInstance()->GetSubsystem<UBBPSpotifyAuth>();
+	const bool bHasApp = Auth && Auth->HasAppCredentials();
+	const bool bSignedIn = Auth && Auth->IsConnected();
+
+	// Falls back to the embed page's first 100 songs, explaining why in Reason.
+	auto UseEmbed = [WeakThis, JobId, Url, bHasApp, bSignedIn](const FString& Reason)
 	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify %s %s through the Web API"), JobId, *Kind, *Id);
-		FetchSpotifyApiTracks(Kind, Id, ClientId, ClientSecret, [WeakThis, JobId](TArray<FBBPWantedTrack>&& Tracks, const FString& Error)
+		FetchSpotifyEmbed(Url, [WeakThis, JobId, Reason, bHasApp, bSignedIn](TArray<FBBPWantedTrack>&& Tracks, const FString& Error)
 		{
-			if (UBBPNetSubsystem* This = WeakThis.Get())
+			UBBPNetSubsystem* This = WeakThis.Get();
+			if (!This)
 			{
-				if (Tracks.Num() == 0)
-				{
-					This->FailJob(JobId, Error.IsEmpty() ? FString(TEXT("That Spotify playlist is empty")) : Error);
-				}
-				else
-				{
-					This->BeginMatching(JobId, MoveTemp(Tracks), FString());
-				}
+				return;
 			}
+			if (Tracks.Num() == 0)
+			{
+				This->FailJob(JobId, Error.IsEmpty() ? FString(TEXT("That Spotify playlist is empty")) : Error);
+				return;
+			}
+			FString Note = Reason;
+			if (Note.IsEmpty() && Tracks.Num() >= SpotifyEmbedLimit)
+			{
+				Note = !bHasApp ? FString(TEXT("Spotify only shares the first 100 songs without signing in. Add a Spotify Client ID and Secret in the mod settings, then press Connect Spotify."))
+					: !bSignedIn ? FString(TEXT("Only the first 100 songs: press Connect Spotify to read whole playlists."))
+					: FString();
+			}
+			This->BeginMatching(JobId, MoveTemp(Tracks), Note);
 		});
+	};
+
+	FString Kind, Id;
+	if (!ParseSpotifyCollectionUrl(Url, Kind, Id) || !bHasApp)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify link '%s' from the embed page"), JobId, *Url);
+		UseEmbed(FString());
 		return JobId;
 	}
 
-	FString EmbedUrl = Url.TrimStartAndEnd().Replace(TEXT("open.spotify.com/"), TEXT("open.spotify.com/embed/"));
-	int32 QueryStart = INDEX_NONE;
-	if (EmbedUrl.FindChar(TEXT('?'), QueryStart))
-	{
-		EmbedUrl.LeftInline(QueryStart);
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify collection '%s' from the embed page (no API credentials)"), JobId, *EmbedUrl);
-	HttpGet(EmbedUrl, [WeakThis, JobId](const FString& Body, const FString& Error)
+	auto OnPages = [WeakThis, JobId, UseEmbed](TArray<FBBPWantedTrack>&& Tracks, int32 FailCode)
 	{
 		UBBPNetSubsystem* This = WeakThis.Get();
 		if (!This)
 		{
 			return;
 		}
-		const FString TrackListJson = Error.IsEmpty() ? ExtractJsonArray(Body, TEXT("trackList")) : FString();
-		TArray<TSharedPtr<FJsonValue>> Items;
-		if (TrackListJson.IsEmpty() || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TrackListJson), Items))
+		if (Tracks.Num() == 0)
 		{
-			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: job %d: Spotify trackList not found (%s)"), JobId, Error.IsEmpty() ? TEXT("page format changed") : *Error);
-			This->FailJob(JobId, TEXT("Couldn't read that Spotify playlist"));
+			UseEmbed(FString::Printf(TEXT("Spotify refused the full list (HTTP %d); showing the first 100 songs."), FailCode));
 			return;
 		}
-		TArray<FBBPWantedTrack> Wanted;
-		for (const TSharedPtr<FJsonValue>& Item : Items)
+		const FString Note = FailCode != 0 ? FString::Printf(TEXT("Spotify stopped after %d songs (HTTP %d)."), Tracks.Num(), FailCode) : FString();
+		This->BeginMatching(JobId, MoveTemp(Tracks), Note);
+	};
+
+	if (Kind == TEXT("playlist"))
+	{
+		if (!bSignedIn)
 		{
-			const TSharedPtr<FJsonObject>* Object = nullptr;
-			if (!Item.IsValid() || !Item->TryGetObject(Object))
-			{
-				continue;
-			}
-			FString Title, Subtitle;
-			double DurationMs = 0.0;
-			(*Object)->TryGetStringField(TEXT("title"), Title);
-			(*Object)->TryGetStringField(TEXT("subtitle"), Subtitle);
-			(*Object)->TryGetNumberField(TEXT("duration"), DurationMs);
-			if (!Title.IsEmpty())
-			{
-				Wanted.Add({ FString::Printf(TEXT("%s %s"), *Title, *PrimaryArtist(Subtitle)), (float)(DurationMs / 1000.0) });
-			}
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: Spotify not connected; reading playlist %s from the embed page"), JobId, *Id);
+			UseEmbed(FString());
+			return JobId;
 		}
-		const FString Note = Wanted.Num() >= SpotifyEmbedLimit
-			? FString::Printf(TEXT("Spotify only shares the first %d songs without an app key. Add a Spotify Client ID and Secret in the mod settings to get the whole playlist."), SpotifyEmbedLimit)
-			: FString();
-		This->BeginMatching(JobId, MoveTemp(Wanted), Note);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify playlist %s as the signed-in user"), JobId, *Id);
+		Auth->GetUserToken([Id, OnPages, UseEmbed](const FString& Token, const FString& Error)
+		{
+			if (Token.IsEmpty())
+			{
+				UseEmbed(FString::Printf(TEXT("%s; showing the first 100 songs."), *Error));
+				return;
+			}
+			FetchSpotifyPages(Token, FString::Printf(TEXT("https://api.spotify.com/v1/playlists/%s/items?limit=50"), *Id), OnPages);
+		});
+		return JobId;
+	}
+
+	FString ClientId = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientIdKey, FString()).TrimStartAndEnd();
+	FString ClientSecret = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientSecretKey, FString()).TrimStartAndEnd();
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify album %s with the app key"), JobId, *Id);
+	GetAppToken(ClientId, ClientSecret, [Id, OnPages, UseEmbed](const FString& Token, int32 Code)
+	{
+		if (Token.IsEmpty())
+		{
+			UseEmbed(Code == 400 || Code == 401 ? FString(TEXT("Spotify rejected the Client ID/Secret in the mod settings.")) : FString());
+			return;
+		}
+		FetchSpotifyPages(Token, FString::Printf(TEXT("https://api.spotify.com/v1/albums/%s/tracks?limit=50"), *Id), OnPages);
 	});
 	return JobId;
 }

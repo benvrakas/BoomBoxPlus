@@ -103,12 +103,38 @@ Typing searches the local library live. **Enter** runs the online part:
 
 ## Big playlists: background matching and batched adds
 
-**Reading the track list.** Without credentials the mod reads Spotify's public embed page, which lists only
-the **first 100** songs; the page then says so and points at the settings. With **Spotify Client ID and
-Secret** set in the mod config (a free app from developer.spotify.com/dashboard), it uses the Web API
-instead: client-credentials token, then `/v1/playlists/{id}/tracks` (100 per page) or
-`/v1/albums/{id}/tracks` (50 per page), following `next` up to 1000 tracks (the queue limit). Private
-playlists can't be read either way. If a later page fails, the tracks read so far are still matched.
+**Reading the track list.** What Spotify allows (verified 2026-09-24 with a new app):
+
+| Request | App key only (client credentials) | Signed-in user |
+|---|---|---|
+| `GET /v1/playlists/{id}` (name, owner) | 200, but **no songs** in the response | — |
+| `GET /v1/playlists/{id}/tracks` | **403 Forbidden** | (old endpoint) |
+| `GET /v1/playlists/{id}/items` | **401 "Valid user authentication required"** | used |
+| `GET /v1/albums/{id}/tracks` | 200 | — |
+| Public embed page `trackList` | first 100 songs, no key | — |
+
+So a playlist's full song list needs a **signed-in user**. `UBBPSpotifyAuth` does a one-time
+authorization-code sign-in: "Connect Spotify" on the music page (shown when the Client ID/Secret are set
+but nobody is signed in) opens `accounts.spotify.com/authorize` (scopes `playlist-read-private
+playlist-read-collaborative`) in the browser; Spotify redirects to `http://127.0.0.1:8888/callback`, which
+the game answers through Unreal's `HTTPServer` module, bound to the loopback address only (a
+`HTTPServer.Listeners` `ListenerOverrides` entry added at runtime, so no firewall prompt). The `state`
+value is checked, the code is exchanged for an access + refresh token with the app's Basic auth, and the
+refresh token is saved to `Saved/BoomBoxPlus/SpotifyLogin.json` (with the Client ID it belongs to).
+Access tokens are renewed from it when within 60 s of expiry; an `invalid_grant` reply deletes the saved
+login. The listener route is removed as soon as the sign-in finishes or after 5 minutes.
+
+**The Spotify app must list `http://127.0.0.1:8888/callback` as a Redirect URI.** Spotify apps in
+development mode also only work for the app owner and users added under "User Management".
+
+Order of attempts for a pasted link:
+
+- Playlist, signed in: `/v1/playlists/{id}/items?limit=50`, following `next` up to 1000 songs. Items
+  wrap the track in `item` (or `track` in the older format); both are read.
+- Album with an app key: client-credentials token, `/v1/albums/{id}/tracks?limit=50`.
+- Anything else, or if Spotify refuses: the embed page's first 100 songs, with a note explaining why
+  (not signed in, no app key, or the HTTP code Spotify returned). Nothing fails outright any more just
+  because the API refused.
 
 **Spotify playlists are matched as a background job** (`UBBPNetSubsystem::StartSpotifyCollection`). After
 the track list is read, three worker threads search

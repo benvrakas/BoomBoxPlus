@@ -21,6 +21,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
+#include "Net/BBPSpotifyAuth.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
@@ -115,6 +116,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (UnlinkButton) UnlinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUnlink);
 	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
 	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
+	if (SpotifyButton) SpotifyButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleConnectSpotify);
 	if (SeekSlider)
 	{
 		SeekSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
@@ -237,6 +239,12 @@ void UBBPMusicPage::BuildDefaultLayout()
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
 	SearchColumn->AddChildToVerticalBox(ResultsMessageText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	SpotifyButton = MakeButton(WidgetTree, LOCTEXT("ConnectSpotify", "Connect Spotify"));
+	SpotifyButton->SetVisibility(ESlateVisibility::Collapsed);
+	UVerticalBoxSlot* SpotifySlot = SearchColumn->AddChildToVerticalBox(SpotifyButton);
+	SpotifySlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	SpotifySlot->SetHorizontalAlignment(HAlign_Left);
+
 	AddAllButton = MakeButton(WidgetTree, LOCTEXT("AddAllDefault", "Add all to queue"));
 	AddAllButton->SetVisibility(ESlateVisibility::Collapsed);
 	UVerticalBoxSlot* AddAllSlot = SearchColumn->AddChildToVerticalBox(AddAllButton);
@@ -662,6 +670,8 @@ void UBBPMusicPage::RebuildResults()
 		}
 	}
 
+	RefreshSpotifyButton();
+
 	SyncRows(ResultsList, ResultRows, Shown, [&Tracks](UBBPTrackRow& Row, int32 Index)
 	{
 		Row.SetupAsResult(Tracks[Index]);
@@ -908,6 +918,7 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 	}
 
 	const int32 Generation = ++SearchGeneration;
+	LastOnlineQuery = Text;
 	CancelMatchJob();
 	OnlineResults.Reset();
 	OnlineNote.Reset();
@@ -1021,6 +1032,63 @@ void UBBPMusicPage::HandleAddAllOnline()
 	UBBPBlueprintLibrary::RequestAddTracks(GetBoomBox(), OnlineResults);
 	bMatchQueued = true;
 	OnlineStatus = FString::Printf(TEXT("Added %d tracks to the queue."), OnlineResults.Num());
+	RefreshResults();
+}
+
+void UBBPMusicPage::RefreshSpotifyButton()
+{
+	if (!SpotifyButton)
+	{
+		return;
+	}
+	const UGameInstance* GameInstance = GetGameInstance();
+	const UBBPSpotifyAuth* Auth = GameInstance ? GameInstance->GetSubsystem<UBBPSpotifyAuth>() : nullptr;
+	const bool bShow = Auth && Auth->HasAppCredentials() && !Auth->IsConnected();
+	BBPWidgetStyle::SetShown(SpotifyButton, bShow);
+	if (bShow)
+	{
+		SpotifyButton->SetLabel(Auth->IsLoginInProgress()
+			? LOCTEXT("SpotifyWaiting", "Waiting for Spotify sign-in in your browser...")
+			: LOCTEXT("ConnectSpotify", "Connect Spotify"));
+	}
+}
+
+void UBBPMusicPage::HandleConnectSpotify()
+{
+	const UGameInstance* GameInstance = GetGameInstance();
+	UBBPSpotifyAuth* Auth = GameInstance ? GameInstance->GetSubsystem<UBBPSpotifyAuth>() : nullptr;
+	if (!Auth)
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: Connect Spotify pressed"));
+	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
+	Auth->BeginLogin(FBBPOnSpotifyLogin::CreateLambda([WeakThis](const FString& Error)
+	{
+		UBBPMusicPage* This = WeakThis.Get();
+		if (!This)
+		{
+			return;
+		}
+		if (!Error.IsEmpty())
+		{
+			This->OnlineStatus = Error;
+			This->RefreshResults();
+			return;
+		}
+		This->OnlineStatus = TEXT("Spotify connected.");
+		// Read the playlist that prompted the sign-in again, now in full.
+		if (UBBPNetSubsystem::ClassifyLink(This->LastOnlineQuery) == EBBPLinkKind::SpotifyCollection)
+		{
+			This->RunOnlineSearch(This->LastOnlineQuery);
+		}
+		else
+		{
+			This->RefreshResults();
+		}
+	}));
+	RefreshSpotifyButton();
+	OnlineStatus = TEXT("Sign in to Spotify in the browser window that just opened, then come back here.");
 	RefreshResults();
 }
 
