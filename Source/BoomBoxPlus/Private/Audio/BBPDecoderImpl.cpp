@@ -7,6 +7,9 @@
 #define STB_VORBIS_NO_STDIO
 
 THIRD_PARTY_INCLUDES_START
+#ifdef _MSC_VER
+#pragma warning(disable : 4701) // Potentially uninitialized local variable, reported inside the vendored libraries.
+#endif
 #define DR_MP3_IMPLEMENTATION
 #include "dr_mp3.h"
 #define DR_WAV_IMPLEMENTATION
