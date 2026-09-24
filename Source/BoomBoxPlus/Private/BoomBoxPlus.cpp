@@ -5,6 +5,7 @@ DEFINE_LOG_CATEGORY(LogBoomBoxPlus);
 
 void FBoomBoxPlusModule::StartupModule()
 {
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("BoomBoxPlus module starting"));
 	RegisterBBPHooks();
 }
 

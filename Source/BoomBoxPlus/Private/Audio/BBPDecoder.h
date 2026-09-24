@@ -45,6 +45,9 @@ public:
 	int32 GetChannels() const { return Channels; }
 	uint64 GetTotalFrames() const { return TotalFrames; }
 
+	// Returns why the last Open() failed; empty after a successful Open().
+	const FString& GetLastError() const { return LastError; }
+
 	// Returns the track length in seconds.
 	float GetDurationSeconds() const { return SampleRate > 0 ? (float)TotalFrames / (float)SampleRate : 0.f; }
 
@@ -62,4 +65,6 @@ private:
 
 	// The format-specific decoder instance (drmp3*, drwav* or stb_vorbis*).
 	void* DecoderHandle = nullptr;
+
+	FString LastError;
 };

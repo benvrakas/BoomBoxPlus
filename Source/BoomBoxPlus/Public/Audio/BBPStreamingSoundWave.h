@@ -35,6 +35,9 @@ public:
 	// Returns true if the file could not be opened or did not match the expected format.
 	bool HasFailed() const;
 
+	// Returns how many audio callbacks ran out of decoded audio since the stream started.
+	int32 GetUnderrunCount() const;
+
 	//~ Begin USoundWaveProcedural interface
 	virtual int32 OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 NumSamples) override;
 	virtual Audio::EAudioMixerStreamDataFormat::Type GetGeneratedPCMDataFormat() const override;
@@ -45,6 +48,9 @@ public:
 	//~ End UObject interface
 
 private:
+	// File being streamed, for log messages.
+	FString StreamPath;
+
 	TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> State;
 	FBBPDecodeWorker* Worker = nullptr;
 	FRunnableThread* WorkerThread = nullptr;

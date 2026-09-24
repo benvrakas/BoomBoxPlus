@@ -63,8 +63,8 @@ public:
 	FBBPOnLibraryChanged OnLibraryChanged;
 
 private:
-	// Stores scan results and saves the cache.
-	void ApplyScanResults(TArray<FBBPLocalTrack>&& Results);
+	// Stores scan results, optionally saves them as the cache, and notifies listeners.
+	void ApplyScanResults(TArray<FBBPLocalTrack>&& Results, bool bSaveCache = true);
 
 	FString GetCachePath() const;
 	TArray<FString> GetScanFolders() const;

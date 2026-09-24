@@ -50,6 +50,7 @@ namespace
 		TArray<uint8> Bytes;
 		if (!FFileHelper::LoadFileToArray(Bytes, *FilePath))
 		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: could not read '%s' (locked or unreadable?)"), *FilePath);
 			return false;
 		}
 
@@ -59,7 +60,7 @@ namespace
 		FBBPDecoder Decoder;
 		if (!Decoder.Open(MoveTemp(Bytes)))
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Skipping '%s': not decodable"), *FilePath);
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: skipping '%s': %s"), *FilePath, *Decoder.GetLastError());
 			return false;
 		}
 
@@ -72,7 +73,11 @@ namespace
 		Out.Track.Source = EBBPTrackSource::Local;
 		Out.Track.Duration = Decoder.GetDurationSeconds();
 		Decoder.ReadTags(Out.Track.Title, Out.Track.Artist);
+		const bool bHadTags = !Out.Track.Title.IsEmpty();
 		ApplyFileNameFallback(FilePath, Out.Track.Title, Out.Track.Artist);
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Library: added '%s' - '%s' (%.1f s, %d Hz, %d ch, id %s, title from %s)"),
+			*Out.Track.Artist, *Out.Track.Title, Out.Track.Duration, Out.SampleRate, Out.Channels, *Out.Track.Id,
+			bHadTags ? TEXT("tags") : TEXT("file name"));
 		return true;
 	}
 
@@ -81,8 +86,18 @@ namespace
 	{
 		TArray<FBBPLocalTrack> Results;
 		TSet<FString> SeenIds;
+		int32 NumReused = 0;
+		int32 NumDecoded = 0;
+		int32 NumSkipped = 0;
+		int32 NumDuplicates = 0;
+		const double StartTime = FPlatformTime::Seconds();
 		for (const FString& Folder : Folders)
 		{
+			if (!FPaths::DirectoryExists(Folder))
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: folder '%s' does not exist"), *Folder);
+				continue;
+			}
 			IFileManager::Get().IterateDirectoryStatRecursively(*Folder, [&](const TCHAR* Path, const FFileStatData& Stat)
 			{
 				if (Stat.bIsDirectory || !IsAudioFile(Path))
@@ -95,9 +110,15 @@ namespace
 				if (Cached && Cached->FileSize == Stat.FileSize && Cached->ModifiedTicks == Ticks)
 				{
 					Entry = *Cached;
+					++NumReused;
 				}
-				else if (!BuildLocalTrack(Path, Stat.FileSize, Ticks, Entry))
+				else if (BuildLocalTrack(Path, Stat.FileSize, Ticks, Entry))
 				{
+					++NumDecoded;
+				}
+				else
+				{
+					++NumSkipped;
 					return true;
 				}
 				// Keeps the first copy of duplicate files.
@@ -106,9 +127,16 @@ namespace
 					SeenIds.Add(Entry.Track.Id);
 					Results.Add(MoveTemp(Entry));
 				}
+				else
+				{
+					++NumDuplicates;
+					UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Library: '%s' is a duplicate of an earlier file"), Path);
+				}
 				return true;
 			});
 		}
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Library scan: %d tracks (%d cached, %d decoded, %d skipped, %d duplicates) in %.2f s"),
+			Results.Num(), NumReused, NumDecoded, NumSkipped, NumDuplicates, FPlatformTime::Seconds() - StartTime);
 		return Results;
 	}
 }
@@ -125,13 +153,25 @@ void UBBPLibrarySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		FFileHelper::SaveStringToFile(MusicFolderReadme, *Readme);
 	}
 
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: music folder is '%s'"), *MusicFolder);
+
 	FBBPLibraryCache Cache;
 	FString CacheJson;
-	if (FFileHelper::LoadFileToString(CacheJson, *GetCachePath())
-		&& FJsonObjectConverter::JsonObjectStringToUStruct(CacheJson, &Cache)
-		&& Cache.Version == LibraryCacheVersion)
+	if (!FFileHelper::LoadFileToString(CacheJson, *GetCachePath()))
 	{
-		ApplyScanResults(MoveTemp(Cache.Tracks));
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: no scan cache yet"));
+	}
+	else if (!FJsonObjectConverter::JsonObjectStringToUStruct(CacheJson, &Cache))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: scan cache '%s' is unreadable; rescanning everything"), *GetCachePath());
+	}
+	else if (Cache.Version != LibraryCacheVersion)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: scan cache is version %d, expected %d; rescanning everything"), Cache.Version, LibraryCacheVersion);
+	}
+	else
+	{
+		ApplyScanResults(MoveTemp(Cache.Tracks), false);
 	}
 
 	Rescan();
@@ -141,6 +181,7 @@ void UBBPLibrarySubsystem::Rescan()
 {
 	if (bScanning)
 	{
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Library: rescan requested during a scan; queued"));
 		bRescanQueued = true;
 		return;
 	}
@@ -172,7 +213,7 @@ void UBBPLibrarySubsystem::Rescan()
 	});
 }
 
-void UBBPLibrarySubsystem::ApplyScanResults(TArray<FBBPLocalTrack>&& Results)
+void UBBPLibrarySubsystem::ApplyScanResults(TArray<FBBPLocalTrack>&& Results, bool bSaveCache)
 {
 	Tracks = MoveTemp(Results);
 	Tracks.Sort([](const FBBPLocalTrack& A, const FBBPLocalTrack& B)
@@ -187,13 +228,16 @@ void UBBPLibrarySubsystem::ApplyScanResults(TArray<FBBPLocalTrack>&& Results)
 		TrackIndexById.Add(Tracks[i].Track.Id, i);
 	}
 
-	FBBPLibraryCache Cache;
-	Cache.Version = LibraryCacheVersion;
-	Cache.Tracks = Tracks;
-	FString CacheJson;
-	if (FJsonObjectConverter::UStructToJsonObjectString(Cache, CacheJson))
+	if (bSaveCache)
 	{
-		FFileHelper::SaveStringToFile(CacheJson, *GetCachePath());
+		FBBPLibraryCache Cache;
+		Cache.Version = LibraryCacheVersion;
+		Cache.Tracks = Tracks;
+		FString CacheJson;
+		if (!FJsonObjectConverter::UStructToJsonObjectString(Cache, CacheJson) || !FFileHelper::SaveStringToFile(CacheJson, *GetCachePath()))
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: could not write scan cache '%s'"), *GetCachePath());
+		}
 	}
 
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Music library: %d tracks"), Tracks.Num());
@@ -243,6 +287,7 @@ FString UBBPLibrarySubsystem::GetMusicFolder() const
 
 void UBBPLibrarySubsystem::OpenMusicFolder() const
 {
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: opening music folder '%s'"), *GetMusicFolder());
 	FPlatformProcess::ExploreFolder(*GetMusicFolder());
 }
 
@@ -261,6 +306,10 @@ TArray<FString> UBBPLibrarySubsystem::GetScanFolders() const
 		{
 			Folders.Add(BundledMusic);
 		}
+	}
+	else
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: BoomBoxPlus plugin not found by the plugin manager; bundled music skipped"));
 	}
 	return Folders;
 }

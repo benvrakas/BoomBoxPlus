@@ -1,5 +1,6 @@
 #include "Audio/BBPDecoder.h"
 #include "Audio/BBPDecoderLibs.h"
+#include "BoomBoxPlus.h"
 
 namespace
 {
@@ -21,6 +22,7 @@ namespace
 		}
 		else
 		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Could not build MP3 seek table; seeking will be slow for this file"));
 			Storage.Empty();
 		}
 	}
@@ -97,10 +99,14 @@ void FBBPDecoder::Close()
 bool FBBPDecoder::Open(TArray<uint8>&& FileBytes)
 {
 	Close();
+	LastError.Reset();
 
 	const EBBPAudioFormat Sniffed = BBPSniffAudioFormat(FileBytes);
 	if (Sniffed == EBBPAudioFormat::Unknown)
 	{
+		LastError = FString::Printf(TEXT("unrecognised format (%d bytes, first bytes %02X %02X %02X %02X)"), FileBytes.Num(),
+			FileBytes.Num() > 0 ? FileBytes[0] : 0, FileBytes.Num() > 1 ? FileBytes[1] : 0,
+			FileBytes.Num() > 2 ? FileBytes[2] : 0, FileBytes.Num() > 3 ? FileBytes[3] : 0);
 		return false;
 	}
 
@@ -115,6 +121,7 @@ bool FBBPDecoder::Open(TArray<uint8>&& FileBytes)
 		{
 			delete Mp3;
 			SourceBytes.Empty();
+			LastError = TEXT("dr_mp3 could not initialise (corrupt or truncated MP3)");
 			return false;
 		}
 		DecoderHandle = Mp3;
@@ -132,6 +139,7 @@ bool FBBPDecoder::Open(TArray<uint8>&& FileBytes)
 		{
 			delete Wav;
 			SourceBytes.Empty();
+			LastError = TEXT("dr_wav could not initialise (unsupported or corrupt WAV encoding)");
 			return false;
 		}
 		DecoderHandle = Wav;
@@ -148,6 +156,7 @@ bool FBBPDecoder::Open(TArray<uint8>&& FileBytes)
 		if (!Vorbis)
 		{
 			SourceBytes.Empty();
+			LastError = FString::Printf(TEXT("stb_vorbis could not open the stream (error %d)"), VorbisError);
 			return false;
 		}
 		DecoderHandle = Vorbis;
@@ -165,6 +174,7 @@ bool FBBPDecoder::Open(TArray<uint8>&& FileBytes)
 	// Rejects streams whose reported format is out of range.
 	if (Channels <= 0 || Channels > MaxSupportedChannels || SampleRate <= 0 || SampleRate > MaxSupportedSampleRate)
 	{
+		LastError = FString::Printf(TEXT("decoder reported an invalid format (%d channels, %d Hz)"), Channels, SampleRate);
 		Close();
 		return false;
 	}

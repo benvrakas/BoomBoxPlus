@@ -105,6 +105,7 @@ public:
 	// Frame to seek to on the decode thread, or -1 if none is pending.
 	std::atomic<int64> PendingSeekFrame;
 
+	std::atomic<int32> UnderrunCount{0};
 	std::atomic<bool> bStopRequested{false};
 	std::atomic<bool> bEndOfStream{false};
 	std::atomic<bool> bFailed{false};
@@ -138,6 +139,9 @@ public:
 			return 0;
 		}
 
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Decode thread opened '%s': %d Hz, %d ch, %.1f s"), *FilePath,
+			Decoder.GetSampleRate(), Decoder.GetChannels(), Decoder.GetDurationSeconds());
+
 		const int32 FileChannels = Decoder.GetChannels();
 		const int32 OutChannels = State->Channels;
 		TArray<int16> Scratch;
@@ -149,6 +153,12 @@ public:
 			if (SeekFrame >= 0)
 			{
 				const bool bSeeked = Decoder.SeekToFrame((uint64)SeekFrame);
+				if (!bSeeked)
+				{
+					UE_LOG(LogBoomBoxPlus, Warning, TEXT("Seek to frame %lld failed in '%s' (file has %llu frames); treating as end of track"),
+						SeekFrame, *FilePath, Decoder.GetTotalFrames());
+				}
+				UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Decode thread seeked '%s' to %.2f s"), *FilePath, (double)SeekFrame / State->SampleRate);
 				State->Reset(SeekFrame);
 				State->bEndOfStream = !bSeeked;
 				continue;
@@ -163,6 +173,7 @@ public:
 			const int32 Frames = Decoder.ReadFrames(Scratch.GetData(), DecodeChunkFrames);
 			if (Frames <= 0)
 			{
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Decode thread reached end of '%s'"), *FilePath);
 				State->bEndOfStream = true;
 				continue;
 			}
@@ -202,12 +213,13 @@ private:
 		}
 		if (!Decoder.Open(MoveTemp(Bytes)))
 		{
-			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Could not decode '%s'"), *FilePath);
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Could not decode '%s': %s"), *FilePath, *Decoder.GetLastError());
 			return false;
 		}
 		if (Decoder.GetSampleRate() != State->SampleRate || FMath::Min(Decoder.GetChannels(), MaxOutputChannels) != State->Channels)
 		{
-			UE_LOG(LogBoomBoxPlus, Warning, TEXT("'%s' changed format since it was scanned"), *FilePath);
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("'%s' changed format since it was scanned (expected %d Hz/%d ch, file is %d Hz/%d ch); rescan the library"),
+				*FilePath, State->SampleRate, State->Channels, Decoder.GetSampleRate(), Decoder.GetChannels());
 			return false;
 		}
 		return true;
@@ -228,10 +240,17 @@ UBBPStreamingSoundWave::UBBPStreamingSoundWave(const FObjectInitializer& ObjectI
 
 bool UBBPStreamingSoundWave::StartStream(const FString& FilePath, int32 InSampleRate, int32 InChannels, float StartSeconds)
 {
-	if (State.IsValid() || InSampleRate <= 0 || InChannels <= 0)
+	if (State.IsValid())
 	{
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("StartStream called twice on the same wave ('%s' then '%s'); create a new wave per track"), *StreamPath, *FilePath);
 		return false;
 	}
+	if (InSampleRate <= 0 || InChannels <= 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("StartStream('%s') given invalid format: %d Hz, %d ch"), *FilePath, InSampleRate, InChannels);
+		return false;
+	}
+	StreamPath = FilePath;
 
 	const int32 OutChannels = FMath::Min(InChannels, MaxOutputChannels);
 	NumChannels = OutChannels;
@@ -241,22 +260,33 @@ bool UBBPStreamingSoundWave::StartStream(const FString& FilePath, int32 InSample
 	State = MakeShared<FBBPStreamState, ESPMode::ThreadSafe>(InSampleRate, OutChannels, StartFrame);
 	Worker = new FBBPDecodeWorker(State.ToSharedRef(), FilePath);
 	WorkerThread = FRunnableThread::Create(Worker, TEXT("BBPDecode"), 0, TPri_AboveNormal);
-	return WorkerThread != nullptr;
+	if (!WorkerThread)
+	{
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("Could not create decode thread for '%s'"), *FilePath);
+		State->bFailed = true;
+		return false;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Streaming '%s' from %.2f s (%d Hz, %d ch out)"), *FilePath, StartSeconds, InSampleRate, OutChannels);
+	return true;
 }
 
 void UBBPStreamingSoundWave::Seek(float PositionSeconds)
 {
-	if (State.IsValid())
+	if (!State.IsValid())
 	{
-		State->PendingSeekFrame = FMath::Max<int64>(0, (int64)(PositionSeconds * State->SampleRate));
-		State->WakeEvent->Trigger();
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Seek(%.2f) on a wave that was never started"), PositionSeconds);
+		return;
 	}
+	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Seek '%s' to %.2f s (was at %.2f s)"), *StreamPath, PositionSeconds, GetPlaybackSeconds());
+	State->PendingSeekFrame = FMath::Max<int64>(0, (int64)(PositionSeconds * State->SampleRate));
+	State->WakeEvent->Trigger();
 }
 
 void UBBPStreamingSoundWave::StopStream()
 {
 	if (WorkerThread)
 	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Stopping stream '%s' at %.2f s (%d underruns)"), *StreamPath, GetPlaybackSeconds(), GetUnderrunCount());
 		WorkerThread->Kill(true);
 		delete WorkerThread;
 		WorkerThread = nullptr;
@@ -284,6 +314,11 @@ bool UBBPStreamingSoundWave::HasFailed() const
 	return State.IsValid() && State->bFailed;
 }
 
+int32 UBBPStreamingSoundWave::GetUnderrunCount() const
+{
+	return State.IsValid() ? State->UnderrunCount.load() : 0;
+}
+
 int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 NumSamples)
 {
 	OutAudio.SetNumUninitialized(NumSamples * sizeof(int16), EAllowShrinking::No);
@@ -292,6 +327,10 @@ int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 
 	if (Read < NumSamples)
 	{
 		FMemory::Memzero(Dst + Read, (NumSamples - Read) * sizeof(int16));
+		if (State.IsValid() && !State->bEndOfStream)
+		{
+			++State->UnderrunCount;
+		}
 	}
 	return NumSamples;
 }
