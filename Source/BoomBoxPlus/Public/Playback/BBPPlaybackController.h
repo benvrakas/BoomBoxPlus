@@ -8,6 +8,7 @@ class ABBPPlaylistSubsystem;
 class AFGBoomBoxPlayer;
 class UAudioComponent;
 class UBBPStreamingSoundWave;
+class UBBPHudOverlay;
 
 // Audio playing from one Boom Box on this machine.
 USTRUCT()
@@ -50,6 +51,9 @@ public:
 	void Shutdown();
 	void Tick(float DeltaSeconds);
 
+	// Returns the distance in centimetres at which Boom Box music becomes inaudible.
+	static float GetAudibleRange();
+
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
 	void SyncEmitters();
@@ -65,10 +69,16 @@ private:
 
 	UAudioComponent* CreateAudioComponent(AFGBoomBoxPlayer* BoomBox);
 
+	// Creates the lyric/now-playing overlay once a local player controller exists.
+	void EnsureHudOverlay();
+
 	UPROPERTY()
 	TObjectPtr<ABBPPlaylistSubsystem> Playlist;
 
 	UPROPERTY()
 	TArray<FBBPEmitter> Emitters;
+
+	UPROPERTY()
+	TObjectPtr<UBBPHudOverlay> HudOverlay;
 
 };

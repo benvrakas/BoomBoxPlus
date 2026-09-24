@@ -80,3 +80,17 @@ Open question for in-game testing: if the tape-select widget caches the list rat
 need a nudge (broadcasting the unlock subsystem's new-tape delegate once) to show the entry.
 
 The icon currently reuses the game's `TXUI_Tape_EmptyTape` texture; a proper icon is future editor work.
+
+## Configuration
+
+`UBBPConfig` is a native `UModConfiguration` (registered in `UBBPGameInstanceModule::ModConfigurations`),
+so it appears in SMM and the in-game mod config without an editor asset. Its root section and properties
+are `Instanced` default subobjects built in the constructor. Read values with `UBBPConfig::GetBool/GetFloat`,
+which fall back to a default (and log at Verbose) if SML's `UConfigManager` hasn't registered it yet.
+
+| Key | Default | Used by |
+|---|---|---|
+| `MusicVolume` | 0.8 | Playback controller — multiplied with each Boom Box's own volume. Needed because Unreal audio ignores the game's Wwise volume sliders. |
+| `ShowLyrics` | on | HUD overlay |
+| `ShowNowPlaying` | on | HUD overlay |
+| `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |

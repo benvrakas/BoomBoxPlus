@@ -1,4 +1,5 @@
 #include "Network/BBPRemoteCallObject.h"
+#include "BBPConfig.h"
 #include "BoomBoxPlus.h"
 #include "FGPlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -22,6 +23,13 @@ ABBPPlaylistSubsystem* UBBPRemoteCallObject::GetPlaylistForRequest(const TCHAR* 
 	if (!Playlist)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: %s from %s ignored; playlist subsystem not spawned"), RequestName, *GetRequesterName());
+		return nullptr;
+	}
+	const AFGPlayerController* Controller = GetOwnerPlayerController();
+	const bool bIsHost = Controller && Controller->IsLocalController();
+	if (!bIsHost && Playlist->GetNetMode() == NM_ListenServer && UBBPConfig::GetBool(this, UBBPConfig::HostOnlyControlKey, false))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("RCO: %s from %s rejected; host-only control is on"), RequestName, *GetRequesterName());
 		return nullptr;
 	}
 	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("RCO: %s from %s"), RequestName, *GetRequesterName());

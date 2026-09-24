@@ -19,6 +19,7 @@
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPTrackRow.h"
 #include "UI/BBPWidgetStyle.h"
+#include "UI/FGInteractWidget.h"
 
 #define LOCTEXT_NAMESPACE "BoomBoxPlus"
 
@@ -250,6 +251,17 @@ void UBBPMusicPage::ShowPage()
 		return;
 	}
 	Switcher->SetActiveWidget(this);
+
+	// Gives gamepad navigation a starting point on this page.
+	UWidget* FocusTarget = PlayPauseButton ? static_cast<UWidget*>(PlayPauseButton) : static_cast<UWidget*>(SearchBox);
+	if (UFGInteractWidget* Window = GetTypedOuter<UFGInteractWidget>())
+	{
+		Window->SetDefaultFocusWidget(FocusTarget);
+	}
+	if (FocusTarget)
+	{
+		FocusTarget->SetFocus();
+	}
 	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("UI: music page shown"));
 }
 

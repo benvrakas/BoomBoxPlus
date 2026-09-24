@@ -1,4 +1,5 @@
 #include "Module/BBPGameInstanceModule.h"
+#include "BBPConfig.h"
 #include "Network/BBPRemoteCallObject.h"
 #include "Patching/WidgetBlueprintHookManager.h"
 #include "UI/BBPMusicPage.h"
@@ -7,6 +8,7 @@ UBBPGameInstanceModule::UBBPGameInstanceModule()
 {
 	bRootModule = true;
 	RemoteCallObjects.Add(UBBPRemoteCallObject::StaticClass());
+	ModConfigurations.Add(UBBPConfig::StaticClass());
 
 	// Adds the Custom Music page as an extra page of the Boom Box window's page switcher.
 	UWidgetBlueprintHookData* MusicPageHook = CreateDefaultSubobject<UWidgetBlueprintHookData>(TEXT("MusicPageHook"));

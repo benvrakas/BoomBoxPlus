@@ -1,12 +1,15 @@
 #include "Playback/BBPPlaybackController.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "BoomBoxPlus.h"
+#include "BBPConfig.h"
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/BBPHudOverlay.h"
 
 namespace
 {
@@ -14,6 +17,11 @@ namespace
 	constexpr float DriftTolerance = 0.25f;
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
+}
+
+float UBBPPlaybackController::GetAudibleRange()
+{
+	return InnerRadius + FalloffDistance;
 }
 
 void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
@@ -33,6 +41,11 @@ void UBBPPlaybackController::Shutdown()
 		}
 	}
 	Emitters.Empty();
+	if (HudOverlay)
+	{
+		HudOverlay->RemoveFromParent();
+		HudOverlay = nullptr;
+	}
 	Playlist = nullptr;
 }
 
@@ -42,6 +55,7 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	EnsureHudOverlay();
 	SyncEmitters();
 	for (FBBPEmitter& Emitter : Emitters)
 	{
@@ -49,9 +63,31 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	}
 }
 
+void UBBPPlaybackController::EnsureHudOverlay()
+{
+	if (HudOverlay)
+	{
+		return;
+	}
+	APlayerController* Controller = UGameplayStatics::GetPlayerController(Playlist, 0);
+	if (!Controller || !Controller->IsLocalController())
+	{
+		return;
+	}
+	HudOverlay = CreateWidget<UBBPHudOverlay>(Controller, UBBPHudOverlay::StaticClass());
+	if (!HudOverlay)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: could not create the lyric/now-playing overlay"));
+		return;
+	}
+	HudOverlay->AddToViewport(-10);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: lyric/now-playing overlay added to viewport"));
+}
+
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
+	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.8f), 0.f, 1.f);
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{
@@ -75,11 +111,13 @@ void UBBPPlaybackController::SyncEmitters()
 		AFGBoomBoxPlayer* BoomBox = ActiveBoomBox.BoomBox;
 		if (FBBPEmitter* Existing = Emitters.FindByPredicate([BoomBox](const FBBPEmitter& E) { return E.BoomBox == BoomBox; }))
 		{
-			if (Existing->Component && Existing->AppliedVolume != ActiveBoomBox.Volume)
+			const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
+			if (Existing->Component && Existing->AppliedVolume != Volume)
 			{
-				Existing->AppliedVolume = ActiveBoomBox.Volume;
-				Existing->Component->SetVolumeMultiplier(FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f));
-				UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: volume %.2f on %s"), ActiveBoomBox.Volume, *GetNameSafe(BoomBox));
+				Existing->AppliedVolume = Volume;
+				Existing->Component->SetVolumeMultiplier(Volume);
+				UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: volume %.2f on %s (Boom Box %.2f x music %.2f)"),
+					Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
 			}
 			continue;
 		}
