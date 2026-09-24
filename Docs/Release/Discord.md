@@ -9,4 +9,4 @@ Load the new **Custom Music** tape and your Boom Box becomes a real speaker:
 - Synced lyrics on screen, and the game's music fades out while yours plays
 
 Get it on ficsit.app or in Satisfactory Mod Manager: [link]
-Bugs and ideas: [link]
+Bugs and ideas: https://github.com/benvrakas/BoomBoxPlus/issues

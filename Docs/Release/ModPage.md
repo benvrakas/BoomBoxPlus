@@ -118,7 +118,7 @@ Open **Mods → BoomBoxPlus**.
 
 ### Bugs and feedback
 
-Report problems at [link to issues page or Discord]. Please attach your log file:
+Report problems on [GitHub Issues](https://github.com/benvrakas/BoomBoxPlus/issues). Source code: [github.com/benvrakas/BoomBoxPlus](https://github.com/benvrakas/BoomBoxPlus). Please attach your log file:
 
 ```
 %LOCALAPPDATA%\FactoryGame\Saved\Logs\FactoryGame.log
