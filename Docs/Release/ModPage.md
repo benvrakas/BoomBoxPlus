@@ -30,8 +30,8 @@ Inspired by the PEAK mod sPEAKer.
 - **Spotify links.** Paste a Spotify song and it searches for it. Paste a playlist or album and every song
   is matched on YouTube. Songs start playing as soon as the first ones are found; you don't wait for the
   whole list.
-- **A real queue.** Play Next, Add, reorder, remove, clear, shuffle and repeat. Drag the seek bar to jump
-  anywhere in a song.
+- **A real queue.** Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
+  song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
   carry it or place it.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
@@ -69,8 +69,12 @@ each player automatically.
 
 ### Whole Spotify playlists (optional)
 
-Without any setup, Spotify only shares the **first 100 songs** of a playlist. To read whole playlists (up
-to 1000 songs):
+Without any setup, Spotify only shares the **first 100 songs** of a playlist. Spotify also only lets mods
+read the whole song list of playlists **you own**. To play a longer playlist made by someone else, copy it
+into your own first: in Spotify, open it, select all songs (Ctrl+A), right-click, **Add to playlist →
+New playlist**, and paste the new playlist's link.
+
+To read whole playlists you own (up to 1000 songs):
 
 1. Sign in at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and click
    **Create app**. Any name and description work.
@@ -105,7 +109,8 @@ Open **Mods → BoomBoxPlus**.
 
 - Only the current song and the next two are downloaded, so big playlists don't fill your disk.
   Downloads are kept in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\Cache`.
-- The Spotify playlist must be public, or yours. Private playlists of other users can't be read.
+- Whole Spotify playlists: only ones you own (copy others into your own, see above). Everyone else's
+  playlists give their first 100 songs.
 - Downloading from YouTube and SoundCloud uses the bundled [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
   [FFmpeg](https://ffmpeg.org). Respect the terms of the services you use.
 - Dedicated servers haven't been tested yet.

@@ -212,7 +212,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, NextButton, false, 18.f);
 	ShuffleButton = MakeButton(WidgetTree, LOCTEXT("Shuffle", "Shuffle: Off"));
 	AddToRow(Transport, ShuffleButton, false);
-	RepeatButton = MakeButton(WidgetTree, LOCTEXT("Repeat", "Repeat: All"));
+	RepeatButton = MakeButton(WidgetTree, LOCTEXT("Repeat", "Repeat: Off"));
 	AddToRow(Transport, RepeatButton, false);
 
 	// Two columns: search and results on the left, the queue on the right.
@@ -1179,7 +1179,7 @@ void UBBPMusicPage::HandleShuffle()
 void UBBPMusicPage::HandleRepeat()
 {
 	const ABBPMusicChannel* Channel = BoundChannel.Get();
-	const EBBPRepeatMode Current = Channel ? Channel->GetPlaybackState().RepeatMode : EBBPRepeatMode::All;
+	const EBBPRepeatMode Current = Channel ? Channel->GetPlaybackState().RepeatMode : EBBPRepeatMode::Off;
 	const EBBPRepeatMode Next = Current == EBBPRepeatMode::All ? EBBPRepeatMode::One
 		: Current == EBBPRepeatMode::One ? EBBPRepeatMode::Off
 		: EBBPRepeatMode::All;

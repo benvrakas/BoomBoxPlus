@@ -730,7 +730,18 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 				UseEmbed(FString::Printf(TEXT("%s; showing the first 100 songs."), *Error));
 				return;
 			}
-			FetchSpotifyPages(Token, FString::Printf(TEXT("https://api.spotify.com/v1/playlists/%s/items?limit=50"), *Id), OnPages);
+			FetchSpotifyPages(Token, FString::Printf(TEXT("https://api.spotify.com/v1/playlists/%s/items?limit=50"), *Id),
+				[OnPages, UseEmbed](TArray<FBBPWantedTrack>&& Tracks, int32 FailCode)
+			{
+				// Spotify only gives apps the full song list of playlists the signed-in user owns.
+				if (Tracks.Num() == 0 && FailCode == 403)
+				{
+					UseEmbed(TEXT("Spotify only lets mods read the whole song list of playlists you own, so this shows the first 100 songs. ")
+						TEXT("To play all of it, copy it into your own playlist in Spotify (select all songs, Add to playlist, New playlist) and paste that link."));
+					return;
+				}
+				OnPages(MoveTemp(Tracks), FailCode);
+			});
 		});
 		return JobId;
 	}

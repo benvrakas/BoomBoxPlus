@@ -246,7 +246,14 @@ void ABBPMusicChannel::Skip()
 		return;
 	}
 	LastSkipTime = Now;
-	Advance(false);
+	// Next on the last song does nothing unless the queue repeats; the song keeps playing.
+	const int32 NextEntry = ChooseNextEntry(false);
+	if (NextEntry == INDEX_NONE)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: next ignored, already at the last song"), LinkCode);
+		return;
+	}
+	StartEntry(NextEntry, 0.f);
 }
 
 void ABBPMusicChannel::Previous()
@@ -511,7 +518,8 @@ int32 ABBPMusicChannel::ChooseNextEntry(bool bAutomatic)
 		}
 		if (Candidates.Num() == 0)
 		{
-			if (PlaybackState.RepeatMode == EBBPRepeatMode::Off)
+			// Only "repeat all" starts a new shuffled round.
+			if (PlaybackState.RepeatMode != EBBPRepeatMode::All)
 			{
 				return INDEX_NONE;
 			}
@@ -532,7 +540,8 @@ int32 ABBPMusicChannel::ChooseNextEntry(bool bAutomatic)
 	{
 		return Queue[NextIndex].EntryId;
 	}
-	return PlaybackState.RepeatMode == EBBPRepeatMode::Off ? INDEX_NONE : Queue[0].EntryId;
+	// Only "repeat all" goes from the last song back to the first.
+	return PlaybackState.RepeatMode == EBBPRepeatMode::All ? Queue[0].EntryId : INDEX_NONE;
 }
 
 void ABBPMusicChannel::MarkQueueChanged()

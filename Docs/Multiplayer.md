@@ -92,6 +92,11 @@ among entries not yet played this cycle (`ShufflePlayed`, server-only); when exh
 (repeat all) or stops (repeat off). `Previous` uses a server-only play history; within the first 3 s of a
 track it goes back, otherwise it restarts the track.
 
+**Repeat defaults to Off**, and only "repeat all" loops from the last song back to the first (or starts a
+new shuffled round). Pressing Next on the last song does nothing: the song keeps playing
+(`ABBPMusicChannel::Skip`). When the last song ends by itself with repeat off, playback stops. Repeat one
+replays the song when it ends, but Next still moves on.
+
 Adding to an empty/stopped queue starts playback immediately. "Play Next" inserts after the current entry.
 
 ## Missing tracks

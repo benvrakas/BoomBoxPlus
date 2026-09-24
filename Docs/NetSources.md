@@ -113,7 +113,13 @@ Typing searches the local library live. **Enter** runs the online part:
 | `GET /v1/albums/{id}/tracks` | 200 | — |
 | Public embed page `trackList` | first 100 songs, no key | — |
 
-So a playlist's full song list needs a **signed-in user**. `UBBPSpotifyAuth` does a one-time
+Signed in, it still only works for playlists **the signed-in user owns** (tested 2026-09-24: the user's
+own playlist → 200; four playlists by other users that the user follows → 403 "Forbidden" on both
+`/items` and `/tracks`). This is Spotify's development-mode restriction; extended quota is only granted to
+registered organisations. On a 403 the mod falls back to the embed page's first 100 songs and tells the
+player to copy the playlist into one they own. Playlist items wrap the track in `item` (confirmed).
+
+So a playlist's full song list needs a **signed-in user who owns it**. `UBBPSpotifyAuth` does a one-time
 authorization-code sign-in: "Connect Spotify" on the music page (shown when the Client ID/Secret are set
 but nobody is signed in) opens `accounts.spotify.com/authorize` (scopes `playlist-read-private
 playlist-read-collaborative`) in the browser; Spotify redirects to `http://127.0.0.1:8888/callback`, which

@@ -74,7 +74,7 @@ struct BOOMBOXPLUS_API FBBPPlaybackState
 	bool bShuffle = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
-	EBBPRepeatMode RepeatMode = EBBPRepeatMode::All;
+	EBBPRepeatMode RepeatMode = EBBPRepeatMode::Off;
 
 	// Increments on every change so clients can tell a restart of the same track from no change.
 	UPROPERTY()
