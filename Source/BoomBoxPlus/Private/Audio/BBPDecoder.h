@@ -36,6 +36,9 @@ public:
 	// Releases the decoder and the file bytes.
 	void Close();
 
+	// Reads the title and artist tags embedded in the file. Leaves an output empty if the file has no such tag.
+	void ReadTags(FString& OutTitle, FString& OutArtist) const;
+
 	bool IsOpen() const { return Format != EBBPAudioFormat::Unknown; }
 	EBBPAudioFormat GetFormat() const { return Format; }
 	int32 GetSampleRate() const { return SampleRate; }

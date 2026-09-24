@@ -77,7 +77,7 @@ public class BoomBoxPlus : ModuleRules
 		});
 		
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			// ... add private dependencies that you statically link with here ...	
+			"Projects",
 		});
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] {
