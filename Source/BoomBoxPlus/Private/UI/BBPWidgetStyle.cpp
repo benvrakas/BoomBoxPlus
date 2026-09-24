@@ -75,9 +75,9 @@ UTextBlock* BBPWidgetStyle::MakeText(UWidgetTree* Tree, int32 FontSize, const FL
 	return Block;
 }
 
-UBBPGameButton* BBPWidgetStyle::MakeButton(UWidgetTree* Tree, const FText& Label)
+UBBPGameButton* BBPWidgetStyle::MakeButton(UWidgetTree* Tree, const FText& Label, bool bCompact)
 {
-	UBBPGameButton* Button = Tree->ConstructWidget<UBBPGameButton>(UBBPGameButton::StaticClass());
+	UBBPGameButton* Button = Tree->ConstructWidget<UBBPGameButton>(bCompact ? UBBPCompactButton::StaticClass() : UBBPGameButton::StaticClass());
 	Button->SetLabel(Label);
 	return Button;
 }

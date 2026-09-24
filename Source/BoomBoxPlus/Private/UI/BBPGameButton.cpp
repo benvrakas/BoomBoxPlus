@@ -2,6 +2,7 @@
 #include "BoomBoxPlus.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/ButtonSlot.h"
+#include "Brushes/SlateColorBrush.h"
 #include "Components/TextBlock.h"
 #include "UI/BBPWidgetStyle.h"
 
@@ -23,7 +24,7 @@ void UBBPGameButton::NativeOnInitialized()
 	}
 
 	static bool bLoggedFallback = false;
-	UClass* GameButtonClass = LoadClass<UUserWidget>(nullptr, GameButtonClassPath);
+	UClass* GameButtonClass = UsesGameWidget() ? LoadClass<UUserWidget>(nullptr, GameButtonClassPath) : nullptr;
 	UUserWidget* Game = GameButtonClass ? WidgetTree->ConstructWidget<UUserWidget>(GameButtonClass) : nullptr;
 	UButton* Inner = Game ? Cast<UButton>(Game->GetWidgetFromName(InnerButtonName)) : nullptr;
 	if (Inner)
@@ -38,13 +39,20 @@ void UBBPGameButton::NativeOnInitialized()
 	}
 	else
 	{
-		if (!bLoggedFallback)
+		if (UsesGameWidget() && !bLoggedFallback)
 		{
 			bLoggedFallback = true;
 			UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: game button widget unavailable (class %s); using plain buttons"), *GetNameSafe(GameButtonClass));
 		}
 		InnerButton = WidgetTree->ConstructWidget<UButton>();
-		InnerButton->SetBackgroundColor(BBPWidgetStyle::ButtonColor);
+		FButtonStyle Style = InnerButton->GetStyle();
+		Style.SetNormal(FSlateColorBrush(BBPWidgetStyle::FlatButtonColor));
+		Style.SetHovered(FSlateColorBrush(BBPWidgetStyle::AccentColor));
+		Style.SetPressed(FSlateColorBrush(BBPWidgetStyle::AccentPressedColor));
+		Style.SetDisabled(FSlateColorBrush(BBPWidgetStyle::InsetColor));
+		Style.SetNormalPadding(FMargin(0.f));
+		Style.SetPressedPadding(FMargin(0.f));
+		InnerButton->SetStyle(Style);
 		FallbackLabel = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::TextColor, FText::GetEmpty(), BBPWidgetStyle::EFontWeight::SemiBold);
 		if (UButtonSlot* LabelSlot = Cast<UButtonSlot>(InnerButton->AddChild(FallbackLabel)))
 		{

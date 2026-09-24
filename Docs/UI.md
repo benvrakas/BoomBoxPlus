@@ -73,6 +73,25 @@ Page layout: title bar (Back, CUSTOM MUSIC, library status, Open Folder, Rescan,
 now-playing panel (track, lyric line, seek slider + time, transport), then two columns — search and results
 on the left, the queue on the right — and the link panel at the bottom.
 
+## List performance (the 400-song crash)
+
+The first version rebuilt the whole queue list — a new row widget per song, each with six game-button
+widgets — on every queue change. Adding a Spotify playlist changes the queue once per song, so the page
+created hundreds of thousands of widget objects, froze ~0.3 s per song, and crashed when the engine's
+object array filled (`UObjectArray.cpp` line 648 fatal error, from `UBBPMusicPage::RefreshQueue`).
+
+Now:
+
+- `RefreshQueue` / `RefreshResults` only mark the list dirty; `NativeTick` rebuilds at most every 0.3 s.
+  Hidden switcher pages don't tick, so a page nobody is looking at never rebuilds.
+- Rows are pooled (`SyncRows`): existing rows are refilled, new ones are only created when the pool is too
+  small, and extras are collapsed. Status lines and "Add all" sit outside the scroll boxes, so the lists
+  contain rows only.
+- At most 100 rows per list. The queue shows a window starting two songs before the current one
+  ("Showing songs 41-140 of 408").
+- Row buttons are `UBBPCompactButton`: a flat `UButton` in the game's colours instead of the heavy
+  `BPW_TileableButton`. Page-level buttons still use the game widget.
+
 ## The Custom Music button on the vanilla page
 
 `UBBPOpenMusicButton` is injected beside `mChangeTape` (Indirect_Child hook). It is built from the same

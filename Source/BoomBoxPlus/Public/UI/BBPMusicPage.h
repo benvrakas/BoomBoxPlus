@@ -155,10 +155,19 @@ private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
 	void BuildDefaultLayout();
 
+	// Mark the results or queue list for rebuilding; the rebuild happens on a later tick, at most every RebuildInterval.
 	void RefreshResults();
 	void RefreshQueue();
+
+	// Rebuild the results or queue list now.
+	void RebuildResults();
+	void RebuildQueue();
+
 	void RefreshTransport();
 	void RefreshLink();
+
+	// Shows the first Count rows of Pool in List, creating rows only when the pool is too small, and hides the rest.
+	void SyncRows(UScrollBox* List, TArray<TObjectPtr<UBBPTrackRow>>& Pool, int32 Count, TFunctionRef<void(UBBPTrackRow& Row, int32 Index)> Setup);
 
 	// Binds to library change events once the library exists.
 	void TryBindSources();
@@ -264,6 +273,32 @@ private:
 	TArray<FBBPTrack> OnlineResults;
 	FString OnlineStatus;
 	bool bOnlineIsCollection = false;
+
+	// Status line above the results (library empty, no matches, online search progress).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ResultsMessageText;
+
+	// "Add all" for playlist results.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> AddAllButton;
+
+	// Note under the queue (empty queue, or how much of a long queue is shown).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> QueueMessageText;
+
+	// Row widgets reused between rebuilds.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UBBPTrackRow>> ResultRows;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UBBPTrackRow>> QueueRows;
+
+	bool bResultsDirty = false;
+	bool bQueueDirty = false;
+	float RebuildCooldown = 0.f;
+
+	// Extra line from the online search (e.g. a Spotify playlist was only partly read).
+	FString OnlineNote;
 
 	// Running Spotify match job (0 when none), its playlist size, and whether Add all has handed it the queueing.
 	int32 MatchJobId = 0;

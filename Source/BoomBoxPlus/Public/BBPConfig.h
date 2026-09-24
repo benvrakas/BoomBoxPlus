@@ -22,12 +22,17 @@ public:
 	static const FString FadeGameMusicKey;
 	static const FString GameMusicLevelKey;
 	static const FString GameMusicFadeTimeKey;
+	static const FString SpotifyClientIdKey;
+	static const FString SpotifyClientSecretKey;
 
 	// Returns a boolean setting, or Fallback if the configuration isn't available.
 	static bool GetBool(const UObject* WorldContext, const FString& Key, bool Fallback);
 
 	// Returns a number setting, or Fallback if the configuration isn't available.
 	static float GetFloat(const UObject* WorldContext, const FString& Key, float Fallback);
+
+	// Returns a text setting, or Fallback if the configuration isn't available.
+	static FString GetString(const UObject* WorldContext, const FString& Key, const FString& Fallback);
 
 	// Returns a whole-number setting, or Fallback if the configuration isn't available.
 	static int32 GetInt(const UObject* WorldContext, const FString& Key, int32 Fallback);

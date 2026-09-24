@@ -23,6 +23,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
+#include "Misc/Base64.h"
 
 namespace
 {
@@ -30,7 +31,8 @@ namespace
 	constexpr int32 YouTubeSearchResults = 8;
 	constexpr int32 SoundCloudSearchResults = 4;
 	constexpr int32 MaxCollectionTracks = 500;
-	constexpr int32 MaxSpotifyTracks = 100;
+	constexpr int32 MaxSpotifyTracks = 1000;
+	constexpr int32 SpotifyEmbedLimit = 100;
 	constexpr int32 MatchWorkers = 3;
 	constexpr int32 SpotifyMatchCandidates = 3;
 	constexpr float HttpTimeoutSeconds = 15.f;
@@ -278,6 +280,51 @@ namespace
 			OnDone(FString(), TEXT("could not start request"));
 		}
 	}
+
+	// Sends a request with extra headers and body; calls back on the game thread with the body and HTTP code.
+	void HttpSend(const FString& Verb, const FString& Url, const TMap<FString, FString>& Headers, const FString& Body,
+		TFunction<void(const FString& Body, int32 Code, const FString& Error)> OnDone)
+	{
+		TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest();
+		Request->SetURL(Url);
+		Request->SetVerb(Verb);
+		for (const TPair<FString, FString>& Header : Headers)
+		{
+			Request->SetHeader(Header.Key, Header.Value);
+		}
+		if (!Body.IsEmpty())
+		{
+			Request->SetContentAsString(Body);
+		}
+		Request->SetTimeout(HttpTimeoutSeconds);
+		Request->OnProcessRequestComplete().BindLambda([OnDone](FHttpRequestPtr, FHttpResponsePtr Response, bool bSucceeded)
+		{
+			if (!bSucceeded || !Response.IsValid())
+			{
+				OnDone(FString(), 0, TEXT("network error"));
+				return;
+			}
+			OnDone(Response->GetContentAsString(), Response->GetResponseCode(), FString());
+		});
+		if (!Request->ProcessRequest())
+		{
+			OnDone(FString(), 0, TEXT("could not start request"));
+		}
+	}
+
+	// Splits an open.spotify.com playlist/album URL into its kind ("playlist" or "album") and id.
+	bool ParseSpotifyCollectionUrl(const FString& Url, FString& OutKind, FString& OutId)
+	{
+		static const FRegexPattern Pattern(TEXT("open\\.spotify\\.com/(?:intl-[a-z-]+/)?(playlist|album)/([A-Za-z0-9]+)"));
+		FRegexMatcher Matcher(Pattern, Url);
+		if (!Matcher.FindNext())
+		{
+			return false;
+		}
+		OutKind = Matcher.GetCaptureGroup(1);
+		OutId = Matcher.GetCaptureGroup(2);
+		return true;
+	}
 }
 
 // One Spotify track to find on YouTube.
@@ -468,6 +515,129 @@ void UBBPNetSubsystem::ResolveSpotifyTrack(const FString& Url, FBBPOnNetText OnD
 	});
 }
 
+namespace
+{
+	// Reads one Spotify Web API track object ({name, duration_ms, artists:[{name}]}) into a wanted track.
+	bool ReadApiTrack(const TSharedPtr<FJsonObject>& Track, FBBPWantedTrack& Out)
+	{
+		FString Name;
+		if (!Track.IsValid() || !Track->TryGetStringField(TEXT("name"), Name) || Name.IsEmpty())
+		{
+			return false;
+		}
+		double DurationMs = 0.0;
+		Track->TryGetNumberField(TEXT("duration_ms"), DurationMs);
+		FString Artist;
+		const TArray<TSharedPtr<FJsonValue>>* Artists = nullptr;
+		if (Track->TryGetArrayField(TEXT("artists"), Artists) && Artists->Num() > 0 && (*Artists)[0].IsValid())
+		{
+			const TSharedPtr<FJsonObject>* ArtistObject = nullptr;
+			if ((*Artists)[0]->TryGetObject(ArtistObject))
+			{
+				(*ArtistObject)->TryGetStringField(TEXT("name"), Artist);
+			}
+		}
+		Out.Query = Artist.IsEmpty() ? Name : FString::Printf(TEXT("%s %s"), *Name, *Artist);
+		Out.Duration = (float)(DurationMs / 1000.0);
+		return true;
+	}
+
+	// Reads every track of a playlist or album through the Spotify Web API, following pagination.
+	void FetchSpotifyApiTracks(const FString& Kind, const FString& Id, const FString& ClientId, const FString& ClientSecret,
+		TFunction<void(TArray<FBBPWantedTrack>&& Tracks, const FString& Error)> OnDone)
+	{
+		const FString Credentials = FBase64::Encode(ClientId + TEXT(":") + ClientSecret);
+		TMap<FString, FString> TokenHeaders;
+		TokenHeaders.Add(TEXT("Authorization"), TEXT("Basic ") + Credentials);
+		TokenHeaders.Add(TEXT("Content-Type"), TEXT("application/x-www-form-urlencoded"));
+		HttpSend(TEXT("POST"), TEXT("https://accounts.spotify.com/api/token"), TokenHeaders, TEXT("grant_type=client_credentials"),
+			[Kind, Id, OnDone](const FString& TokenBody, int32 TokenCode, const FString& TokenError)
+		{
+			FString AccessToken;
+			TSharedPtr<FJsonObject> TokenJson;
+			if (TokenCode == 200 && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TokenBody), TokenJson) && TokenJson.IsValid())
+			{
+				TokenJson->TryGetStringField(TEXT("access_token"), AccessToken);
+			}
+			if (AccessToken.IsEmpty())
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify token request failed (HTTP %d%s%s)"), TokenCode, TokenError.IsEmpty() ? TEXT("") : TEXT(", "), *TokenError);
+				OnDone({}, TokenCode == 400 || TokenCode == 401 ? TEXT("Spotify rejected the Client ID/Secret in the mod settings") : TEXT("Couldn't reach Spotify"));
+				return;
+			}
+
+			const bool bPlaylist = Kind == TEXT("playlist");
+			const FString FirstPage = bPlaylist
+				? FString::Printf(TEXT("https://api.spotify.com/v1/playlists/%s/tracks?limit=100&fields=%s"), *Id,
+					*FGenericPlatformHttp::UrlEncode(TEXT("next,items(track(name,duration_ms,artists(name)))")))
+				: FString::Printf(TEXT("https://api.spotify.com/v1/albums/%s/tracks?limit=50"), *Id);
+
+			TSharedRef<TArray<FBBPWantedTrack>> Collected = MakeShared<TArray<FBBPWantedTrack>>();
+			TSharedRef<TFunction<void(const FString&)>> FetchPage = MakeShared<TFunction<void(const FString&)>>();
+			TWeakPtr<TFunction<void(const FString&)>> WeakFetchPage = FetchPage;
+			*FetchPage = [AccessToken, bPlaylist, Collected, WeakFetchPage, OnDone](const FString& PageUrl)
+			{
+				TMap<FString, FString> Headers;
+				Headers.Add(TEXT("Authorization"), TEXT("Bearer ") + AccessToken);
+				// The page callback holds the fetcher alive until the last page is done.
+				TSharedPtr<TFunction<void(const FString&)>> Self = WeakFetchPage.Pin();
+				HttpSend(TEXT("GET"), PageUrl, Headers, FString(), [bPlaylist, Collected, Self, OnDone](const FString& Body, int32 Code, const FString& Error)
+				{
+					TSharedPtr<FJsonObject> Json;
+					if (Code != 200 || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Body), Json) || !Json.IsValid())
+					{
+						UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: Spotify API page failed (HTTP %d%s%s) after %d tracks"), Code, Error.IsEmpty() ? TEXT("") : TEXT(", "), *Error, Collected->Num());
+						if (Collected->Num() > 0)
+						{
+							OnDone(MoveTemp(*Collected), FString());
+						}
+						else
+						{
+							OnDone({}, Code == 404 ? TEXT("Spotify couldn't find that playlist (private playlists can't be read)") : TEXT("Couldn't read that Spotify playlist"));
+						}
+						return;
+					}
+					const TArray<TSharedPtr<FJsonValue>>* Items = nullptr;
+					if (Json->TryGetArrayField(TEXT("items"), Items))
+					{
+						for (const TSharedPtr<FJsonValue>& Item : *Items)
+						{
+							const TSharedPtr<FJsonObject>* ItemObject = nullptr;
+							if (!Item.IsValid() || !Item->TryGetObject(ItemObject))
+							{
+								continue;
+							}
+							// Playlist items wrap the track; album items are the track.
+							const TSharedPtr<FJsonObject>* TrackObject = ItemObject;
+							if (bPlaylist && !(*ItemObject)->TryGetObjectField(TEXT("track"), TrackObject))
+							{
+								continue;
+							}
+							FBBPWantedTrack Wanted;
+							if (ReadApiTrack(*TrackObject, Wanted))
+							{
+								Collected->Add(MoveTemp(Wanted));
+							}
+						}
+					}
+					FString Next;
+					if (Collected->Num() < MaxSpotifyTracks && Json->TryGetStringField(TEXT("next"), Next) && !Next.IsEmpty() && Self.IsValid())
+					{
+						(*Self)(Next);
+						return;
+					}
+					if (Collected->Num() > MaxSpotifyTracks)
+					{
+						Collected->SetNum(MaxSpotifyTracks);
+					}
+					OnDone(MoveTemp(*Collected), FString());
+				});
+			};
+			(*FetchPage)(FirstPage);
+		});
+	}
+}
+
 int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchProgress OnProgress)
 {
 	const int32 JobId = NextJobId++;
@@ -480,46 +650,60 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 		OnProgress.ExecuteIfBound(Failed);
 		return JobId;
 	}
-	FString EmbedUrl = Url.TrimStartAndEnd().Replace(TEXT("open.spotify.com/"), TEXT("open.spotify.com/embed/"));
-	int32 QueryStart = INDEX_NONE;
-	if (EmbedUrl.FindChar(TEXT('?'), QueryStart))
-	{
-		EmbedUrl.LeftInline(QueryStart);
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d resolving Spotify collection '%s'"), JobId, *EmbedUrl);
 
 	TSharedPtr<FBBPMatchJob> Job = MakeShared<FBBPMatchJob>();
 	Job->Work = MakeShared<FBBPMatchWork, ESPMode::ThreadSafe>();
 	Job->OnProgress = OnProgress;
 	Job->Progress.JobId = JobId;
 	MatchJobs.Add(JobId, Job);
-
 	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
-	HttpGet(EmbedUrl, [WeakThis, JobId, YtDlp = YtDlpPath](const FString& Body, const FString& Error)
+
+	FString Kind, Id;
+	const FString ClientId = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientIdKey, FString()).TrimStartAndEnd();
+	const FString ClientSecret = UBBPConfig::GetString(GetGameInstance(), UBBPConfig::SpotifyClientSecretKey, FString()).TrimStartAndEnd();
+	if (!ClientId.IsEmpty() && !ClientSecret.IsEmpty() && ParseSpotifyCollectionUrl(Url, Kind, Id))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify %s %s through the Web API"), JobId, *Kind, *Id);
+		FetchSpotifyApiTracks(Kind, Id, ClientId, ClientSecret, [WeakThis, JobId](TArray<FBBPWantedTrack>&& Tracks, const FString& Error)
+		{
+			if (UBBPNetSubsystem* This = WeakThis.Get())
+			{
+				if (Tracks.Num() == 0)
+				{
+					This->FailJob(JobId, Error.IsEmpty() ? FString(TEXT("That Spotify playlist is empty")) : Error);
+				}
+				else
+				{
+					This->BeginMatching(JobId, MoveTemp(Tracks), FString());
+				}
+			}
+		});
+		return JobId;
+	}
+
+	FString EmbedUrl = Url.TrimStartAndEnd().Replace(TEXT("open.spotify.com/"), TEXT("open.spotify.com/embed/"));
+	int32 QueryStart = INDEX_NONE;
+	if (EmbedUrl.FindChar(TEXT('?'), QueryStart))
+	{
+		EmbedUrl.LeftInline(QueryStart);
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d reading Spotify collection '%s' from the embed page (no API credentials)"), JobId, *EmbedUrl);
+	HttpGet(EmbedUrl, [WeakThis, JobId](const FString& Body, const FString& Error)
 	{
 		UBBPNetSubsystem* This = WeakThis.Get();
-		TSharedPtr<FBBPMatchJob>* JobPtr = This ? This->MatchJobs.Find(JobId) : nullptr;
-		if (!JobPtr)
+		if (!This)
 		{
 			return;
 		}
-		FBBPMatchJob& Job = **JobPtr;
-
 		const FString TrackListJson = Error.IsEmpty() ? ExtractJsonArray(Body, TEXT("trackList")) : FString();
 		TArray<TSharedPtr<FJsonValue>> Items;
 		if (TrackListJson.IsEmpty() || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(TrackListJson), Items))
 		{
 			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: job %d: Spotify trackList not found (%s)"), JobId, Error.IsEmpty() ? TEXT("page format changed") : *Error);
-			Job.Progress.bFinished = true;
-			Job.Progress.Error = TEXT("Couldn't read that Spotify playlist");
-			const FBBPOnMatchProgress Callback = Job.OnProgress;
-			const FBBPMatchProgress Final = Job.Progress;
-			This->MatchJobs.Remove(JobId);
-			Callback.ExecuteIfBound(Final);
+			This->FailJob(JobId, TEXT("Couldn't read that Spotify playlist"));
 			return;
 		}
-
-		TArray<FBBPWantedTrack>& Wanted = Job.Work->Wanted;
+		TArray<FBBPWantedTrack> Wanted;
 		for (const TSharedPtr<FJsonValue>& Item : Items)
 		{
 			const TSharedPtr<FJsonObject>* Object = nullptr;
@@ -536,67 +720,93 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 			{
 				Wanted.Add({ FString::Printf(TEXT("%s %s"), *Title, *PrimaryArtist(Subtitle)), (float)(DurationMs / 1000.0) });
 			}
-			if (Wanted.Num() >= MaxSpotifyTracks)
-			{
-				break;
-			}
 		}
-		const int32 Total = Wanted.Num();
-		Job.Progress.Total = Total;
-		Job.Slots.SetNum(Total);
-		Job.Received.Init(false, Total);
-		Job.OnProgress.ExecuteIfBound(Job.Progress);
-		if (Total == 0)
-		{
-			This->HandleMatchFinished(JobId);
-			return;
-		}
-
-		const int32 Workers = FMath::Min(MatchWorkers, Total);
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: %d Spotify tracks; matching on YouTube with %d workers"), JobId, Total, Workers);
-		TSharedPtr<FBBPMatchWork, ESPMode::ThreadSafe> Work = Job.Work;
-		Work->WorkersLeft = Workers;
-		for (int32 Worker = 0; Worker < Workers; ++Worker)
-		{
-			Async(EAsyncExecution::ThreadPool, [WeakThis, JobId, YtDlp, Work]()
-			{
-				// Workers take playlist tracks in order, so the first tracks are matched first.
-				for (int32 Index = Work->NextIndex++; Index < Work->Wanted.Num() && !Work->bCancelled; Index = Work->NextIndex++)
-				{
-					const FBBPWantedTrack& Item = Work->Wanted[Index];
-					FString MatchError;
-					const TArray<FBBPTrack> Candidates = RunListing(YtDlp, FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
-					TOptional<FBBPTrack> Match;
-					if (Candidates.Num() > 0)
-					{
-						Match = Candidates[PickClosestDuration(Candidates, Item.Duration)];
-					}
-					else
-					{
-						UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: no YouTube match for '%s'"), JobId, *Item.Query);
-					}
-					AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId, Index, Match = MoveTemp(Match)]()
-					{
-						if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
-						{
-							Subsystem->HandleMatchResult(JobId, Index, Match);
-						}
-					});
-				}
-				if (--Work->WorkersLeft == 0)
-				{
-					AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId]()
-					{
-						if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
-						{
-							Subsystem->HandleMatchFinished(JobId);
-						}
-					});
-				}
-			});
-		}
+		const FString Note = Wanted.Num() >= SpotifyEmbedLimit
+			? FString::Printf(TEXT("Spotify only shares the first %d songs without an app key. Add a Spotify Client ID and Secret in the mod settings to get the whole playlist."), SpotifyEmbedLimit)
+			: FString();
+		This->BeginMatching(JobId, MoveTemp(Wanted), Note);
 	});
 	return JobId;
+}
+
+void UBBPNetSubsystem::FailJob(int32 JobId, const FString& Error)
+{
+	TSharedPtr<FBBPMatchJob> Job;
+	if (!MatchJobs.RemoveAndCopyValue(JobId, Job) || !Job.IsValid())
+	{
+		return;
+	}
+	Job->Progress.bFinished = true;
+	Job->Progress.Error = Error;
+	UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: job %d failed: %s"), JobId, *Error);
+	Job->OnProgress.ExecuteIfBound(Job->Progress);
+}
+
+void UBBPNetSubsystem::BeginMatching(int32 JobId, TArray<FBBPWantedTrack>&& Wanted, const FString& Note)
+{
+	TSharedPtr<FBBPMatchJob>* JobPtr = MatchJobs.Find(JobId);
+	if (!JobPtr)
+	{
+		return;
+	}
+	FBBPMatchJob& Job = **JobPtr;
+	const int32 Total = Wanted.Num();
+	Job.Work->Wanted = MoveTemp(Wanted);
+	Job.Progress.Total = Total;
+	Job.Progress.Note = Note;
+	Job.Slots.SetNum(Total);
+	Job.Received.Init(false, Total);
+	Job.OnProgress.ExecuteIfBound(Job.Progress);
+	if (Total == 0)
+	{
+		HandleMatchFinished(JobId);
+		return;
+	}
+
+	const int32 Workers = FMath::Min(MatchWorkers, Total);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: %d Spotify tracks; matching on YouTube with %d workers"), JobId, Total, Workers);
+	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
+	TSharedPtr<FBBPMatchWork, ESPMode::ThreadSafe> Work = Job.Work;
+	Work->WorkersLeft = Workers;
+	for (int32 Worker = 0; Worker < Workers; ++Worker)
+	{
+		Async(EAsyncExecution::ThreadPool, [WeakThis, JobId, YtDlp = YtDlpPath, Work]()
+		{
+			// Workers take playlist tracks in order, so the first tracks are matched first.
+			for (int32 Index = Work->NextIndex++; Index < Work->Wanted.Num() && !Work->bCancelled; Index = Work->NextIndex++)
+			{
+				const FBBPWantedTrack& Item = Work->Wanted[Index];
+				FString MatchError;
+				const TArray<FBBPTrack> Candidates = RunListing(YtDlp, FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
+				TOptional<FBBPTrack> Match;
+				if (Candidates.Num() > 0)
+				{
+					Match = Candidates[PickClosestDuration(Candidates, Item.Duration)];
+				}
+				else
+				{
+					UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: no YouTube match for '%s'"), JobId, *Item.Query);
+				}
+				AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId, Index, Match = MoveTemp(Match)]()
+				{
+					if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
+					{
+						Subsystem->HandleMatchResult(JobId, Index, Match);
+					}
+				});
+			}
+			if (--Work->WorkersLeft == 0)
+			{
+				AsyncTask(ENamedThreads::GameThread, [WeakThis, JobId]()
+				{
+					if (UBBPNetSubsystem* Subsystem = WeakThis.Get())
+					{
+						Subsystem->HandleMatchFinished(JobId);
+					}
+				});
+			}
+		});
+	}
 }
 
 void UBBPNetSubsystem::HandleMatchResult(int32 JobId, int32 Index, const TOptional<FBBPTrack>& Match)
@@ -691,6 +901,15 @@ void UBBPNetSubsystem::QueueNewMatches(FBBPMatchJob& Job)
 	const TArray<FBBPTrack> NewTracks(Job.Progress.Matched.GetData() + Job.Queued, Job.Progress.Matched.Num() - Job.Queued);
 	Job.Queued = Job.Progress.Matched.Num();
 	UBBPBlueprintLibrary::RequestAddTracks(BoomBox, NewTracks);
+}
+
+void UBBPNetSubsystem::SetWantedDownloads(const TSet<FString>& WantedIds)
+{
+	const int32 Removed = DownloadQueue.RemoveAll([&WantedIds](const FBBPTrack& Track) { return !WantedIds.Contains(Track.Id); });
+	if (Removed > 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: dropped %d queued download(s) no longer needed soon; %d left"), Removed, DownloadQueue.Num());
+	}
 }
 
 bool UBBPNetSubsystem::IsDownloadPending(const FString& TrackId) const

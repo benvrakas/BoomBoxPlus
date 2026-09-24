@@ -21,7 +21,7 @@ namespace
 {
 	constexpr float DriftCheckInterval = 1.f;
 	constexpr float PrefetchInterval = 1.f;
-	constexpr int32 PrefetchAhead = 3;
+	constexpr int32 PrefetchAhead = 2;
 	constexpr float DriftTolerance = 0.25f;
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
@@ -273,6 +273,9 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 			Heard.Add(Channel);
 		}
 	}
+	// Only the current track and the next few are downloaded; anything else still waiting is dropped.
+	TSet<FString> Wanted;
+	TArray<const FBBPTrack*> ToFetch;
 	for (const ABBPMusicChannel* Channel : Heard)
 	{
 		const TArray<FBBPQueueEntry>& Queue = Channel->GetQueue();
@@ -283,9 +286,15 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 			const FBBPTrack& Track = Queue[i].Track;
 			if (Track.Source != EBBPTrackSource::Local && !Library->HasTrack(Track.Id))
 			{
-				Net->EnsureDownloaded(Track);
+				Wanted.Add(Track.Id);
+				ToFetch.Add(&Track);
 			}
 		}
+	}
+	Net->SetWantedDownloads(Wanted);
+	for (const FBBPTrack* Track : ToFetch)
+	{
+		Net->EnsureDownloaded(*Track);
 	}
 }
 

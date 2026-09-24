@@ -5,6 +5,7 @@
 #include "Configuration/Properties/ConfigPropertyFloat.h"
 #include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertySection.h"
+#include "Configuration/Properties/ConfigPropertyString.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -18,6 +19,8 @@ const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
 const FString UBBPConfig::FadeGameMusicKey = TEXT("FadeGameMusic");
 const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
 const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
+const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
+const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
 
 namespace
 {
@@ -107,6 +110,16 @@ UBBPConfig::UBBPConfig()
 	GameMusicFadeTime->DefaultValue = 2.f;
 	GameMusicFadeTime->Value = 2.f;
 	RootSection->SectionProperties.Add(GameMusicFadeTimeKey, GameMusicFadeTime);
+
+	UConfigPropertyString* SpotifyClientId = CreateDefaultSubobject<UConfigPropertyString>(TEXT("SpotifyClientId"));
+	SpotifyClientId->DisplayName = LOCTEXT("SpotifyClientId", "Spotify Client ID (optional)");
+	SpotifyClientId->Tooltip = LOCTEXT("SpotifyClientIdTip", "Without a Spotify app, only the first 100 songs of a Spotify playlist can be read. Create a free app at developer.spotify.com/dashboard and paste its Client ID and Client Secret here to read whole playlists.");
+	RootSection->SectionProperties.Add(SpotifyClientIdKey, SpotifyClientId);
+
+	UConfigPropertyString* SpotifyClientSecret = CreateDefaultSubobject<UConfigPropertyString>(TEXT("SpotifyClientSecret"));
+	SpotifyClientSecret->DisplayName = LOCTEXT("SpotifyClientSecret", "Spotify Client Secret (optional)");
+	SpotifyClientSecret->Tooltip = LOCTEXT("SpotifyClientSecretTip", "The Client Secret of the same Spotify app. Only sent to Spotify, to read playlists.");
+	RootSection->SectionProperties.Add(SpotifyClientSecretKey, SpotifyClientSecret);
 }
 
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
@@ -126,6 +139,16 @@ float UBBPConfig::GetFloat(const UObject* WorldContext, const FString& Key, floa
 		return Property->Value;
 	}
 	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Config: '%s' unavailable, using %.2f"), *Key, Fallback);
+	return Fallback;
+}
+
+FString UBBPConfig::GetString(const UObject* WorldContext, const FString& Key, const FString& Fallback)
+{
+	if (const UConfigPropertyString* Property = Cast<UConfigPropertyString>(FindProperty(WorldContext, Key)))
+	{
+		return Property->Value;
+	}
+	UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Config: '%s' unavailable"), *Key);
 	return Fallback;
 }
 

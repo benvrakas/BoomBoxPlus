@@ -27,6 +27,8 @@ namespace BBPWidgetStyle
 	const FLinearColor InputColor(0.0024f, 0.0024f, 0.0027f, 1.f);	// text fields #080809
 	const FLinearColor OutlineColor(0.0612f, 0.0612f, 0.0648f, 1.f);	// #464648
 	const FLinearColor ButtonColor(0.1144f, 0.1144f, 0.1144f);		// fallback buttons #5F5F5F
+	const FLinearColor FlatButtonColor(0.0395f, 0.0395f, 0.0452f, 1.f);	// flat list buttons #38383B
+	const FLinearColor AccentPressedColor(0.604f, 0.162f, 0.0319f);	// pressed orange #CC7033
 
 	enum class EFontWeight : uint8
 	{
@@ -41,8 +43,8 @@ namespace BBPWidgetStyle
 	// Creates a text block in the game's font.
 	UTextBlock* MakeText(UWidgetTree* Tree, int32 FontSize, const FLinearColor& Color, const FText& Text = FText::GetEmpty(), EFontWeight Weight = EFontWeight::Regular);
 
-	// Creates a button drawn with the game's own button widget.
-	UBBPGameButton* MakeButton(UWidgetTree* Tree, const FText& Label);
+	// Creates a button drawn with the game's own button widget, or a light flat one when bCompact (for list rows).
+	UBBPGameButton* MakeButton(UWidgetTree* Tree, const FText& Label, bool bCompact = false);
 
 	// Replaces the text of a button made by MakeButton.
 	void SetButtonLabel(UBBPGameButton* Button, const FText& Label);

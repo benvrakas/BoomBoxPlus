@@ -103,8 +103,15 @@ Typing searches the local library live. **Enter** runs the online part:
 
 ## Big playlists: background matching and batched adds
 
+**Reading the track list.** Without credentials the mod reads Spotify's public embed page, which lists only
+the **first 100** songs; the page then says so and points at the settings. With **Spotify Client ID and
+Secret** set in the mod config (a free app from developer.spotify.com/dashboard), it uses the Web API
+instead: client-credentials token, then `/v1/playlists/{id}/tracks` (100 per page) or
+`/v1/albums/{id}/tracks` (50 per page), following `next` up to 1000 tracks (the queue limit). Private
+playlists can't be read either way. If a later page fails, the tracks read so far are still matched.
+
 **Spotify playlists are matched as a background job** (`UBBPNetSubsystem::StartSpotifyCollection`). After
-the embed page gives the track list (up to 100, the embed page's own limit), three worker threads search
+the track list is read, three worker threads search
 YouTube in parallel (`MatchWorkers`), taking tracks in playlist order so the first ones finish first. Each
 result goes back to the game thread with its index; the job publishes the **settled prefix** only (track N
 shows once tracks 0..N are matched or given up on), so results always appear in playlist order even though
@@ -122,7 +129,11 @@ Boom Box window is closed. A new search or closing the page cancels a job only i
 (`Server_AddTracks`) instead of one reliable RPC per track, which would risk overflowing the reliable
 buffer and disconnecting a client that adds a 500-track playlist.
 
-Downloads were already lazy: each machine fetches only the current track and the next three.
+**Downloads stay small.** Nothing is downloaded when tracks are queued. Each machine downloads only the
+current track and the next two of every channel a nearby Boom Box plays, one at a time, and drops any
+queued download that is no longer among those (`SetWantedDownloads`) — so skipping through a 400-song
+queue never builds up a backlog. Finished downloads are kept up to `MaxCachedSongs` (default 50), least
+recently used deleted first.
 
 Each search bumps a generation counter; responses to older searches are dropped, so a slow Spotify playlist
 match can't overwrite a newer search.

@@ -8,6 +8,7 @@
 class AFGBoomBoxPlayer;
 class UBBPLibrarySubsystem;
 struct FBBPMatchJob;
+struct FBBPWantedTrack;
 
 // Kinds of links the search box understands.
 enum class EBBPLinkKind : uint8
@@ -37,6 +38,9 @@ struct FBBPMatchProgress
 	int32 Total = 0;
 	bool bFinished = false;
 	FString Error;
+
+	// Information for the player that isn't an error, e.g. that only part of the playlist could be read.
+	FString Note;
 };
 
 DECLARE_DELEGATE_OneParam(FBBPOnMatchProgress, const FBBPMatchProgress&);
@@ -109,6 +113,9 @@ public:
 	// Downloads a network track if it isn't cached yet, then makes it available in the library.
 	void EnsureDownloaded(const FBBPTrack& Track);
 
+	// Drops queued downloads (not the one in progress) whose track id isn't in WantedIds.
+	void SetWantedDownloads(const TSet<FString>& WantedIds);
+
 	// Returns true while Track is queued for download or downloading.
 	bool IsDownloadPending(const FString& TrackId) const;
 
@@ -124,6 +131,12 @@ private:
 
 	// Sends matches the job hasn't queued yet to its Boom Box.
 	void QueueNewMatches(FBBPMatchJob& Job);
+
+	// Game thread. Starts the YouTube matching workers for a job's track list.
+	void BeginMatching(int32 JobId, TArray<FBBPWantedTrack>&& Wanted, const FString& Note);
+
+	// Game thread. Ends a job that couldn't read its playlist.
+	void FailJob(int32 JobId, const FString& Error);
 
 	// Records a finished download and evicts old cache entries.
 	void FinishDownload(const FBBPTrack& Track, const FString& FilePath, const FString& Error);

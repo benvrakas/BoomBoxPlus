@@ -59,7 +59,7 @@ void UBBPTrackRow::BuildDefaultLayout()
 
 	auto AddButton = [this, Row](const FText& Label) -> UBBPGameButton*
 	{
-		UBBPGameButton* Button = BBPWidgetStyle::MakeButton(WidgetTree, Label);
+		UBBPGameButton* Button = BBPWidgetStyle::MakeButton(WidgetTree, Label, true);
 		UHorizontalBoxSlot* ButtonSlot = Row->AddChildToHorizontalBox(Button);
 		ButtonSlot->SetPadding(FMargin(0.f, 4.f, 4.f, 4.f));
 		ButtonSlot->SetVerticalAlignment(VAlign_Center);

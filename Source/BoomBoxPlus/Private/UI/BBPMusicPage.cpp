@@ -44,6 +44,10 @@ namespace
 		return FText::FromString(FString::Printf(TEXT("%d:%02d"), Total / 60, Total % 60));
 	}
 	constexpr int32 MaxResults = 100;
+	constexpr int32 MaxResultRows = 100;
+	constexpr int32 MaxQueueRows = 100;
+	constexpr int32 QueueRowsBeforeCurrent = 2;
+	constexpr float RebuildInterval = 0.3f;
 	const FName BoomBoxPropertyName(TEXT("mBoomBox"));
 }
 
@@ -110,6 +114,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (LinkButton) LinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleLink);
 	if (UnlinkButton) UnlinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUnlink);
 	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
+	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 	if (SeekSlider)
 	{
 		SeekSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
@@ -229,6 +234,15 @@ void UBBPMusicPage::BuildDefaultLayout()
 	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link."));
 	AddToRow(SearchRow, SearchBox, true, 0.f);
 
+	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
+	ResultsMessageText->SetAutoWrapText(true);
+	SearchColumn->AddChildToVerticalBox(ResultsMessageText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	AddAllButton = MakeButton(WidgetTree, LOCTEXT("AddAllDefault", "Add all to queue"));
+	AddAllButton->SetVisibility(ESlateVisibility::Collapsed);
+	UVerticalBoxSlot* AddAllSlot = SearchColumn->AddChildToVerticalBox(AddAllButton);
+	AddAllSlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	AddAllSlot->SetHorizontalAlignment(HAlign_Left);
+
 	UBorder* ResultsPanel = MakePanel(WidgetTree, InsetColor, FMargin(6.f));
 	AddFill(SearchColumn, ResultsPanel, 8.f);
 	ResultsList = WidgetTree->ConstructWidget<UScrollBox>();
@@ -246,6 +260,10 @@ void UBBPMusicPage::BuildDefaultLayout()
 	QueueHeaderText = QueueTitle;
 	ClearQueueButton = MakeButton(WidgetTree, LOCTEXT("ClearQueue", "Clear Queue"));
 	AddToRow(QueueHeader, ClearQueueButton, false, 0.f);
+
+	QueueMessageText = MakeText(WidgetTree, 11, DimTextColor);
+	QueueMessageText->SetAutoWrapText(true);
+	QueueColumn->AddChildToVerticalBox(QueueMessageText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 
 	UBorder* QueuePanel = MakePanel(WidgetTree, InsetColor, FMargin(6.f));
 	AddFill(QueueColumn, QueuePanel, 8.f);
@@ -298,8 +316,8 @@ void UBBPMusicPage::NativeConstruct()
 
 	TryBindSources();
 	UpdateChannelBinding();
-	RefreshResults();
-	RefreshQueue();
+	RebuildResults();
+	RebuildQueue();
 	RefreshTransport();
 	RefreshLink();
 }
@@ -328,6 +346,20 @@ void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		TryBindSources();
 	}
 	UpdateChannelBinding();
+
+	RebuildCooldown -= InDeltaTime;
+	if ((bResultsDirty || bQueueDirty) && RebuildCooldown <= 0.f)
+	{
+		RebuildCooldown = RebuildInterval;
+		if (bResultsDirty)
+		{
+			RebuildResults();
+		}
+		if (bQueueDirty)
+		{
+			RebuildQueue();
+		}
+	}
 
 	if (SearchDebounceTimer >= 0.f)
 	{
@@ -531,6 +563,47 @@ UBBPTrackRow* UBBPMusicPage::MakeRow()
 
 void UBBPMusicPage::RefreshResults()
 {
+	bResultsDirty = true;
+}
+
+void UBBPMusicPage::RefreshQueue()
+{
+	bQueueDirty = true;
+}
+
+void UBBPMusicPage::SyncRows(UScrollBox* List, TArray<TObjectPtr<UBBPTrackRow>>& Pool, int32 Count, TFunctionRef<void(UBBPTrackRow& Row, int32 Index)> Setup)
+{
+	if (!List)
+	{
+		return;
+	}
+	while (Pool.Num() < Count)
+	{
+		UBBPTrackRow* Row = MakeRow();
+		if (!Row)
+		{
+			break;
+		}
+		Pool.Add(Row);
+		AddToList(List, Row);
+	}
+	for (int32 i = 0; i < Pool.Num(); ++i)
+	{
+		if (i < Count)
+		{
+			Setup(*Pool[i], i);
+			Pool[i]->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		}
+		else
+		{
+			Pool[i]->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+void UBBPMusicPage::RebuildResults()
+{
+	bResultsDirty = false;
 	const UGameInstance* GameInstance = GetGameInstance();
 	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
 
@@ -542,67 +615,62 @@ void UBBPMusicPage::RefreshResults()
 		LibraryStatusText->SetText(Status);
 	}
 
-	if (!ResultsList)
+	TArray<FBBPTrack> Tracks;
+	FString Message;
+	if (Library && Library->GetTrackCount() > 0)
 	{
-		return;
+		Tracks = Library->Search(SearchQuery, MaxResults);
 	}
-	ResultsList->ClearChildren();
-	if (!Library)
+	else if (Library && OnlineStatus.IsEmpty())
 	{
-		return;
+		Message = FString::Printf(TEXT("No music files yet. Put .mp3, .ogg or .wav files in:\n%s\nor press Enter to search YouTube and SoundCloud."), *Library->GetMusicFolder());
 	}
-
-	if (Library->GetTrackCount() == 0)
+	Tracks.Append(OnlineResults);
+	if (Tracks.Num() == 0 && Message.IsEmpty() && OnlineStatus.IsEmpty())
 	{
-		const FText Empty = FText::Format(LOCTEXT("EmptyLibrary", "No music found. Put .mp3, .ogg or .wav files in:\n{0}"), FText::FromString(Library->GetMusicFolder()));
-		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, Empty));
-		return;
+		Message = TEXT("No matches. Press Enter to search YouTube and SoundCloud.");
 	}
-
-	const TArray<FBBPTrack> Results = Library->Search(SearchQuery, MaxResults);
-	if (Results.Num() == 0 && OnlineResults.Num() == 0 && OnlineStatus.IsEmpty())
-	{
-		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("NoResults", "No matches. Press Enter to search YouTube and SoundCloud.")));
-		return;
-	}
-	for (const FBBPTrack& Track : Results)
-	{
-		if (UBBPTrackRow* Row = MakeRow())
-		{
-			Row->SetupAsResult(Track);
-			AddToList(ResultsList, Row);
-		}
-	}
-
 	if (!OnlineStatus.IsEmpty())
 	{
-		AddToList(ResultsList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::AccentColor, FText::FromString(OnlineStatus)));
+		Message = OnlineStatus;
 	}
-	const bool bMatching = MatchJobId != 0;
-	if (OnlineResults.Num() > 0 || (bMatching && MatchTotal > 0))
+	if (!OnlineNote.IsEmpty())
 	{
-		if (bOnlineIsCollection && !bMatchQueued)
+		Message += (Message.IsEmpty() ? TEXT("") : TEXT("\n")) + OnlineNote;
+	}
+	const int32 Shown = FMath::Min(Tracks.Num(), MaxResultRows);
+	if (Tracks.Num() > Shown)
+	{
+		Message += FString::Printf(TEXT("%sShowing the first %d of %d."), Message.IsEmpty() ? TEXT("") : TEXT("\n"), Shown, Tracks.Num());
+	}
+	if (ResultsMessageText)
+	{
+		ResultsMessageText->SetText(FText::FromString(Message));
+		BBPWidgetStyle::SetShown(ResultsMessageText, !Message.IsEmpty());
+	}
+
+	const bool bMatching = MatchJobId != 0;
+	const bool bShowAddAll = bOnlineIsCollection && !bMatchQueued && (OnlineResults.Num() > 0 || (bMatching && MatchTotal > 0));
+	if (AddAllButton)
+	{
+		BBPWidgetStyle::SetShown(AddAllButton, bShowAddAll);
+		if (bShowAddAll)
 		{
-			const FText Label = bMatching
+			AddAllButton->SetLabel(bMatching
 				? FText::Format(LOCTEXT("AddAllMatching", "Add all {0} (queues as they're found)"), MatchTotal)
-				: FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num());
-			UBBPGameButton* AddAll = BBPWidgetStyle::MakeButton(WidgetTree, Label);
-			AddAll->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
-			AddToList(ResultsList, AddAll);
-		}
-		for (const FBBPTrack& Track : OnlineResults)
-		{
-			if (UBBPTrackRow* Row = MakeRow())
-			{
-				Row->SetupAsResult(Track);
-				AddToList(ResultsList, Row);
-			}
+				: FText::Format(LOCTEXT("AddAll", "Add all {0} to queue"), OnlineResults.Num()));
 		}
 	}
+
+	SyncRows(ResultsList, ResultRows, Shown, [&Tracks](UBBPTrackRow& Row, int32 Index)
+	{
+		Row.SetupAsResult(Tracks[Index]);
+	});
 }
 
-void UBBPMusicPage::RefreshQueue()
+void UBBPMusicPage::RebuildQueue()
 {
+	bQueueDirty = false;
 	const ABBPMusicChannel* Channel = BoundChannel.Get();
 	const int32 QueueLength = Channel ? Channel->GetQueue().Num() : 0;
 
@@ -610,25 +678,33 @@ void UBBPMusicPage::RefreshQueue()
 	{
 		QueueHeaderText->SetText(FText::Format(LOCTEXT("QueueHeader", "QUEUE ({0})"), QueueLength));
 	}
-	if (!QueueList)
+
+	// Long queues show a window starting just before the current track.
+	int32 Start = 0;
+	if (Channel)
 	{
-		return;
+		const int32 CurrentEntryId = Channel->GetPlaybackState().CurrentEntryId;
+		const int32 CurrentIndex = Channel->GetQueue().IndexOfByPredicate([CurrentEntryId](const FBBPQueueEntry& E) { return E.EntryId == CurrentEntryId; });
+		Start = FMath::Clamp(CurrentIndex - QueueRowsBeforeCurrent, 0, FMath::Max(0, QueueLength - MaxQueueRows));
 	}
-	QueueList->ClearChildren();
-	if (QueueLength == 0)
+	const int32 Shown = FMath::Min(MaxQueueRows, QueueLength - Start);
+
+	if (QueueMessageText)
 	{
-		AddToList(QueueList, BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor, LOCTEXT("EmptyQueue", "The queue is empty. Add tracks with Play Next or Add.")));
-		return;
+		const FText Message = QueueLength == 0
+			? LOCTEXT("EmptyQueue", "The queue is empty. Add tracks with Play Next or Add.")
+			: QueueLength > Shown
+				? FText::Format(LOCTEXT("QueueWindow", "Showing songs {0}-{1} of {2}."), Start + 1, Start + Shown, QueueLength)
+				: FText::GetEmpty();
+		QueueMessageText->SetText(Message);
+		BBPWidgetStyle::SetShown(QueueMessageText, !Message.IsEmpty());
 	}
-	const TArray<FBBPQueueEntry>& Queue = Channel->GetQueue();
-	for (int32 i = 0; i < Queue.Num(); ++i)
+
+	SyncRows(QueueList, QueueRows, Shown, [Channel, Start, QueueLength](UBBPTrackRow& Row, int32 Index)
 	{
-		if (UBBPTrackRow* Row = MakeRow())
-		{
-			Row->SetupAsQueueEntry(Queue[i], i, QueueLength, UBBPBlueprintLibrary::GetEntryAvailability(Channel, Queue[i]));
-			AddToList(QueueList, Row);
-		}
-	}
+		const FBBPQueueEntry& Entry = Channel->GetQueue()[Start + Index];
+		Row.SetupAsQueueEntry(Entry, Start + Index, QueueLength, UBBPBlueprintLibrary::GetEntryAvailability(Channel, Entry));
+	});
 }
 
 void UBBPMusicPage::RefreshTransport()
@@ -834,6 +910,7 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 	const int32 Generation = ++SearchGeneration;
 	CancelMatchJob();
 	OnlineResults.Reset();
+	OnlineNote.Reset();
 	bOnlineIsCollection = false;
 	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
 
@@ -955,6 +1032,7 @@ void UBBPMusicPage::HandleMatchProgress(int32 Generation, const FBBPMatchProgres
 	}
 	OnlineResults = Progress.Matched;
 	MatchTotal = Progress.Total;
+	OnlineNote = Progress.Note;
 	bOnlineIsCollection = true;
 	if (!Progress.bFinished)
 	{

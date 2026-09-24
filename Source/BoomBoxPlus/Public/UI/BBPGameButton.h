@@ -34,6 +34,9 @@ protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 
+	// True to draw with the game's button widget; false for a light flat button (used for list rows).
+	virtual bool UsesGameWidget() const { return true; }
+
 private:
 	UFUNCTION()
 	void HandleClicked();
@@ -52,4 +55,14 @@ private:
 	// Label of the fallback button.
 	UPROPERTY()
 	TObjectPtr<UTextBlock> FallbackLabel;
+};
+
+// A flat, lightweight button in the game's colours, for places with many buttons such as list rows.
+UCLASS()
+class BOOMBOXPLUS_API UBBPCompactButton : public UBBPGameButton
+{
+	GENERATED_BODY()
+
+protected:
+	virtual bool UsesGameWidget() const override { return false; }
 };
