@@ -100,7 +100,7 @@ Open **Mods → BoomBoxPlus**.
 | Show "now playing" | On | The notification when the song changes. |
 | Only the host controls music | Off | On a hosted game, only the host can change queues and playback. |
 | Downloaded songs to keep | 50 | How many YouTube/SoundCloud downloads stay on disk. The oldest unused ones are deleted first. |
-| Game music level while playing | 0 | How loud the game's own music stays while you can hear Custom Music: 0 fades it out, 1 leaves it alone. |
+| Game music level while playing | 0 | How loud the game's music is while custom music is playing. (0 = silent, 1 = unchanged). |
 | Game music fade time | 2 s | How long the fade takes. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 
