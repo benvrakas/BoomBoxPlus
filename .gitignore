@@ -72,3 +72,5 @@ Plugins/*/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+# Third-party tools fetched by Tools/FetchTools.ps1 (not committed)
+Resources/Tools/
