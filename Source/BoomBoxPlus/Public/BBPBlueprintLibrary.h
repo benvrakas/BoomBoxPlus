@@ -81,6 +81,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);
 
+	// Asks the server to give BoomBox a channel (and link code) if it has none yet.
+	static void RequestChannel(AFGBoomBoxPlayer* BoomBox);
+
 	// Returns the channel (queue and transport) BoomBox plays, or null if it has none yet.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
 	static ABBPMusicChannel* GetChannel(const AFGBoomBoxPlayer* BoomBox);

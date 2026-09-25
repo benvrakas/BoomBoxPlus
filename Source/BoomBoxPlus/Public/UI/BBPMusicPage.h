@@ -367,6 +367,9 @@ private:
 	float SearchDebounceTimer = -1.f;
 	bool bBoundLibrary = false;
 
+	// True once this page has asked the server for its Boom Box's channel.
+	bool bRequestedChannel = false;
+
 	// Channel whose change events this page is bound to.
 	TWeakObjectPtr<ABBPMusicChannel> BoundChannel;
 

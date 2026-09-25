@@ -125,8 +125,9 @@ later, but the mod page slider covers the need.
 ## Personal volume slider
 
 "My Volume" sits on the transport row (`MyVolumeSlider` + `MyVolumeText`, both `BindWidgetOptional`), next
-to Repeat. It's a plain UMG `USlider` (native 0–1 range, which matches the setting's range exactly, no
-rescaling). It reads and writes the `MusicVolume` mod-config value directly — `UBBPConfig::GetFloat` /
+to Repeat. It's a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0
+(unboosted) sits at its midpoint and the top half boosts Custom Music above the game's own mix. It reads
+and writes the `MusicVolume` mod-config value directly — `UBBPConfig::GetFloat` /
 the new `UBBPConfig::SetFloat` — which is a local, unreplicated setting already (see Multiplayer.md), so
 this is genuinely a "my volume" control: it never touches anyone else's playback.
 
@@ -146,8 +147,10 @@ bar updates too.
 ## Link panel
 
 Shows this Boom Box's channel code and how many Boom Boxes share it, a 4-digit code field, Link and Unlink
-(Unlink only while shared). The line under it shows a pending link request with its countdown, or the
-server's last reply for 8 s. See Multiplayer.md.
+(Unlink only while shared). The code is requested (`Server_EnsureChannel`) the first time the page is
+shown, not only once something plays or is queued, so there's always a real code to read here rather than
+a placeholder. The line under it shows a pending link request with its countdown, or the server's last
+reply for 8 s. See Multiplayer.md.
 
 ## Radio panel
 

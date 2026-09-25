@@ -16,8 +16,10 @@ modules, see Architecture.md). Channels are spawned by the subsystem.
 ## Channels: one queue per Boom Box, shareable
 
 Each Boom Box has its own queue and audio by default: the server gives it a **channel** the first time it
-has Custom Music loaded, or the first time someone sends a request for it (so a queue can be built before
-the tape goes in). Every channel gets a random, unused **4-digit link code**, shown on the music page.
+has Custom Music loaded, or the first time someone sends a request for it. That includes just opening the
+music page (`UBBPMusicPage::ShowPage` sends `Server_EnsureChannel` the first time it's shown), so a link
+code is there to read as soon as the page is, rather than only after playing or queuing something. Every
+channel gets a random, unused **4-digit link code**, shown on the music page.
 
 **Linking is mutual and time-limited.** Typing another Boom Box's code into the page's Link field sends a
 link request (`FBBPLinkRequest`: from-code, to-code, expiry), replicated on the subsystem. The link only
@@ -177,7 +179,7 @@ Final volume of a Boom Box's audio is the product of four sliders, each 0–1:
 game Master volume              (option RTPC.Menu_Volume_Master, per player)
 x game Boom Box volume          (option RTPC.Boombox_Bus_Volume, per player)
 x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
-x Music volume ("My Volume" on the page)  (default 0.5, clamped to 0–1)
+x Music volume ("My Volume" on the page)  (default 1.0, clamped to 0–2 - can boost above the game's own mix)
 ```
 
 There is no hidden gain. An earlier fixed 0.3 "headroom" factor was removed: it was tuned while the

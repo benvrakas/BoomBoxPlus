@@ -275,6 +275,18 @@ bool UBBPRemoteCallObject::Server_LinkBoomBox_Validate(AFGBoomBoxPlayer* BoomBox
 	return Code >= 0 && Code <= 9999;
 }
 
+void UBBPRemoteCallObject::Server_EnsureChannel_Implementation(AFGBoomBoxPlayer* BoomBox)
+{
+	ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	if (!BoomBox || !Playlist)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: EnsureChannel from %s ignored (Boom Box %s, subsystem %d)"), *GetRequesterName(), *GetNameSafe(BoomBox), Playlist != nullptr);
+		return;
+	}
+	const ABBPMusicChannel* Channel = Playlist->GetOrCreateChannel(BoomBox);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("RCO: %s opened the music page of %s (channel %04d)"), *GetRequesterName(), *GetNameSafe(BoomBox), Channel ? Channel->GetLinkCode() : 0);
+}
+
 void UBBPRemoteCallObject::Server_UnlinkBoomBox_Implementation(AFGBoomBoxPlayer* BoomBox)
 {
 	FString Message;

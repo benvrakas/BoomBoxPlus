@@ -82,6 +82,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_UnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);
 
+	// Gives BoomBox a channel, and so a link code, if it has none yet. Sent when its music page is shown.
+	// Not subject to HostOnlyControl: it changes nothing anyone hears.
+	UFUNCTION(Server, Reliable)
+	void Server_EnsureChannel(AFGBoomBoxPlayer* BoomBox);
+
 	// Tells the requesting player how a link or unlink went.
 	UFUNCTION(Client, Reliable)
 	void Client_LinkResult(AFGBoomBoxPlayer* BoomBox, bool bSuccess, const FString& Message);

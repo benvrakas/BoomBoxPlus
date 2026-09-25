@@ -5,6 +5,10 @@
 - **Boom Boxes remember their queue.** The queue, the song that was playing and where it was, pause,
   shuffle and repeat are now kept in your save, along with which Boom Boxes are linked. Load the game and
   the music carries on from where it was. (Link codes are still new each session.)
+- A Boom Box gets its link code as soon as you open its Custom Music page, instead of only after playing or
+  queuing something.
+- **My Volume can now boost Custom Music, not just lower it.** Range is 0 to 2 (200%), default 1 (unboosted,
+  same loudness as before); 2 doubles it above the game's own mix.
 - Fixed the **My Volume** slider being stuck at 50%. Since 1.2.0 the mod couldn't read or save any of its
   settings, so every setting in **Mods → BoomBoxPlus** was ignored and its default used instead.
 - Updating from 1.1.0 or earlier resets the mod's settings, including the Spotify Client ID and Secret; enter

@@ -94,9 +94,9 @@ UBBPConfig::UBBPConfig()
 	// reach it from and shows its effect immediately.
 	UConfigPropertyFloat* MusicVolume = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("MusicVolume"));
 	MusicVolume->DisplayName = LOCTEXT("MusicVolume", "Music volume");
-	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 1 (full). Also on the Custom Music page as \"My Volume\".");
-	MusicVolume->DefaultValue = 0.5f;
-	MusicVolume->Value = 0.5f;
+	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 2 (double, to boost it above the game's own mix). 1 is unboosted. Also on the Custom Music page as \"My Volume\".");
+	MusicVolume->DefaultValue = 1.f;
+	MusicVolume->Value = 1.f;
 	MusicVolume->bHidden = true;
 	AddSetting(MusicVolumeKey, MusicVolume);
 

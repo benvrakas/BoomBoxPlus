@@ -181,6 +181,14 @@ void UBBPBlueprintLibrary::RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox)
 	}
 }
 
+void UBBPBlueprintLibrary::RequestChannel(AFGBoomBoxPlayer* BoomBox)
+{
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("EnsureChannel")))
+	{
+		RCO->Server_EnsureChannel(BoomBox);
+	}
+}
+
 ABBPMusicChannel* UBBPBlueprintLibrary::GetChannel(const AFGBoomBoxPlayer* BoomBox)
 {
 	return ABBPPlaylistSubsystem::FindChannelFor(BoomBox);

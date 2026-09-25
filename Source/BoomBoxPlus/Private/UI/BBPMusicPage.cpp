@@ -245,6 +245,8 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("MyVolumeLabel", "My Volume")), false, 6.f);
 	MyVolumeSlider = WidgetTree->ConstructWidget<USlider>();
 	StyleSlider(MyVolumeSlider);
+	MyVolumeSlider->SetMinValue(0.f);
+	MyVolumeSlider->SetMaxValue(2.f);
 	USizeBox* MyVolumeSize = WidgetTree->ConstructWidget<USizeBox>();
 	MyVolumeSize->SetWidthOverride(90.f);
 	MyVolumeSize->SetContent(MyVolumeSlider);
@@ -589,6 +591,13 @@ void UBBPMusicPage::ShowPage()
 	}
 	Switcher->SetActiveWidget(this);
 
+	// The link code comes with the channel, so a Boom Box gets one the first time its page is shown.
+	if (!BoundChannel.IsValid() && !bRequestedChannel)
+	{
+		bRequestedChannel = true;
+		UBBPBlueprintLibrary::RequestChannel(GetBoomBox());
+	}
+
 	// Gives gamepad navigation a starting point on this page.
 	UWidget* FocusTarget = PlayPauseButton ? PlayPauseButton->GetFocusTarget() : static_cast<UWidget*>(SearchBox);
 	if (UFGInteractWidget* Window = GetTypedOuter<UFGInteractWidget>())
@@ -895,7 +904,7 @@ void UBBPMusicPage::RefreshLink()
 		FText Text;
 		if (!Channel)
 		{
-			Text = LOCTEXT("NoLinkCode", "Link code: appears once this Boom Box plays or queues music");
+			Text = LOCTEXT("NoLinkCode", "Link code: ----");
 		}
 		else if (Shared > 1)
 		{
@@ -1016,7 +1025,7 @@ void UBBPMusicPage::HandleSeekEnd()
 void UBBPMusicPage::HandleMyVolumeChanged(float Value)
 {
 	// Local-only setting: nothing is sent to the server, it just changes what this player hears.
-	UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, FMath::Clamp(Value, 0.f, 1.f));
+	UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, FMath::Clamp(Value, 0.f, 2.f));
 	RefreshMyVolume();
 }
 
@@ -1032,7 +1041,7 @@ void UBBPMusicPage::HandleMyVolumeCaptureEnd()
 
 void UBBPMusicPage::RefreshMyVolume()
 {
-	const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 0.5f), 0.f, 1.f);
+	const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f);
 	if (MyVolumeSlider && !bChangingMyVolume)
 	{
 		MyVolumeSlider->SetValue(Value);

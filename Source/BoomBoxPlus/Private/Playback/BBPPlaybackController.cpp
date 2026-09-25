@@ -356,7 +356,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 0.5f), 0.f, 1.f) * GameVolumeScale;
+	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f) * GameVolumeScale;
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{
