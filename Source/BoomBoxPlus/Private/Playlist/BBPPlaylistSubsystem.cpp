@@ -222,6 +222,17 @@ void ABBPPlaylistSubsystem::MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChann
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d merged into %04d (%d Boom Box(es))"), Absorbed->GetLinkCode(), Kept->GetLinkCode(), Kept->GetMembers().Num());
 	Channels.Remove(Absorbed);
 	Absorbed->Destroy();
+
+	// Linking is meant to make every Boom Box in the group play along; one that still has a different (or no) tape
+	// in wouldn't be heard until someone opened its own page and pressed something. Switch it over here instead.
+	for (AFGBoomBoxPlayer* Member : Kept->GetMembers())
+	{
+		if (Member && !UBBPCustomMusicTape::IsCustomMusicTape(Member->GetCurrentTape()))
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: linking loaded Custom Music into %s"), *GetNameSafe(Member));
+			Member->BeginChangeTapeSequence(UBBPCustomMusicTape::StaticClass(), Member->GetmOwningCharacter());
+		}
+	}
 	ForceNetUpdate();
 }
 

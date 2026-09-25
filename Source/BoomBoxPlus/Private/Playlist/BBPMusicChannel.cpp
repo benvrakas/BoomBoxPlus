@@ -430,7 +430,8 @@ void ABBPMusicChannel::MergeFrom(const ABBPMusicChannel& Other)
 
 	if (PlaybackState.CurrentEntryId == INDEX_NONE && Other.IsPlaying())
 	{
-		StartEntry(Incoming[0].EntryId, 0.f);
+		// Other was already partway through this song; picking it up here should continue it, not restart it.
+		StartEntry(Incoming[0].EntryId, Other.GetPlaybackPosition());
 	}
 }
 
