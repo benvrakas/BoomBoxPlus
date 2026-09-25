@@ -11,6 +11,8 @@
   playing yet, it used to pick up the other side's song from 0:00 instead of from where it already was.
 - Music volume is no longer a separate setting in **Mods → BoomBoxPlus**; it's the same value as "My Volume"
   on the Custom Music page, which is the easier place to reach it from.
+- Fixed **Mods → BoomBoxPlus** showing every setting as one row running off the edge of the screen instead
+  of a normal stacked list.
 - Smaller download: dedicated server packages no longer carry the bundled ffmpeg/yt-dlp, which they never
   use (only players' own games download and play music; the server just relays the queue).
 

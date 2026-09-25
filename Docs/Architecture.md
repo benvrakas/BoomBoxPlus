@@ -96,12 +96,23 @@ fields** in the Mods menu — which is how the first versions shipped. Assets ca
 the config's default object is constructed, so `UBBPGameInstanceModule::DispatchLifecycleEvent` calls
 `UBBPConfig::UseSMLEditorClasses()` at `INITIALIZATION`, just before SML registers the configuration
 (SML copies the default object at registration). It rebuilds the default root section with instances of
-the Blueprint classes, copying every property value, and logs `Config: N of M settings use SML's editor
-widgets`. A missing Blueprint class leaves that one setting on its C++ class (still saved, not shown).
+the Blueprint classes, copying every property value, and logs `Config: N of M settings/sections use SML's
+editor widgets`. A missing Blueprint class leaves that one setting on its C++ class (still saved, not shown).
+
+**A section's direct properties render as one unbounded horizontal row, not a vertical list.** Fine for a
+section holding a single property; the first version put all of RootSection's properties directly on it,
+and the Mods menu showed them as one strip that ran off the edge of the screen instead of stacking. Each
+setting now gets its own single-property `UConfigPropertySection` (`UBBPConfig::UBBPConfig`'s `AddSetting`
+lambda), one level below the root, which is what makes them stack vertically like every other mod's
+settings. `UseSMLEditorClasses` had to become recursive (`ConvertSectionRecursive`) to reach properties
+nested this way — it previously only converted RootSection's direct children, which was fine when they
+were all leaf properties but would leave the new per-setting wrapper sections' children on their
+invisible C++ classes. `FindProperty` (`GetBool`/`GetFloat`/`GetInt`/`GetString`/`SetFloat`) also searches
+one level deep now, for the same reason.
 
 | Key | Default | Used by |
 |---|---|---|
-| `MusicVolume` | 0.5 (range 0–1, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom |
+| `MusicVolume` | 0.5 (range 0–1, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom. Hidden from the Mods menu (`bHidden`) — reached from the Custom Music page's "My Volume" slider instead |
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
