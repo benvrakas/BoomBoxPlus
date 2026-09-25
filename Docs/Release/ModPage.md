@@ -119,11 +119,11 @@ no sign-in.
 
 ### Settings
 
-Open **Mods → BoomBoxPlus**.
+Open **Mods → BoomBoxPlus**. Your Custom Music volume is the "My Volume" slider on the Custom Music page
+itself, next to the transport controls, rather than a setting here.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Music volume | 0.5 | Volume of Custom Music, from 0 (silent) to 1 (full). Multiplied with the game's Master and Boom Box volume sliders and the Boom Box's own volume. The same slider also sits directly on the Custom Music page as "My Volume", next to the transport controls, so you don't need to open this menu to adjust it. |
 | Show lyrics | On | The lyric line at the bottom of the screen. Turning it off also stops lyric lookups. |
 | Show "now playing" | On | The notification when the song changes. |
 | Only the host controls music | Off | On a hosted game, only the host can change queues and playback. |

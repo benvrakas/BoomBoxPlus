@@ -54,11 +54,15 @@ UBBPConfig::UBBPConfig()
 
 	RootSection = CreateDefaultSubobject<UConfigPropertySection>(TEXT("RootSection"));
 
+	// Still a real setting (read/written by UBBPConfig::GetFloat/SetFloat, saved to disk) but hidden from the Mods
+	// menu: it's the same value as the "My Volume" slider on the Custom Music page, which is the easier place to
+	// reach it from and shows its effect immediately.
 	UConfigPropertyFloat* MusicVolume = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("MusicVolume"));
 	MusicVolume->DisplayName = LOCTEXT("MusicVolume", "Music volume");
-	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 1 (full). Multiplied with the game's Master and Boom Box volume sliders and each Boom Box's own volume.");
+	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 1 (full). Also on the Custom Music page as \"My Volume\".");
 	MusicVolume->DefaultValue = 0.5f;
 	MusicVolume->Value = 0.5f;
+	MusicVolume->bHidden = true;
 	RootSection->SectionProperties.Add(MusicVolumeKey, MusicVolume);
 
 	UConfigPropertyBool* ShowLyrics = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("ShowLyrics"));
