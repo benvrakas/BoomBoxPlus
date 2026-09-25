@@ -28,6 +28,13 @@ An internet radio station and a YouTube live stream playing, with recent station
 
 ![A YouTube live stream playing](Docs/Images/youtube-live.png)
 
+Pasting a Spotify playlist: songs are matched on YouTube as you watch, and **Add all** queues them as they're
+found while the rest are still being matched.
+
+![A Spotify playlist being matched](Docs/Images/spotify-matching.png)
+
+![Matches queueing while matching continues](Docs/Images/spotify-queueing.png)
+
 The current lyric line while a Boom Box plays nearby.
 
 ![Lyrics on screen near a Boom Box](Docs/Images/lyrics-in-world.png)
