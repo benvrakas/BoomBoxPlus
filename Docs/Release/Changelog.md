@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.2 — Queues survive restarts
+## 1.2.3 — Queue persistence, boostable volume
 
 - **Boom Boxes remember their queue.** The queue, the song that was playing and where it was, pause,
   shuffle and repeat are now kept in your save, along with which Boom Boxes are linked. Load the game and
