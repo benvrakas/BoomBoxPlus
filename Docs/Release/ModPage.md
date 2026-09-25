@@ -138,6 +138,8 @@ itself, next to the transport controls, rather than a setting here.
   to the station itself, so players may hear it a few seconds apart. Pausing disconnects; resuming picks up
   the live broadcast. Seeking, lyrics and repeat don't apply to them, and they play until someone presses
   Next.
+- Picking a Boom Box up into your inventory resets it: when you place it again it has its own new queue and
+  link code, and has left any group it was in.
 - Only the current song and the next two are downloaded, so big playlists don't fill your disk.
   Downloads are kept in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\Cache`.
 - Whole Spotify playlists: only ones you own (copy others into your own, see above). Everyone else's

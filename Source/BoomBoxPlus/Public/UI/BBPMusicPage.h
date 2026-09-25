@@ -28,6 +28,9 @@ public:
 	// Shows this page on every open Boom Box window for BoomBox when Custom Music has just been loaded into it.
 	static void NotifyTapeChanged(AFGBoomBoxPlayer* BoomBox, TSubclassOf<UFGTapeData> NewTape);
 
+	// While true, NotifyTapeChanged doesn't bring pages forward (the mod is loading the tape itself, not a player).
+	static bool bSuppressShowOnTapeChange;
+
 	// Shows the server's reply to a link or unlink request on open pages for BoomBox.
 	static void NotifyLinkResult(AFGBoomBoxPlayer* BoomBox, const FString& Message);
 

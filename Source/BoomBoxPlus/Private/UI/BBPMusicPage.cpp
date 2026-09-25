@@ -61,10 +61,11 @@ namespace
 }
 
 TArray<TWeakObjectPtr<UBBPMusicPage>> UBBPMusicPage::LivePages;
+bool UBBPMusicPage::bSuppressShowOnTapeChange = false;
 
 void UBBPMusicPage::NotifyTapeChanged(AFGBoomBoxPlayer* BoomBox, TSubclassOf<UFGTapeData> NewTape)
 {
-	if (!UBBPCustomMusicTape::IsCustomMusicTape(NewTape))
+	if (!UBBPCustomMusicTape::IsCustomMusicTape(NewTape) || bSuppressShowOnTapeChange)
 	{
 		return;
 	}

@@ -390,7 +390,7 @@ void UBBPPlaybackController::SyncEmitters()
 			}
 			continue;
 		}
-		if (!BoomBox)
+		if (!IsValid(BoomBox))
 		{
 			continue;
 		}

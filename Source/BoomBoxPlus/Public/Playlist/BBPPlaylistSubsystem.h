@@ -104,6 +104,12 @@ private:
 	// it, so every Boom Box that shares a playing channel plays along without someone selecting the tape by hand.
 	void EnsureMembersLoaded(ABBPMusicChannel* Channel);
 
+	// Returns the character to name as changing BoomBox's tape: its carrier, else the nearest player, else null.
+	class AFGCharacterPlayer* FindTapeChangeInstigator(AFGBoomBoxPlayer* BoomBox) const;
+
+	// Server only. When EnsureMembersLoaded last asked each Boom Box to load Custom Music (server time).
+	TMap<TWeakObjectPtr<AFGBoomBoxPlayer>, double> TapeLoadRequests;
+
 	// Server only. Drops expired requests and requests naming codes no channel uses any more.
 	void PruneLinkRequests();
 

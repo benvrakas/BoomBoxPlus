@@ -52,6 +52,20 @@ with a current track, it loads Custom Music onto any member that isn't already o
 accessor). `MergeChannels` also calls it directly right after a link completes, so the switch is immediate
 rather than waiting up to one tick.
 
+`BeginChangeTapeSequence` only *starts* the eject/insert animation; `GetCurrentTape()` changes when it
+finishes. The first version asked again on every tick, which restarted the animation every 0.5 s: the tape
+looped forever, the Boom Box never played, and each restart's tape-change hook pulled any open window for
+that Boom Box back onto the music page (the Back button seemed not to work). Now each Boom Box is asked at
+most once per 10 s (`TapeLoadRequests`, retried with a warning if the tape still isn't in), and
+`UBBPMusicPage::bSuppressShowOnTapeChange` keeps these mod-initiated loads from bringing pages forward. A
+placed Boom Box has no carrier, so the nearest player is named as the instigator
+(`FindTapeChangeInstigator`).
+
+**Putting a Boom Box in an inventory takes it out of its group.** The game destroys the actor when it's
+picked up and spawns a new one when it's placed; the item keeps its tape, volume and repeat mode
+(`FFGBoomBoxItemState`) but nothing of ours, so the placed Boom Box gets a fresh channel and link code.
+This is intended: storing a Boom Box is the way to reset it.
+
 **Groupings persist across a save reload; leaving is per Boom Box.** Channels themselves are still
 session-only — neither `ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a `SaveGame` property, both are
 ordinary runtime-spawned actors, and a world restart always starts with zero channels, zero pending link

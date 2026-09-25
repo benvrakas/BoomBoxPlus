@@ -7,6 +7,8 @@
   own page and pressed something. This also now applies generally: any Boom Box that ends up sharing a
   channel that's already playing (linking, being reunited after a save reload, or having had its tape
   changed away mid-song) gets Custom Music loaded automatically.
+- Fixed a linked Boom Box getting stuck replaying the tape-change animation (and not playing), and its
+  window jumping back to the Custom Music page when you pressed Back.
 - **Linking no longer restarts a song that was already playing.** If the Boom Box you linked to had nothing
   playing yet, it used to pick up the other side's song from 0:00 instead of from where it already was.
 - Music volume is no longer a separate setting in **Mods → BoomBoxPlus**; it's the same value as "My Volume"

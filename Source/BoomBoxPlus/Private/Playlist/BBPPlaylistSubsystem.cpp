@@ -8,10 +8,17 @@
 #include "Playlist/BBPMusicChannel.h"
 #include "Subsystem/SubsystemActorManager.h"
 #include "Tape/BBPCustomMusicTape.h"
+#include "FGCharacterPlayer.h"
+#include "GameFramework/PlayerState.h"
+#include "UI/BBPMusicPage.h"
 
 namespace
 {
 	constexpr float ActiveBoomBoxRefreshInterval = 0.5f;
+
+	// BeginChangeTapeSequence only starts the eject/insert animation; the tape counts as loaded once it finishes.
+	// Asking again before then restarts the animation, so a Boom Box is asked at most once per this many seconds.
+	constexpr double TapeLoadRetrySeconds = 10.0;
 	constexpr int32 MinLinkCode = 1000;
 	constexpr int32 MaxLinkCode = 9999;
 }
@@ -237,14 +244,64 @@ void ABBPPlaylistSubsystem::EnsureMembersLoaded(ABBPMusicChannel* Channel)
 	{
 		return;
 	}
+	const double Now = GetServerTime();
 	for (AFGBoomBoxPlayer* Member : Channel->GetMembers())
 	{
-		if (Member && !UBBPCustomMusicTape::IsCustomMusicTape(Member->GetCurrentTape()))
+		if (!IsValid(Member))
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: loaded Custom Music into %s (channel %04d already playing)"), *GetNameSafe(Member), Channel->GetLinkCode());
-			Member->BeginChangeTapeSequence(UBBPCustomMusicTape::StaticClass(), Member->GetmOwningCharacter());
+			continue;
+		}
+		if (UBBPCustomMusicTape::IsCustomMusicTape(Member->GetCurrentTape()))
+		{
+			TapeLoadRequests.Remove(Member);
+			continue;
+		}
+		if (const double* RequestedAt = TapeLoadRequests.Find(Member))
+		{
+			if (Now - *RequestedAt < TapeLoadRetrySeconds)
+			{
+				continue;
+			}
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playlist: Custom Music still not loaded in %s %.0f s after asking; asking again"), *GetNameSafe(Member), Now - *RequestedAt);
+		}
+		AFGCharacterPlayer* TapeInstigator = FindTapeChangeInstigator(Member);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: loading Custom Music into %s (channel %04d already playing; instigator %s)"),
+			*GetNameSafe(Member), Channel->GetLinkCode(), *GetNameSafe(TapeInstigator));
+		TapeLoadRequests.Add(Member, Now);
+		// This load is the mod's own doing, so it mustn't pull open Boom Box windows onto the music page.
+		TGuardValue<bool> SuppressShow(UBBPMusicPage::bSuppressShowOnTapeChange, true);
+		Member->BeginChangeTapeSequence(UBBPCustomMusicTape::StaticClass(), TapeInstigator);
+	}
+}
+
+AFGCharacterPlayer* ABBPPlaylistSubsystem::FindTapeChangeInstigator(AFGBoomBoxPlayer* BoomBox) const
+{
+	if (AFGCharacterPlayer* Carrier = BoomBox->GetmOwningCharacter())
+	{
+		return Carrier;
+	}
+	// A placed Boom Box has no carrier; use the nearest player, as if they had changed the tape themselves.
+	AFGCharacterPlayer* Nearest = nullptr;
+	double NearestDistanceSquared = TNumericLimits<double>::Max();
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	if (GameState)
+	{
+		for (const APlayerState* Player : GameState->PlayerArray)
+		{
+			AFGCharacterPlayer* Character = Player ? Cast<AFGCharacterPlayer>(Player->GetPawn()) : nullptr;
+			if (!Character)
+			{
+				continue;
+			}
+			const double DistanceSquared = FVector::DistSquared(Character->GetActorLocation(), BoomBox->GetActorLocation());
+			if (DistanceSquared < NearestDistanceSquared)
+			{
+				NearestDistanceSquared = DistanceSquared;
+				Nearest = Character;
+			}
 		}
 	}
+	return Nearest;
 }
 
 void ABBPPlaylistSubsystem::PruneLinkRequests()
