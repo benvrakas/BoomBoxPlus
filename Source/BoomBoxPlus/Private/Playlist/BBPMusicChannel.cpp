@@ -364,6 +364,59 @@ void ABBPMusicChannel::SetRepeatMode(EBBPRepeatMode Mode)
 	MarkPlaybackChanged();
 }
 
+FBBPSavedChannel ABBPMusicChannel::MakeSaveData() const
+{
+	FBBPSavedChannel Saved;
+	Saved.Queue = Queue;
+	Saved.CurrentEntryId = PlaybackState.CurrentEntryId;
+	Saved.Position = GetPlaybackPosition();
+	Saved.bPaused = PlaybackState.bPaused;
+	Saved.bShuffle = PlaybackState.bShuffle;
+	Saved.RepeatMode = PlaybackState.RepeatMode;
+	return Saved;
+}
+
+void ABBPMusicChannel::RestoreFrom(const FBBPSavedChannel& Saved)
+{
+	BBP_REQUIRE_AUTHORITY()
+	Queue = Saved.Queue;
+	if (Queue.Num() > MaxQueueLength)
+	{
+		Queue.SetNum(MaxQueueLength);
+	}
+	NextEntryId = 1;
+	for (const FBBPQueueEntry& Entry : Queue)
+	{
+		NextEntryId = FMath::Max(NextEntryId, Entry.EntryId + 1);
+	}
+	PlayHistory.Reset();
+	ShufflePlayed.Reset();
+	PlaybackState.bShuffle = Saved.bShuffle;
+	PlaybackState.RepeatMode = Saved.RepeatMode;
+	MarkQueueChanged();
+
+	const int32 Index = FindEntryIndex(Saved.CurrentEntryId);
+	if (Index == INDEX_NONE)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: restored %d saved track(s), nothing current"), LinkCode, Queue.Num());
+		MarkPlaybackChanged();
+		return;
+	}
+	const FBBPTrack& Track = Queue[Index].Track;
+	const float Position = Track.IsLive() ? 0.f
+		: FMath::Clamp(Saved.Position, 0.f, Track.Duration > 0.f ? FMath::Max(0.f, Track.Duration - 1.f) : Saved.Position);
+	StartEntry(Saved.CurrentEntryId, Position);
+	if (Saved.bPaused)
+	{
+		PlaybackState.bPaused = true;
+		PlaybackState.bLoading = false;
+		PlaybackState.PausedPosition = Position;
+		MarkPlaybackChanged();
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: restored %d saved track(s); '%s' %s at %.1f s"), LinkCode, Queue.Num(),
+		*Track.Title, Saved.bPaused ? TEXT("paused") : TEXT("playing"), Position);
+}
+
 void ABBPMusicChannel::CopyFrom(const ABBPMusicChannel& Other)
 {
 	BBP_REQUIRE_AUTHORITY()

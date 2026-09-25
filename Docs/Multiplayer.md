@@ -44,7 +44,7 @@ first version paused those too, which paused every Play press on a Boom Box whos
 **No Boom Box in a playing channel is left on the wrong tape.** Pressing Play, Play Next or Add on the music
 page loads the Custom Music tape into that specific Boom Box if another tape is in. That only covers the one
 Boom Box whose page you're on, though — a Boom Box that joins a channel some other way (linking into a group
-that's already playing, being reunited by `RegroupSavedBoomBoxes` after a reload, or just having had its tape
+that's already playing, being restored by `RestoreSavedChannels` after a reload, or just having had its tape
 changed away while its channel kept playing) would otherwise sit silent until someone opened its own page.
 `ABBPPlaylistSubsystem::EnsureMembersLoaded` closes that gap: every `MaintainChannels` tick, for each channel
 with a current track, it loads Custom Music onto any member that isn't already on it
@@ -66,23 +66,22 @@ picked up and spawns a new one when it's placed; the item keeps its tape, volume
 (`FFGBoomBoxItemState`) but nothing of ours, so the placed Boom Box gets a fresh channel and link code.
 This is intended: storing a Boom Box is the way to reset it.
 
-**Groupings persist across a save reload; leaving is per Boom Box.** Channels themselves are still
-session-only — neither `ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a `SaveGame` property, both are
-ordinary runtime-spawned actors, and a world restart always starts with zero channels, zero pending link
-requests and freshly rolled codes (`ABBPPlaylistSubsystem::BeginPlay` logs the counts, always 0). What
-*does* persist is **which Boom Boxes belong together**: `ABBPPlaylistSubsystem` implements
-`IFGSaveInterface` and saves `SavedGroups`, a `TArray<FString>` where each entry is one group's members'
-`GetPathName()` values joined with `|` (the game's save system keeps an actor's path stable across a
-reload, the same guarantee foundations/pipes rely on to reconnect). Every `MaintainChannels` tick
-(`SyncSavedGroupsFromChannels`) rebuilds this list from the live channels (one entry per channel with 2+
-members), so it's always current, on the host's next autosave, to within half a second.
+**Queues, playback and groupings are kept in the save.** `ABBPPlaylistSubsystem` implements
+`IFGSaveInterface` and saves `SavedChannels`: one `FBBPSavedChannel` per channel, stored as a JSON string
+(`FJsonObjectConverter`) so the struct can change without every nested field needing the `SaveGame` flag.
+Each holds the members' `GetPathName()` (the save system keeps an actor's path stable across a reload, the
+same guarantee foundations and pipes rely on to reconnect), the whole queue with its entry ids, the current
+entry, its position, and paused/shuffle/repeat. `SaveChannels` rebuilds the list in `PreSaveGame` (exact
+position) and every 10 s as a fallback. A lone Boom Box with an empty queue isn't saved. Link codes and
+pending link requests are not kept: codes are rolled fresh each session.
 
-On the way back up, `RegroupSavedBoomBoxes` (also called every tick, before the "give every orphan its own
-channel" loop) checks each saved group: once **2 or more** of its Boom Boxes are discovered active and
-still unchannelled, they're all put on one new channel together in a single step — so a reunited group
-shares a channel immediately, rather than each member briefly getting a lone channel first. A saved group
-with only one surviving member just falls through to a normal solo channel, and drops out of `SavedGroups`
-on the next sync (no permanent single-member group ever lingers).
+On load, `BeginPlay` parses them into `PendingRestores`; `RestoreSavedChannels` (start of every
+`MaintainChannels`) rebuilds a channel once all its Boom Boxes exist, or after 5 s with whichever do, and
+`GetOrCreateChannel` restores a Boom Box's saved channel immediately if something asks for its channel first
+(so it never gets an empty one instead). `ABBPMusicChannel::RestoreFrom` puts the queue back and restarts the
+current track at the saved position through the usual load wait, or leaves it paused there. Saved channels
+whose Boom Boxes are all gone are dropped. Saves from 1.2.1 and earlier (which only had `SavedGroups`, the
+group memberships) aren't read.
 
 **Leaving is the only way a group loses a member**, and it's per Boom Box: `UnlinkBoomBox` ("Leave Group"
 on the page) takes one Boom Box off a shared channel and gives it its own again; the rest of the group

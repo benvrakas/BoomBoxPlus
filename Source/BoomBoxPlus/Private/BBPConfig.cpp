@@ -8,12 +8,6 @@
 #include "Configuration/Properties/ConfigPropertyString.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
-#include "Dom/JsonObject.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
 
 #define LOCTEXT_NAMESPACE "BoomBoxPlus"
 
@@ -222,50 +216,6 @@ namespace
 		}
 		return NewSection;
 	}
-}
-
-void UBBPConfig::MigrateOldConfigFile()
-{
-	// Same place UConfigManager::GetConfigurationFilePath (private) puts a config with no category.
-	const FString Path = FPaths::ProjectDir() / TEXT("Configs") / (MakeConfigId().ModReference + TEXT(".cfg"));
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *Path))
-	{
-		return;
-	}
-	TSharedPtr<FJsonObject> Root;
-	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid())
-	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: '%s' isn't valid JSON; leaving it for SML to handle"), *Path);
-		return;
-	}
-	// Up to 1.1.0 every setting was a top-level value; since 1.2.0 each is nested in a section of the same name.
-	const FString Keys[] = { MusicVolumeKey, ShowLyricsKey, ShowNowPlayingKey, HostOnlyControlKey, MaxCachedSongsKey,
-		GameMusicLevelKey, GameMusicFadeTimeKey, SpotifyClientIdKey, SpotifyClientSecretKey };
-	int32 Moved = 0;
-	for (const FString& Key : Keys)
-	{
-		const TSharedPtr<FJsonValue> Value = Root->TryGetField(Key);
-		if (Value.IsValid() && Value->Type != EJson::Object)
-		{
-			TSharedRef<FJsonObject> Wrapper = MakeShared<FJsonObject>();
-			Wrapper->SetField(Key, Value);
-			Root->SetObjectField(Key, Wrapper);
-			++Moved;
-		}
-	}
-	if (Moved == 0)
-	{
-		return;
-	}
-	FString Out;
-	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Out);
-	if (!FJsonSerializer::Serialize(Root.ToSharedRef(), Writer) || !FFileHelper::SaveStringToFile(Out, *Path))
-	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: could not rewrite '%s' in the new layout; its settings will reset"), *Path);
-		return;
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Config: moved %d setting(s) in '%s' to the 1.2 layout"), Moved, *Path);
 }
 
 void UBBPConfig::UseSMLEditorClasses()

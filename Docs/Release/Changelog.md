@@ -1,11 +1,14 @@
 # Changelog
 
-## 1.2.2 — Settings fix
+## 1.2.2 — Queues survive restarts
 
+- **Boom Boxes remember their queue.** The queue, the song that was playing and where it was, pause,
+  shuffle and repeat are now kept in your save, along with which Boom Boxes are linked. Load the game and
+  the music carries on from where it was. (Link codes are still new each session.)
 - Fixed the **My Volume** slider being stuck at 50%. Since 1.2.0 the mod couldn't read or save any of its
   settings, so every setting in **Mods → BoomBoxPlus** was ignored and its default used instead.
-- Settings saved by 1.1.0 or earlier are carried over instead of being reset. (Updating to 1.2.0 or 1.2.1
-  reset them, including the Spotify Client ID and Secret; if that happened to you, enter them again.)
+- Updating from 1.1.0 or earlier resets the mod's settings, including the Spotify Client ID and Secret; enter
+  them again. Links saved by earlier versions aren't carried over either.
 
 ## 1.2.1 — Linked Boom Box fix
 

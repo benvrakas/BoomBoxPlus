@@ -64,6 +64,13 @@ public:
 	// Server only.
 	void SetRepeatMode(EBBPRepeatMode Mode);
 
+	// Server only. Returns the queue and transport for the save file (Members is left for the subsystem to fill).
+	FBBPSavedChannel MakeSaveData() const;
+
+	// Server only. Replaces the queue and transport with saved ones. A track that was playing starts again from
+	// where it was (after the usual load wait); a paused one stays paused there.
+	void RestoreFrom(const FBBPSavedChannel& Saved);
+
 	// Server only. Takes over another channel's queue and playback, so a Boom Box leaving it keeps playing the same music.
 	void CopyFrom(const ABBPMusicChannel& Other);
 

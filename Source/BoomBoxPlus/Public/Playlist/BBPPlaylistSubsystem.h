@@ -33,10 +33,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	//~ End AActor interface
 
-	//~ Begin IFGSaveInterface. SavedGroups is the only thing this mod persists; everything else (channels,
-	// queues, link codes, playback) is runtime-only and rebuilt from SavedGroups plus the Boom Boxes' own
-	// (already-saved) mCurrentTape after a reload.
-	virtual void PreSaveGame_Implementation(int32 SaveVersion, int32 GameVersion) override {}
+	//~ Begin IFGSaveInterface. SavedChannels (each channel's Boom Boxes, queue and transport) is what this mod keeps
+	// in the save; channels themselves, link codes and pending link requests are rebuilt or start fresh on load.
+	virtual void PreSaveGame_Implementation(int32 SaveVersion, int32 GameVersion) override;
 	virtual void PostSaveGame_Implementation(int32 SaveVersion, int32 GameVersion) override {}
 	virtual void PreLoadGame_Implementation(int32 SaveVersion, int32 GameVersion) override {}
 	virtual void PostLoadGame_Implementation(int32 SaveVersion, int32 GameVersion) override {}
@@ -113,15 +112,12 @@ private:
 	// Server only. Drops expired requests and requests naming codes no channel uses any more.
 	void PruneLinkRequests();
 
-	// Server only. Rebuilds SavedGroups from the current channels (one entry per channel with 2+ members).
-	// Called every MaintainChannels tick, so leaving a group or a link completing is reflected within a fraction
-	// of a second, and the next save always has an up-to-date picture.
-	void SyncSavedGroupsFromChannels();
+	// Server only. Rebuilds SavedChannels from the live channels (and any saved ones not restored yet).
+	void SaveChannels();
 
-	// Server only. For each SavedGroups entry, gathers its currently-active, not-yet-channelled Boom Boxes and,
-	// if 2 or more are present, gives them all one shared channel together - so a saved group reunites as soon
-	// as its Boom Boxes are discovered, instead of each first getting its own lone channel.
-	void RegroupSavedBoomBoxes();
+	// Server only. Rebuilds channels from PendingRestores once all of a saved channel's Boom Boxes have turned up
+	// (or RestoreGraceSeconds after start, with whichever have). Needed forces the channel of that Boom Box now.
+	void RestoreSavedChannels(const AFGBoomBoxPlayer* Needed = nullptr);
 
 	// Stable identifier for BoomBox that survives a save/reload, or empty if BoomBox is null.
 	static FString GetBoomBoxKey(const AFGBoomBoxPlayer* BoomBox);
@@ -142,9 +138,15 @@ private:
 	// Server only.
 	float ActiveBoomBoxRefreshTimer = 0.f;
 
-	// Persisted (SaveGame) across saves. Each entry is one group: the GetBoomBoxKey() of every Boom Box that
-	// was sharing a channel, joined with '|'. Rebuilt from the live channels every tick (SyncSavedGroupsFromChannels)
-	// and consumed on the way back up (RegroupSavedBoomBoxes) - there is no other persisted mod state.
+	// Kept in the save: one FBBPSavedChannel per channel, as JSON (so the struct can change without the save
+	// system needing SaveGame flags on every field). Written by SaveChannels, read at BeginPlay.
 	UPROPERTY(SaveGame)
-	TArray<FString> SavedGroups;
+	TArray<FString> SavedChannels;
+
+	// Server only. Saved channels whose Boom Boxes haven't all turned up yet, and when to stop waiting for them.
+	TArray<FBBPSavedChannel> PendingRestores;
+	double RestoreDeadline = 0.0;
+
+	// Server only. Seconds until SavedChannels is refreshed again (in case the game saves without PreSaveGame).
+	float SaveSyncTimer = 0.f;
 };

@@ -1,6 +1,7 @@
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "BoomBoxPlus.h"
 #include "EngineUtils.h"
+#include "JsonObjectConverter.h"
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
@@ -15,6 +16,12 @@
 namespace
 {
 	constexpr float ActiveBoomBoxRefreshInterval = 0.5f;
+
+	// After a load, how long a saved channel waits for all of its Boom Boxes before it's rebuilt with those found.
+	constexpr double RestoreGraceSeconds = 5.0;
+
+	// How often SavedChannels is refreshed besides PreSaveGame.
+	constexpr float SaveSyncInterval = 10.f;
 
 	// BeginChangeTapeSequence only starts the eject/insert animation; the tape counts as loaded once it finishes.
 	// Asking again before then restarts the animation, so a Boom Box is asked at most once per this many seconds.
@@ -47,11 +54,26 @@ void ABBPPlaylistSubsystem::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Channels, link codes and pending link requests are runtime-only and always start empty on BeginPlay; only
-	// which Boom Boxes belong together (SavedGroups) survives a save reload, and gets turned back into real
-	// channels by RegroupSavedBoomBoxes as each group's Boom Boxes are discovered (see MaintainChannels).
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s); %d channel(s), %d pending link request(s), %d saved group(s)"),
-		HasAuthority() ? TEXT("server") : TEXT("client"), Channels.Num(), LinkRequests.Num(), SavedGroups.Num());
+	// Channels are rebuilt from SavedChannels by RestoreSavedChannels (see MaintainChannels) as their Boom Boxes
+	// turn up; link codes and pending link requests start fresh.
+	if (HasAuthority())
+	{
+		for (const FString& Json : SavedChannels)
+		{
+			FBBPSavedChannel Saved;
+			if (FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Saved) && Saved.Members.Num() > 0)
+			{
+				PendingRestores.Add(MoveTemp(Saved));
+			}
+			else
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playlist: skipping an unreadable saved channel (%d chars)"), Json.Len());
+			}
+		}
+		RestoreDeadline = GetWorld()->GetTimeSeconds() + RestoreGraceSeconds;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s); %d saved channel(s) to restore"),
+		HasAuthority() ? TEXT("server") : TEXT("client"), PendingRestores.Num());
 
 	if (GetNetMode() != NM_DedicatedServer)
 	{
@@ -148,6 +170,12 @@ ABBPMusicChannel* ABBPPlaylistSubsystem::GetOrCreateChannel(AFGBoomBoxPlayer* Bo
 	if (ABBPMusicChannel* Existing = FindChannel(BoomBox))
 	{
 		return Existing;
+	}
+	// A Boom Box whose saved channel hasn't been rebuilt yet gets that one, not an empty new one.
+	RestoreSavedChannels(BoomBox);
+	if (ABBPMusicChannel* Restored = FindChannel(BoomBox))
+	{
+		return Restored;
 	}
 	ABBPMusicChannel* Channel = SpawnChannel();
 	if (Channel)
@@ -438,9 +466,8 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 		Channel->bWasHeard = bHeard;
 	}
 
-	// Reunite whole saved groups first, so their Boom Boxes share one channel instead of each getting its own
-	// lone one before its groupmates are also discovered (which could happen a tick or two apart).
-	RegroupSavedBoomBoxes();
+	// Saved channels first, so their Boom Boxes get their saved queue back instead of an empty channel below.
+	RestoreSavedChannels();
 
 	for (const FBBPActiveBoomBox& Active : ActiveBoomBoxes)
 	{
@@ -450,7 +477,21 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 		}
 	}
 
-	SyncSavedGroupsFromChannels();
+	SaveSyncTimer -= ActiveBoomBoxRefreshInterval;
+	if (SaveSyncTimer <= 0.f)
+	{
+		SaveSyncTimer = SaveSyncInterval;
+		SaveChannels();
+	}
+}
+
+void ABBPPlaylistSubsystem::PreSaveGame_Implementation(int32 SaveVersion, int32 GameVersion)
+{
+	if (HasAuthority())
+	{
+		SaveChannels();
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: saving %d channel(s)"), SavedChannels.Num());
+	}
 }
 
 FString ABBPPlaylistSubsystem::GetBoomBoxKey(const AFGBoomBoxPlayer* BoomBox)
@@ -458,80 +499,104 @@ FString ABBPPlaylistSubsystem::GetBoomBoxKey(const AFGBoomBoxPlayer* BoomBox)
 	return BoomBox ? BoomBox->GetPathName() : FString();
 }
 
-void ABBPPlaylistSubsystem::RegroupSavedBoomBoxes()
+void ABBPPlaylistSubsystem::RestoreSavedChannels(const AFGBoomBoxPlayer* Needed)
 {
-	for (const FString& Group : SavedGroups)
+	if (PendingRestores.Num() == 0)
 	{
-		TArray<FString> Keys;
-		Group.ParseIntoArray(Keys, TEXT("|"), true);
-		if (Keys.Num() < 2)
+		return;
+	}
+	TMap<FString, AFGBoomBoxPlayer*> BoomBoxesByKey;
+	for (TActorIterator<AFGBoomBoxPlayer> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It))
 		{
-			continue;
+			BoomBoxesByKey.Add(GetBoomBoxKey(*It), *It);
 		}
-
-		TArray<AFGBoomBoxPlayer*> Members;
-		for (const FBBPActiveBoomBox& Active : ActiveBoomBoxes)
+	}
+	const bool bGraceOver = GetWorld()->GetTimeSeconds() >= RestoreDeadline;
+	for (int32 i = PendingRestores.Num() - 1; i >= 0; --i)
+	{
+		const FBBPSavedChannel& Saved = PendingRestores[i];
+		TArray<AFGBoomBoxPlayer*> Found;
+		bool bHasNeeded = false;
+		for (const FString& Key : Saved.Members)
 		{
-			if (Active.BoomBox && !FindChannel(Active.BoomBox) && Keys.Contains(GetBoomBoxKey(Active.BoomBox)))
+			AFGBoomBoxPlayer* const* BoomBox = BoomBoxesByKey.Find(Key);
+			if (BoomBox && !FindChannel(*BoomBox))
 			{
-				Members.Add(Active.BoomBox);
+				Found.Add(*BoomBox);
+				bHasNeeded |= *BoomBox == Needed;
 			}
 		}
-		// Only regroup once at least two of the saved group's Boom Boxes have actually turned up; a single
-		// survivor just gets the usual lone channel below, and drops out of the saved group on the next sync.
-		if (Members.Num() < 2)
+		if (Found.Num() < Saved.Members.Num() && !bGraceOver && !bHasNeeded)
 		{
 			continue;
 		}
-
+		const FBBPSavedChannel Restoring = PendingRestores[i];
+		PendingRestores.RemoveAt(i);
+		if (Found.Num() == 0)
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: none of a saved channel's %d Boom Box(es) exist any more; dropping its %d track(s)"),
+				Restoring.Members.Num(), Restoring.Queue.Num());
+			continue;
+		}
 		ABBPMusicChannel* Channel = SpawnChannel();
 		if (!Channel)
 		{
 			continue;
 		}
-		for (AFGBoomBoxPlayer* Member : Members)
+		for (AFGBoomBoxPlayer* Member : Found)
 		{
 			Channel->AddMember(Member);
 		}
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: reunited %d Boom Box(es) from a saved group into channel %04d"), Members.Num(), Channel->GetLinkCode());
+		Channel->RestoreFrom(Restoring);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: restored channel %04d from the save with %d of %d Boom Box(es)"),
+			Channel->GetLinkCode(), Found.Num(), Restoring.Members.Num());
 	}
 }
 
-void ABBPPlaylistSubsystem::SyncSavedGroupsFromChannels()
+void ABBPPlaylistSubsystem::SaveChannels()
 {
-	TArray<FString> NewGroups;
-	NewGroups.Reserve(Channels.Num());
+	TArray<FString> NewSaved;
+	NewSaved.Reserve(Channels.Num() + PendingRestores.Num());
+	auto Add = [&NewSaved](const FBBPSavedChannel& Saved)
+	{
+		FString Json;
+		if (FJsonObjectConverter::UStructToJsonObjectString(Saved, Json, 0, 0, 0, nullptr, false))
+		{
+			NewSaved.Add(MoveTemp(Json));
+		}
+		else
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playlist: could not write a channel with %d track(s) to the save"), Saved.Queue.Num());
+		}
+	};
 	for (const TObjectPtr<ABBPMusicChannel>& Channel : Channels)
 	{
-		if (!Channel || Channel->GetMembers().Num() < 2)
+		if (!IsValid(Channel))
 		{
 			continue;
 		}
-		TArray<FString> Keys;
-		Keys.Reserve(Channel->GetMembers().Num());
+		FBBPSavedChannel Saved = Channel->MakeSaveData();
 		for (const TObjectPtr<AFGBoomBoxPlayer>& Member : Channel->GetMembers())
 		{
-			if (Member)
+			if (IsValid(Member))
 			{
-				Keys.Add(GetBoomBoxKey(Member));
+				Saved.Members.Add(GetBoomBoxKey(Member));
 			}
 		}
-		if (Keys.Num() >= 2)
+		// A lone Boom Box with an empty queue has nothing worth keeping.
+		if (Saved.Members.Num() > 1 || (Saved.Members.Num() == 1 && Saved.Queue.Num() > 0))
 		{
-			FString Joined;
-			for (const FString& Key : Keys)
-			{
-				if (!Joined.IsEmpty())
-				{
-					Joined += TEXT("|");
-				}
-				Joined += Key;
-			}
-			NewGroups.Add(MoveTemp(Joined));
+			Add(Saved);
 		}
 	}
-	// Cheap either way; reassigning unconditionally avoids needing an order-independent array comparison.
-	SavedGroups = MoveTemp(NewGroups);
+	// Saved channels still waiting for their Boom Boxes are kept as they were.
+	for (const FBBPSavedChannel& Pending : PendingRestores)
+	{
+		Add(Pending);
+	}
+	SavedChannels = MoveTemp(NewSaved);
 }
 
 void ABBPPlaylistSubsystem::RefreshActiveBoomBoxes()

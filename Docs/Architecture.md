@@ -114,10 +114,9 @@ not set 'MusicVolume'; configuration not available"): My Volume was stuck at 50%
 had any effect.
 
 The nesting also changed the config file from `"MusicVolume": 0.5` to `"MusicVolume": { "MusicVolume": 0.5 }`.
-SML can't read the old layout into the new one, so it rewrote the file with defaults on the first start
-after updating from 1.1.0, losing everything including the Spotify app key.
-`UBBPConfig::MigrateOldConfigFile` (called just before `UseSMLEditorClasses`, before SML loads the file)
-wraps any top-level non-object values in `<ProjectDir>/Configs/BoomBoxPlus.cfg` so they survive.
+SML can't read the old layout into the new one, so the first start after updating from 1.1.0 rewrites the
+file with defaults (including an empty Spotify app key). This is deliberate: the author chose not to carry
+migration code for old config layouts.
 
 | Key | Default | Used by |
 |---|---|---|

@@ -89,6 +89,37 @@ struct BOOMBOXPLUS_API FBBPPlaybackState
 	int32 LoadGeneration = 0;
 };
 
+// One channel as kept in the save file (as JSON, in ABBPPlaylistSubsystem::SavedChannels).
+USTRUCT()
+struct BOOMBOXPLUS_API FBBPSavedChannel
+{
+	GENERATED_BODY()
+
+	// GetPathName() of each Boom Box on the channel; the save system keeps it stable across a reload.
+	UPROPERTY()
+	TArray<FString> Members;
+
+	UPROPERTY()
+	TArray<FBBPQueueEntry> Queue;
+
+	// Entry that was current (playing or paused), or INDEX_NONE.
+	UPROPERTY()
+	int32 CurrentEntryId = INDEX_NONE;
+
+	// Position in the current entry, in seconds.
+	UPROPERTY()
+	float Position = 0.f;
+
+	UPROPERTY()
+	bool bPaused = true;
+
+	UPROPERTY()
+	bool bShuffle = false;
+
+	UPROPERTY()
+	EBBPRepeatMode RepeatMode = EBBPRepeatMode::Off;
+};
+
 // A Boom Box's request to link with another; completes when the other enters this one's code before it expires.
 USTRUCT(BlueprintType)
 struct BOOMBOXPLUS_API FBBPLinkRequest
