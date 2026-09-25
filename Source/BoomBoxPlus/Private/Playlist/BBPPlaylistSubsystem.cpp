@@ -223,17 +223,28 @@ void ABBPPlaylistSubsystem::MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChann
 	Channels.Remove(Absorbed);
 	Absorbed->Destroy();
 
-	// Linking is meant to make every Boom Box in the group play along; one that still has a different (or no) tape
-	// in wouldn't be heard until someone opened its own page and pressed something. Switch it over here instead.
-	for (AFGBoomBoxPlayer* Member : Kept->GetMembers())
+	// Linking is meant to make every Boom Box in the group play along right away, rather than waiting for the next
+	// MaintainChannels tick (EnsureMembersLoaded also runs there, and covers every other way a Boom Box ends up on a
+	// channel that's already playing: it was regrouped after a reload, or someone else on its channel started music
+	// while its own tape had been changed away).
+	EnsureMembersLoaded(Kept);
+	ForceNetUpdate();
+}
+
+void ABBPPlaylistSubsystem::EnsureMembersLoaded(ABBPMusicChannel* Channel)
+{
+	if (!Channel || Channel->GetPlaybackState().CurrentEntryId == INDEX_NONE)
+	{
+		return;
+	}
+	for (AFGBoomBoxPlayer* Member : Channel->GetMembers())
 	{
 		if (Member && !UBBPCustomMusicTape::IsCustomMusicTape(Member->GetCurrentTape()))
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: linking loaded Custom Music into %s"), *GetNameSafe(Member));
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: loaded Custom Music into %s (channel %04d already playing)"), *GetNameSafe(Member), Channel->GetLinkCode());
 			Member->BeginChangeTapeSequence(UBBPCustomMusicTape::StaticClass(), Member->GetmOwningCharacter());
 		}
 	}
-	ForceNetUpdate();
 }
 
 void ABBPPlaylistSubsystem::PruneLinkRequests()
@@ -355,6 +366,7 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 			ForceNetUpdate();
 			continue;
 		}
+		EnsureMembersLoaded(Channel);
 		// When the last Boom Box playing a channel switches to another tape, pause rather than run through the queue in silence.
 		// A channel that never had one (queue built before the tape went in) keeps its state.
 		const bool bHeard = Channel->GetMembers().ContainsByPredicate([this](const TObjectPtr<AFGBoomBoxPlayer>& Member)

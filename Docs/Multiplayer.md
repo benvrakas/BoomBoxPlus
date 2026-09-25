@@ -40,8 +40,17 @@ A channel with no Boom Boxes left (all linked away or destroyed) is destroyed. W
 on a channel that had Custom Music loaded switches to another tape, the channel is paused so it doesn't run
 through its queue in silence (`bWasHeard`). A channel that never had the tape loaded is left alone: the
 first version paused those too, which paused every Play press on a Boom Box whose tape wasn't in yet.
-Pressing Play, Play Next or Add on the music page now also loads the Custom Music tape if another tape is
-in.
+
+**No Boom Box in a playing channel is left on the wrong tape.** Pressing Play, Play Next or Add on the music
+page loads the Custom Music tape into that specific Boom Box if another tape is in. That only covers the one
+Boom Box whose page you're on, though — a Boom Box that joins a channel some other way (linking into a group
+that's already playing, being reunited by `RegroupSavedBoomBoxes` after a reload, or just having had its tape
+changed away while its channel kept playing) would otherwise sit silent until someone opened its own page.
+`ABBPPlaylistSubsystem::EnsureMembersLoaded` closes that gap: every `MaintainChannels` tick, for each channel
+with a current track, it loads Custom Music onto any member that isn't already on it
+(`BeginChangeTapeSequence`, using the Boom Box's own carrier as the instigator via a `mOwningCharacter`
+accessor). `MergeChannels` also calls it directly right after a link completes, so the switch is immediate
+rather than waiting up to one tick.
 
 **Groupings persist across a save reload; leaving is per Boom Box.** Channels themselves are still
 session-only — neither `ABBPPlaylistSubsystem` nor `ABBPMusicChannel` has a `SaveGame` property, both are

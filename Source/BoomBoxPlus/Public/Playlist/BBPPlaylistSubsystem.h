@@ -100,6 +100,10 @@ private:
 	// Server only. Moves every Boom Box on Absorbed onto Kept, merges Absorbed's queue into Kept's and destroys Absorbed.
 	void MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChannel* Absorbed);
 
+	// Server only. While Channel has a current track, loads Custom Music onto any of its Boom Boxes that don't have
+	// it, so every Boom Box that shares a playing channel plays along without someone selecting the tape by hand.
+	void EnsureMembersLoaded(ABBPMusicChannel* Channel);
+
 	// Server only. Drops expired requests and requests naming codes no channel uses any more.
 	void PruneLinkRequests();
 
