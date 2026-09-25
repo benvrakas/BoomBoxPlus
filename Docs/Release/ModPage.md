@@ -144,8 +144,8 @@ Open **Mods → BoomBoxPlus**.
   playlists give their first 100 songs.
 - Downloading from YouTube and SoundCloud uses the bundled [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
   [FFmpeg](https://ffmpeg.org). Respect the terms of the services you use.
-- Dedicated servers (Windows and Linux) are supported but haven't been tested much yet. Players still need the
-  mod installed themselves.
+- Dedicated server builds (Windows and Linux) are included but haven't been tested on a real server yet;
+  please report how they work. Players still need the mod installed themselves.
 - Gamepad support is partial; keyboard and mouse work fully.
 
 ### Bugs and feedback

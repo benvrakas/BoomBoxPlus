@@ -33,7 +33,8 @@ or **Add to Queue**.
   just that Boom Box out; the others stay together.
 - The Custom Music page keeps a fixed size instead of resizing while lists load, and long titles are cut
   off cleanly.
-- Dedicated server builds (Windows and Linux) are included. They haven't been tested much yet.
+- Dedicated server builds (Windows and Linux) are included, but haven't been tested on a real server yet. Please
+  report how they work.
 
 ## 1.0.0 — Initial release
 
