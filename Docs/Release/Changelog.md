@@ -20,7 +20,8 @@ or **Add to Queue**.
 - Search results have a **Play Now** button, next to Play Next and Add.
 - The demo track is now copied into your music folder once, so you can delete it.
 - Moving songs in the queue uses a small stacked ^ / v control instead of separate Up and Down buttons.
-
+- Emoji in song and station titles no longer show as "?" boxes (the game's font can't draw them, so they're left out).
+- The link code line no longer runs into the Link button.
 - A **My Volume** slider on the Custom Music page, next to the transport controls. It's the same setting
   as Music volume in the Mods menu and only affects what you hear.
 - Custom Music now follows the game's **Master** volume slider (it used to ignore it and play too loud).
