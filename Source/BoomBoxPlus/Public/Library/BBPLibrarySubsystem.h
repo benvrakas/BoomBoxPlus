@@ -75,6 +75,9 @@ private:
 	FString GetCachePath() const;
 	TArray<FString> GetScanFolders() const;
 
+	// Copies the bundled demo track into the music folder the first time the mod runs, where the player can delete it.
+	void CopyDemoMusicOnce() const;
+
 	TArray<FBBPLocalTrack> Tracks;
 	TMap<FString, int32> TrackIndexById;
 

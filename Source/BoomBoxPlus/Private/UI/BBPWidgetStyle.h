@@ -43,6 +43,10 @@ namespace BBPWidgetStyle
 	// Creates a text block in the game's font.
 	UTextBlock* MakeText(UWidgetTree* Tree, int32 FontSize, const FLinearColor& Color, const FText& Text = FText::GetEmpty(), EFontWeight Weight = EFontWeight::Regular);
 
+	// Returns Text for a text block in the game's font, which has no emoji: drops emoji, pictographic symbols and their
+	// joiners/variation selectors, and collapses the spaces they leave.
+	FText ToDisplayText(const FString& Text);
+
 	// Cuts text that doesn't fit its space off with "..." instead of letting it run over neighbouring widgets.
 	void Truncate(UTextBlock* Text);
 

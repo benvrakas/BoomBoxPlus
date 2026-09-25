@@ -154,6 +154,7 @@ void UBBPLibrarySubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: music folder is '%s'"), *MusicFolder);
+	CopyDemoMusicOnce();
 
 	FBBPLibraryCache Cache;
 	FString CacheJson;
@@ -361,18 +362,43 @@ FString UBBPLibrarySubsystem::GetCachePath() const
 
 TArray<FString> UBBPLibrarySubsystem::GetScanFolders() const
 {
-	TArray<FString> Folders = { GetMusicFolder() };
-	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("BoomBoxPlus")))
+	return { GetMusicFolder() };
+}
+
+void UBBPLibrarySubsystem::CopyDemoMusicOnce() const
+{
+	// The marker records that the copy happened, so a demo track the player deleted doesn't come back.
+	const FString Marker = FPaths::ProjectSavedDir() / TEXT("BoomBoxPlus") / TEXT("DemoMusicCopied.txt");
+	if (FPaths::FileExists(Marker))
 	{
-		const FString BundledMusic = Plugin->GetBaseDir() / TEXT("Resources") / TEXT("Music");
-		if (FPaths::DirectoryExists(BundledMusic))
+		return;
+	}
+	const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("BoomBoxPlus"));
+	if (!Plugin)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: BoomBoxPlus plugin not found by the plugin manager; demo track not copied"));
+		return;
+	}
+	const FString BundledMusic = Plugin->GetBaseDir() / TEXT("Resources") / TEXT("Music");
+	TArray<FString> Files;
+	IFileManager::Get().FindFiles(Files, *BundledMusic, nullptr);
+	int32 NumCopied = 0;
+	for (const FString& File : Files)
+	{
+		if (!IsAudioFile(File))
 		{
-			Folders.Add(BundledMusic);
+			continue;
+		}
+		const FString Target = GetMusicFolder() / File;
+		if (FPaths::FileExists(Target) || IFileManager::Get().Copy(*Target, *(BundledMusic / File)) == COPY_OK)
+		{
+			++NumCopied;
+		}
+		else
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: could not copy demo track '%s' to '%s'"), *File, *Target);
 		}
 	}
-	else
-	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Library: BoomBoxPlus plugin not found by the plugin manager; bundled music skipped"));
-	}
-	return Folders;
+	FFileHelper::SaveStringToFile(FString::Printf(TEXT("BoomBoxPlus copied its demo track into the music folder (%d file(s)). Delete this file to copy it again."), NumCopied), *Marker);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Library: copied %d demo track(s) into the music folder"), NumCopied);
 }

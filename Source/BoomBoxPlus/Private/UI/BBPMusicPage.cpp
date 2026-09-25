@@ -355,6 +355,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	LinkPanel->SetContent(LinkColumn);
 	UHorizontalBox* LinkRow = AddRow(LinkColumn, 0.f);
 	LinkCodeText = MakeText(WidgetTree, 13, TextColor, FText::GetEmpty(), EFontWeight::SemiBold);
+	Truncate(LinkCodeText);
 	AddToRow(LinkRow, LinkCodeText, true, 10.f);
 	LinkCodeBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 	StyleTextBox(LinkCodeBox, 13);
@@ -368,6 +369,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 	UnlinkButton = MakeButton(WidgetTree, LOCTEXT("Unlink", "Leave Group"));
 	AddToRow(LinkRow, UnlinkButton, false, 0.f);
 	LinkMessageText = MakeText(WidgetTree, 11, DimTextColor);
+	Truncate(LinkMessageText);
 	LinkColumn->AddChildToVerticalBox(LinkMessageText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 }
 
@@ -828,8 +830,8 @@ void UBBPMusicPage::RefreshTransport()
 	if (NowPlayingText)
 	{
 		NowPlayingText->SetText(!bHasCurrent ? LOCTEXT("NothingPlaying", "Nothing playing")
-			: bLive ? FText::FromString(Current.Track.Title)
-			: FText::FromString(FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title)));
+			: bLive ? BBPWidgetStyle::ToDisplayText(Current.Track.Title)
+			: BBPWidgetStyle::ToDisplayText(FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title)));
 	}
 	if (PositionText)
 	{
@@ -868,7 +870,7 @@ void UBBPMusicPage::RefreshTransport()
 		{
 			Line = UBBPBlueprintLibrary::GetCurrentLyricLine(Channel);
 		}
-		LyricText->SetText(FText::FromString(Line));
+		LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
 	}
 	if (Channel)
 	{
@@ -895,12 +897,12 @@ void UBBPMusicPage::RefreshLink()
 		}
 		else if (Shared > 1)
 		{
-			Text = FText::Format(LOCTEXT("LinkCodeShared", "Link code: {0}   (grouped with {1} Boom Boxes; this stays paired across saves)"),
+			Text = FText::Format(LOCTEXT("LinkCodeShared", "Link code: {0}   (grouped with {1} Boom Boxes)"),
 				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())), Shared);
 		}
 		else
 		{
-			Text = FText::Format(LOCTEXT("LinkCodeSolo", "Link code: {0}   (to share a queue, both Boom Boxes enter each other's code within 3 minutes)"),
+			Text = FText::Format(LOCTEXT("LinkCodeSolo", "Link code: {0}"),
 				FText::FromString(FString::Printf(TEXT("%04d"), Channel->GetLinkCode())));
 		}
 		LinkCodeText->SetText(Text);
@@ -938,7 +940,9 @@ void UBBPMusicPage::RefreshLink()
 		}
 	}
 	const bool bRecent = LinkMessageTime >= 0.0 && FPlatformTime::Seconds() - LinkMessageTime < LinkMessageSeconds;
-	LinkMessageText->SetText(bRecent ? LinkMessage : FText::GetEmpty());
+	LinkMessageText->SetText(bRecent ? LinkMessage : Shared > 1
+		? LOCTEXT("LinkHintShared", "These Boom Boxes share one queue and stay paired across saves.")
+		: LOCTEXT("LinkHintSolo", "To share a queue, both Boom Boxes enter each other's code within 3 minutes."));
 	LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::DimTextColor);
 }
 
@@ -1167,7 +1171,7 @@ void UBBPMusicPage::RefreshRadioStations()
 		BBPWidgetStyle::SetShown(Button, bShow);
 		if (bShow)
 		{
-			const FString& Title = Stations[i].Title;
+			const FString Title = BBPWidgetStyle::ToDisplayText(Stations[i].Title).ToString();
 			Button->SetLabel(FText::FromString(Title.Len() > 24 ? Title.Left(23) + TEXT("...") : Title));
 			Button->SetToolTipText(FText::FromString(Stations[i].SourceRef));
 		}
@@ -1182,7 +1186,7 @@ void UBBPMusicPage::SetRadioStatus(const FString& Status, bool bError)
 {
 	if (RadioStatusText)
 	{
-		RadioStatusText->SetText(FText::FromString(Status));
+		RadioStatusText->SetText(BBPWidgetStyle::ToDisplayText(Status));
 		RadioStatusText->SetColorAndOpacity(bError ? BBPWidgetStyle::AccentColor : BBPWidgetStyle::DimTextColor);
 	}
 }

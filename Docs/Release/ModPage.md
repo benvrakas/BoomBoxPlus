@@ -14,13 +14,17 @@ Turn the Boom Box into a real speaker: your own music, YouTube, SoundCloud, Spot
 
 ## BoomBoxPlus
 
-The Boom Box finally plays **your** music. Load the new **Custom Music** tape and the Boom Box plays songs
-from your own music folder, YouTube or SoundCloud, whole Spotify playlists, or live internet radio, and
+The Boom Box finally plays **your** music. Press the new **Custom Music** button on any Boom Box and it
+plays songs from your own music folder, YouTube or SoundCloud, whole Spotify playlists, or live internet radio, and
 everyone within earshot hears the same song at the same moment.
 
 Inspired by the PEAK mod sPEAKer.
 
-![The Custom Music page: now playing, search results and the queue](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+![The Custom Music page: now playing, search results, the queue and internet radio](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+
+![Search results with Play Now, Play Next and Add](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/search-results.png)
+
+![An internet radio station playing live](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/radio.png)
 
 ![A Boom Box playing, with the current lyric line on screen](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-in-world.png)
 
@@ -61,8 +65,7 @@ Inspired by the PEAK mod sPEAKer.
 
 1. Install with Satisfactory Mod Manager. Everyone in a multiplayer session needs the mod.
 2. Pick up or open any Boom Box and press **Custom Music**.
-3. Search, then press **Play Now**, **Play Next** or **Add**. The Custom Music tape loads by itself when you press
-   Play or add a song.
+3. Search, then press **Play Now**, **Play Next** or **Add**.
 4. For radio, paste a stream address (for example `http://stream.sunshine-live.de/dnb/mp3-192`) into the
    **Radio** box at the bottom and press **Play Now**.
 
@@ -78,7 +81,8 @@ For YouTube, paste the link of a video that is live right now.
 ```
 
 Press **Open Folder** on the Custom Music page to open it, and **Rescan** after adding files. Subfolders
-work. A demo track is included so there's something to play right away.
+work. A demo track is put in the folder the first time, so there's something to play right away; delete it
+if you don't want it.
 
 In multiplayer, a song from your own folder only plays for players who have the same file. Everyone else
 sees it greyed out and stays silent for that song. YouTube, SoundCloud and Spotify songs are downloaded by
@@ -102,12 +106,8 @@ To read whole playlists you own (up to 1000 songs):
    Secret**.
 5. On the Custom Music page, press **Connect Spotify** and approve in your browser. You only do this once.
 
-![The Connect Spotify button under the search box](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/connect-spotify.png)
-
 Pasting a playlist link shows the matches as they're found; **Add all** starts playing right away and
-keeps adding the rest in order:
-
-![A Spotify playlist being matched on YouTube](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-matching.png)
+keeps adding the rest in order.
 
 Use the Spotify account that created the app. The mod only asks for permission to read playlists. The
 Client Secret is only ever sent to Spotify. Spotify albums work with just the Client ID and Secret, with

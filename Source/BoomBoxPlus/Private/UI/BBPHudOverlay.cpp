@@ -82,7 +82,7 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	if (LyricText)
 	{
 		const FString Line = (bPlaying && bShowLyrics) ? UBBPBlueprintLibrary::GetCurrentLyricLine(Channel) : FString();
-		LyricText->SetText(FText::FromString(Line));
+		LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
 	}
 
 	// Entry ids are per channel, so a different channel counts as a different track.
@@ -95,8 +95,8 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		if (bPlaying && bShowNowPlaying)
 		{
 			NowPlayingTimeLeft = NowPlayingSeconds;
-			if (NowPlayingTitleText) NowPlayingTitleText->SetText(FText::FromString(Current.Track.Title));
-			if (NowPlayingArtistText) NowPlayingArtistText->SetText(FText::FromString(Current.Track.Artist));
+			if (NowPlayingTitleText) NowPlayingTitleText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Title));
+			if (NowPlayingArtistText) NowPlayingArtistText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Artist));
 		}
 	}
 	else if (bPlaying && Current.Track.IsLive())
@@ -112,8 +112,8 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 			if (bShowNowPlaying && !SongTitle.IsEmpty() && SongTitle != Current.Track.Title)
 			{
 				NowPlayingTimeLeft = NowPlayingSeconds;
-				if (NowPlayingTitleText) NowPlayingTitleText->SetText(FText::FromString(SongTitle));
-				if (NowPlayingArtistText) NowPlayingArtistText->SetText(FText::FromString(Current.Track.Title));
+				if (NowPlayingTitleText) NowPlayingTitleText->SetText(BBPWidgetStyle::ToDisplayText(SongTitle));
+				if (NowPlayingArtistText) NowPlayingArtistText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Title));
 			}
 		}
 	}

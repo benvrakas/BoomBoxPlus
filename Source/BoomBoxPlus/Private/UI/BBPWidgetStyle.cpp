@@ -75,6 +75,29 @@ UTextBlock* BBPWidgetStyle::MakeText(UWidgetTree* Tree, int32 FontSize, const FL
 	return Block;
 }
 
+FText BBPWidgetStyle::ToDisplayText(const FString& Text)
+{
+	FString Out;
+	Out.Reserve(Text.Len());
+	for (const TCHAR Char : Text)
+	{
+		const uint32 Code = (uint32)Char;
+		const bool bSurrogate = Code >= 0xD800 && Code <= 0xDFFF;		// emoji outside the basic plane
+		const bool bSymbol = Code >= 0x2600 && Code <= 0x27BF;			// miscellaneous symbols and dingbats
+		const bool bJoiner = Code == 0x200D || Code == 0xFE0E || Code == 0xFE0F;
+		if (bSurrogate || bSymbol || bJoiner)
+		{
+			continue;
+		}
+		if (Char == TEXT(' ') && Out.EndsWith(TEXT(" ")))
+		{
+			continue;
+		}
+		Out.AppendChar(Char);
+	}
+	return FText::FromString(Out.TrimStartAndEnd());
+}
+
 void BBPWidgetStyle::Truncate(UTextBlock* Text)
 {
 	if (Text)

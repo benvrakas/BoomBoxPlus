@@ -1,6 +1,6 @@
 **BoomBoxPlus: the Boom Box plays your music now** 🎶
 
-Load the new **Custom Music** tape and your Boom Box becomes a real speaker:
+Press the new **Custom Music** button on any Boom Box and it becomes a real speaker:
 - Your own mp3/ogg/wav files, plus **YouTube** and **SoundCloud** search and links
 - Paste a **Spotify** song, album or playlist: it finds each song and starts playing right away
 - **Internet radio** and **YouTube live streams**: paste a stream link into the Radio box

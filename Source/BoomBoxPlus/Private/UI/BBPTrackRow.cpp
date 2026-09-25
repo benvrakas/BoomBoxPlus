@@ -100,9 +100,9 @@ void UBBPTrackRow::SetupAsResult(const FBBPTrack& InTrack)
 	EntryId = INDEX_NONE;
 	Index = INDEX_NONE;
 
-	if (TitleText) TitleText->SetText(FText::FromString(Track.Title));
+	if (TitleText) TitleText->SetText(BBPWidgetStyle::ToDisplayText(Track.Title));
 	ShowSourceTag();
-	if (DetailText) DetailText->SetText(FText::FromString(Track.IsLive() ? Track.Artist
+	if (DetailText) DetailText->SetText(BBPWidgetStyle::ToDisplayText(Track.IsLive() ? Track.Artist
 		: FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
 	if (RowBackground) RowBackground->SetBrushColor(BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, false);
@@ -141,12 +141,12 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 
 	if (TitleText)
 	{
-		TitleText->SetText(FText::FromString(Title));
+		TitleText->SetText(BBPWidgetStyle::ToDisplayText(Title));
 		TitleText->SetColorAndOpacity(bPlaying ? BBPWidgetStyle::AccentColor : bMissing ? BBPWidgetStyle::DimTextColor : BBPWidgetStyle::TextColor);
 	}
 	if (DetailText)
 	{
-		DetailText->SetText(FText::FromString(Detail));
+		DetailText->SetText(BBPWidgetStyle::ToDisplayText(Detail));
 	}
 
 	BBPWidgetStyle::SetShown(AddFrontButton, false);

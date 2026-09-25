@@ -18,6 +18,7 @@ or **Add to Queue**.
 **Changes since 1.0.0**
 
 - Search results have a **Play Now** button, next to Play Next and Add.
+- The demo track is now copied into your music folder once, so you can delete it.
 - Moving songs in the queue uses a small stacked ^ / v control instead of separate Up and Down buttons.
 
 - A **My Volume** slider on the Custom Music page, next to the transport controls. It's the same setting

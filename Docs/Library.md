@@ -7,8 +7,10 @@ knows which music files exist on *this* machine.
 
 - `<Saved>/BoomBoxPlus/Music/` — created on first run with a `README.txt`. In the shipped game `<Saved>` is
   `%LOCALAPPDATA%\FactoryGame\Saved`.
-- `<plugin>/Resources/Music/` — bundled tracks (the demo track). `Config/PluginSettings.ini` stages the
-  `Resources` folder with the mod.
+Only the music folder is scanned. The bundled demo track (`<plugin>/Resources/Music/`, staged by
+`Config/PluginSettings.ini`) is **copied into it once** (`CopyDemoMusicOnce`), so players can delete it like any
+other file; `<Saved>/BoomBoxPlus/DemoMusicCopied.txt` records the copy so a deleted demo track doesn't come back.
+Versions up to 1.1.0 scanned the plugin folder directly, which left the demo track undeletable.
 
 Sub-folders are included. Only `.mp3`/`.ogg`/`.wav` are considered (extension filter for scan speed; the
 format itself is still decided by magic bytes in `FBBPDecoder`).
