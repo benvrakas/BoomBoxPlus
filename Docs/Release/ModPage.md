@@ -37,7 +37,7 @@ Inspired by the PEAK mod sPEAKer.
   AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live streams**. The
   station's name is filled in automatically, the song the station announces shows under Now Playing, and
   your last 4 stations are one click away.
-- **A real queue.** Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
+- **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
   carry it or place it.
@@ -61,7 +61,7 @@ Inspired by the PEAK mod sPEAKer.
 
 1. Install with Satisfactory Mod Manager. Everyone in a multiplayer session needs the mod.
 2. Pick up or open any Boom Box and press **Custom Music**.
-3. Search, then press **Play Next** or **Add**. The Custom Music tape loads by itself when you press
+3. Search, then press **Play Now**, **Play Next** or **Add**. The Custom Music tape loads by itself when you press
    Play or add a song.
 4. For radio, paste a stream address (for example `http://stream.sunshine-live.de/dnb/mp3-192`) into the
    **Radio** box at the bottom and press **Play Now**.

@@ -17,6 +17,9 @@ or **Add to Queue**.
 
 **Changes since 1.0.0**
 
+- Search results have a **Play Now** button, next to Play Next and Add.
+- Moving songs in the queue uses a small stacked ^ / v control instead of separate Up and Down buttons.
+
 - A **My Volume** slider on the Custom Music page, next to the transport controls. It's the same setting
   as Music volume in the Mods menu and only affects what you hear.
 - Custom Music now follows the game's **Master** volume slider (it used to ignore it and play too loud).

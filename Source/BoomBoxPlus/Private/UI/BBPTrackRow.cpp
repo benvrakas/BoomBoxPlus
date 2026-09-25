@@ -3,6 +3,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/SizeBox.h"
 #include "Components/Spacer.h"
 #include "UI/BBPGameButton.h"
 #include "UI/BBPMusicPage.h"
@@ -12,6 +13,11 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "UI/BBPWidgetStyle.h"
+
+namespace
+{
+	constexpr float MoveColumnWidth = 26.f;
+}
 
 void UBBPTrackRow::NativeOnInitialized()
 {
@@ -68,11 +74,23 @@ void UBBPTrackRow::BuildDefaultLayout()
 		ButtonSlot->SetVerticalAlignment(VAlign_Center);
 		return Button;
 	};
+	PlayButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowPlay", "Play"));
 	AddFrontButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowPlayNext", "Play Next"));
 	AddEndButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowAdd", "Add"));
-	PlayButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowPlay", "Play"));
-	MoveUpButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowUp", "Up"));
-	MoveDownButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowDown", "Down"));
+
+	// Move up/down: two small arrow buttons stacked in one narrow column.
+	USizeBox* MoveColumn = WidgetTree->ConstructWidget<USizeBox>();
+	MoveColumn->SetWidthOverride(MoveColumnWidth);
+	UVerticalBox* MoveStack = WidgetTree->ConstructWidget<UVerticalBox>();
+	MoveColumn->SetContent(MoveStack);
+	MoveUpButton = BBPWidgetStyle::MakeButton(WidgetTree, FText::FromString(TEXT("^")), true);
+	MoveStack->AddChildToVerticalBox(MoveUpButton)->SetPadding(FMargin(0.f, 0.f, 0.f, 1.f));
+	MoveDownButton = BBPWidgetStyle::MakeButton(WidgetTree, FText::FromString(TEXT("v")), true);
+	MoveStack->AddChildToVerticalBox(MoveDownButton);
+	UHorizontalBoxSlot* MoveSlot = Row->AddChildToHorizontalBox(MoveColumn);
+	MoveSlot->SetPadding(FMargin(0.f, 3.f, 4.f, 3.f));
+	MoveSlot->SetVerticalAlignment(VAlign_Center);
+
 	RemoveButton = AddButton(NSLOCTEXT("BoomBoxPlus", "RowRemove", "Remove"));
 }
 
@@ -89,9 +107,10 @@ void UBBPTrackRow::SetupAsResult(const FBBPTrack& InTrack)
 	if (RowBackground) RowBackground->SetBrushColor(BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, false);
 
+	BBPWidgetStyle::SetButtonLabel(PlayButton, NSLOCTEXT("BoomBoxPlus", "RowPlayNow", "Play Now"));
+	BBPWidgetStyle::SetShown(PlayButton, true);
 	BBPWidgetStyle::SetShown(AddFrontButton, true);
 	BBPWidgetStyle::SetShown(AddEndButton, true);
-	BBPWidgetStyle::SetShown(PlayButton, false);
 	BBPWidgetStyle::SetShown(MoveUpButton, false);
 	BBPWidgetStyle::SetShown(MoveDownButton, false);
 	BBPWidgetStyle::SetShown(RemoveButton, false);
@@ -132,6 +151,7 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 
 	BBPWidgetStyle::SetShown(AddFrontButton, false);
 	BBPWidgetStyle::SetShown(AddEndButton, false);
+	BBPWidgetStyle::SetButtonLabel(PlayButton, NSLOCTEXT("BoomBoxPlus", "RowPlay", "Play"));
 	BBPWidgetStyle::SetShown(PlayButton, !bPlaying);
 	BBPWidgetStyle::SetShown(MoveUpButton, InIndex > 0);
 	BBPWidgetStyle::SetShown(MoveDownButton, InIndex < QueueLength - 1);
@@ -155,6 +175,13 @@ void UBBPTrackRow::HandleAddEnd()
 void UBBPTrackRow::HandlePlay()
 {
 	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
+	// A search result has no queue entry yet: Play Now puts it right after the current track and starts it.
+	if (EntryId == INDEX_NONE)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: Play Now '%s'"), *Track.Title);
+		UBBPBlueprintLibrary::RequestPlayTrackNow(BoomBox.Get(), Track);
+		return;
+	}
 	UBBPBlueprintLibrary::RequestPlayEntry(BoomBox.Get(), EntryId);
 }
 

@@ -165,7 +165,7 @@ or a note that resuming reconnects. See Radio.md.
 
 ## Controls in v1
 
-Queue reordering uses **Up/Down buttons** plus a remove `X` on every row; drag-and-drop can be added in the
+Search results have **Play Now** (`RequestPlayTrackNow`: insert after the current track and start it), Play Next and Add. Queue reordering uses a narrow column of stacked **^ / v** buttons plus a remove `X` on every row; drag-and-drop can be added in the
 Blueprint pass. Buttons are also what makes the queue usable on a gamepad. `FGFocusableWidget`
 (`GetWidgetToFocus`) is **not implemented yet** — needed for proper gamepad focus, per the plan.
 
