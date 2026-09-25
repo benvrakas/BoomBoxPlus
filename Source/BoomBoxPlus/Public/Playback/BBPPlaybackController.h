@@ -11,6 +11,7 @@ class AFGBoomBoxPlayer;
 class UAudioComponent;
 class UBBPStreamingSoundWave;
 class UBBPHudOverlay;
+struct FBBPQueueEntry;
 
 // Audio playing from one Boom Box on this machine.
 USTRUCT()
@@ -46,6 +47,9 @@ struct FBBPEmitter
 
 	// True while EntryId has no local file yet; playback starts at the synced position once it appears.
 	bool bWaitingForFile = false;
+
+	// True while EntryId is a live radio stream.
+	bool bLive = false;
 };
 
 // Plays each Custom Music Boom Box's channel through that Boom Box, kept in sync with the server clock.
@@ -66,6 +70,10 @@ public:
 	// With bRequireSound, only counts Boom Boxes actually producing sound on this machine.
 	const ABBPMusicChannel* GetAudibleChannel(bool bRequireSound) const;
 
+	// Returns true if this machine is playing Channel's current track as a live radio stream, with the song title the
+	// station announces (may be empty) and whether it is still waiting for audio.
+	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
+
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
 	void SyncEmitters();
@@ -75,6 +83,15 @@ private:
 
 	// Starts the channel's current track on an emitter from the given position.
 	void StartTrack(FBBPEmitter& Emitter, const ABBPMusicChannel& Channel, int32 EntryId, float Position);
+
+	// Starts the live radio stream of Entry on an emitter.
+	void StartLiveStream(FBBPEmitter& Emitter, const FBBPQueueEntry& Entry);
+
+	// Plays a started wave on an emitter's audio component.
+	void PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWave* Wave);
+
+	// Stops and releases an emitter's wave, keeping the entry it plays.
+	void ReleaseWave(FBBPEmitter& Emitter);
 
 	// Stops and releases an emitter's wave.
 	void StopTrack(FBBPEmitter& Emitter);

@@ -15,6 +15,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Net/BBPProcess.h"
+#include "Net/BBPRadio.h"
 #include "BBPBlueprintLibrary.h"
 #include "FGBoomBoxPlayer.h"
 #include "Playlist/BBPMusicChannel.h"
@@ -140,6 +141,23 @@ namespace
 			OutTrack.Title = TitleName;
 		}
 		OutTrack.Title = CleanVideoTitle(OutTrack.Title);
+
+		// A live broadcast can't be downloaded; it plays as radio, and each machine looks up its stream itself.
+		FString LiveStatus;
+		bool bIsLive = false;
+		Json->TryGetStringField(TEXT("live_status"), LiveStatus);
+		Json->TryGetBoolField(TEXT("is_live"), bIsLive);
+		if (!bSoundCloud && (bIsLive || LiveStatus == TEXT("is_live")))
+		{
+			OutTrack.Source = EBBPTrackSource::Radio;
+			OutTrack.Id = TEXT("ytlive:") + Id;
+			OutTrack.SourceRef = TEXT("https://www.youtube.com/watch?v=") + Id;
+			OutTrack.Duration = 0.f;
+			if (OutTrack.Artist.IsEmpty())
+			{
+				OutTrack.Artist = TEXT("YouTube live");
+			}
+		}
 		return true;
 	}
 
@@ -346,7 +364,8 @@ void UBBPNetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		YtDlpPath = ToolsDir / TEXT("yt-dlp.exe");
 		FfmpegDir = ToolsDir / TEXT("ffmpeg");
 	}
-	bToolsAvailable = FPaths::FileExists(YtDlpPath) && FPaths::FileExists(FfmpegDir / TEXT("ffmpeg.exe"));
+	bFfmpegAvailable = FPaths::FileExists(FfmpegDir / TEXT("ffmpeg.exe"));
+	bToolsAvailable = FPaths::FileExists(YtDlpPath) && bFfmpegAvailable;
 	if (bToolsAvailable)
 	{
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: tools found at '%s'"), *FPaths::GetPath(YtDlpPath));
@@ -355,6 +374,20 @@ void UBBPNetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: yt-dlp/ffmpeg not found (expected '%s' and '%s'); YouTube and SoundCloud disabled. Run Tools/FetchTools.ps1 before packaging."),
 			*YtDlpPath, *(FfmpegDir / TEXT("ffmpeg.exe")));
+	}
+
+	FString StationsJson;
+	if (FFileHelper::LoadFileToString(StationsJson, *GetRadioStationsPath()))
+	{
+		if (FJsonObjectConverter::JsonObjectStringToUStruct(StationsJson, &RadioStations))
+		{
+			RadioStations.Stations.RemoveAll([](const FBBPTrack& Station) { return !Station.IsLive() || !BBPRadio::IsStreamUrl(Station.SourceRef); });
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: %d recent radio stations"), RadioStations.Stations.Num());
+		}
+		else
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not read '%s'; starting with no recent stations"), *GetRadioStationsPath());
+		}
 	}
 
 	FString CacheJson;
@@ -447,6 +480,141 @@ void UBBPNetSubsystem::ResolveLink(const FString& Url, FBBPOnNetTracks OnDone)
 			OnDone.ExecuteIfBound(Tracks, Error);
 		});
 	});
+}
+
+void UBBPNetSubsystem::TuneRadio(const FString& Text, FBBPOnRadioTuned OnDone)
+{
+	const FString Url = BBPRadio::NormalizeUrl(Text);
+	const EBBPLinkKind Kind = ClassifyLink(Url);
+	if (Kind == EBBPLinkKind::YouTubeVideo)
+	{
+		// A YouTube link counts as a station only while it is broadcasting live.
+		ResolveLink(Url, FBBPOnNetTracks::CreateLambda([OnDone](const TArray<FBBPTrack>& Tracks, const FString& Error)
+		{
+			if (Tracks.Num() == 1 && Tracks[0].IsLive())
+			{
+				OnDone.ExecuteIfBound(Tracks[0], FString());
+				return;
+			}
+			OnDone.ExecuteIfBound(FBBPTrack(), !Error.IsEmpty() ? FString::Printf(TEXT("Couldn't read that YouTube link (%s)."), *Error)
+				: FString(TEXT("That YouTube video isn't live right now. Use the search box for regular videos.")));
+		}));
+		return;
+	}
+	if (Kind != EBBPLinkKind::None)
+	{
+		OnDone.ExecuteIfBound(FBBPTrack(), TEXT("That's a song or playlist link, not a live stream. Paste it into the search box instead."));
+		return;
+	}
+	if (!BBPRadio::IsStreamUrl(Url))
+	{
+		OnDone.ExecuteIfBound(FBBPTrack(), TEXT("That isn't a stream address. Paste a link starting with http:// or https://."));
+		return;
+	}
+	if (!bFfmpegAvailable)
+	{
+		OnDone.ExecuteIfBound(FBBPTrack(), TEXT("Radio needs the mod's bundled ffmpeg, which is missing. Reinstall the mod."));
+		return;
+	}
+	if (!BBPRadio::IsPlaylistUrl(Url))
+	{
+		ProbeRadio(Url, OnDone);
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: reading station playlist '%s'"), *Url);
+	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
+	HttpGet(Url, [WeakThis, Url, OnDone](const FString& Body, const FString& Error)
+	{
+		UBBPNetSubsystem* This = WeakThis.Get();
+		if (!This)
+		{
+			return;
+		}
+		const FString StreamUrl = Error.IsEmpty() ? BBPRadio::ParsePlaylist(Body) : FString();
+		if (StreamUrl.IsEmpty())
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: station playlist '%s' gave no stream (%s)"), *Url, Error.IsEmpty() ? TEXT("no stream URL in it") : *Error);
+			OnDone.ExecuteIfBound(FBBPTrack(), Error.IsEmpty() ? FString(TEXT("That playlist doesn't list a stream."))
+				: FString::Printf(TEXT("Couldn't read that playlist (%s)."), *Error));
+			return;
+		}
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: station playlist '%s' points to '%s'"), *Url, *StreamUrl);
+		This->ProbeRadio(StreamUrl, OnDone);
+	});
+}
+
+void UBBPNetSubsystem::ProbeRadio(const FString& Url, FBBPOnRadioTuned OnDone)
+{
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: tuning in to '%s'"), *Url);
+	Async(EAsyncExecution::ThreadPool, [Ffmpeg = GetFfmpegPath(), Url, OnDone]()
+	{
+		TArray<FString> Args = { TEXT("-hide_banner"), TEXT("-nostdin"), TEXT("-nostats"), TEXT("-loglevel"), TEXT("verbose") };
+		Args.Append(BBPRadio::MakeInputArgs(Url, false));
+		// Decoding one second proves the stream plays.
+		Args.Append({ TEXT("-t"), TEXT("1"), TEXT("-vn"), TEXT("-f"), TEXT("null"), TEXT("-") });
+		const FBBPProcessResult Result = BBPRunProcess(Ffmpeg, Args);
+
+		FString StationName, SongTitle, Problem;
+		bool bHasAudio = false;
+		TArray<FString> Lines;
+		Result.StdErr.ParseIntoArrayLines(Lines);
+		for (const FString& Line : Lines)
+		{
+			BBPRadio::ParseLogLine(Line, StationName, SongTitle);
+			bHasAudio |= Line.Contains(TEXT("Stream #0:")) && Line.Contains(TEXT("Audio:"));
+			static const FString ErrorMarker = TEXT("Error opening input files: ");
+			const int32 ErrorAt = Line.Find(ErrorMarker);
+			if (ErrorAt != INDEX_NONE)
+			{
+				Problem = Line.RightChop(ErrorAt + ErrorMarker.Len()).TrimStartAndEnd();
+			}
+		}
+
+		FBBPTrack Station;
+		FString Error;
+		if (!Result.bLaunched)
+		{
+			Error = TEXT("Couldn't start ffmpeg.");
+		}
+		else if (Result.ReturnCode != 0 || !bHasAudio)
+		{
+			Error = FString::Printf(TEXT("Couldn't play that stream (%s)."), Problem.IsEmpty() ? TEXT("no audio found") : *Problem);
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: radio probe of '%s' failed, ffmpeg code %d: %s"), *Url, Result.ReturnCode,
+				Problem.IsEmpty() ? *Result.StdErr.Right(300) : *Problem);
+		}
+		else
+		{
+			Station.Id = BBPRadio::MakeTrackId(Url);
+			Station.Source = EBBPTrackSource::Radio;
+			Station.SourceRef = Url;
+			Station.Artist = GetHost(Url);
+			Station.Title = !StationName.IsEmpty() ? StationName : Station.Artist;
+			Station.Title.LeftInline(200);
+		}
+		AsyncTask(ENamedThreads::GameThread, [Station, Error, Url, OnDone]()
+		{
+			if (Error.IsEmpty())
+			{
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: '%s' is station '%s'"), *Url, *Station.Title);
+			}
+			OnDone.ExecuteIfBound(Station, Error);
+		});
+	});
+}
+
+void UBBPNetSubsystem::RememberStation(const FBBPTrack& Station)
+{
+	if (!Station.IsLive() || !BBPRadio::IsStreamUrl(Station.SourceRef))
+	{
+		return;
+	}
+	RadioStations.Stations.RemoveAll([&Station](const FBBPTrack& Existing) { return Existing.Id == Station.Id; });
+	RadioStations.Stations.Insert(Station, 0);
+	if (RadioStations.Stations.Num() > MaxRecentStations)
+	{
+		RadioStations.Stations.SetNum(MaxRecentStations);
+	}
+	SaveRadioStations();
 }
 
 void UBBPNetSubsystem::ResolveSpotifyTrack(const FString& Url, FBBPOnNetText OnDone)
@@ -956,7 +1124,7 @@ bool UBBPNetSubsystem::IsDownloadPending(const FString& TrackId) const
 
 void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track)
 {
-	if (Track.Source == EBBPTrackSource::Local || !Track.IsValid())
+	if (Track.Source == EBBPTrackSource::Local || Track.IsLive() || !Track.IsValid())
 	{
 		return;
 	}
@@ -1098,6 +1266,21 @@ void UBBPNetSubsystem::SaveCache() const
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not write '%s'"), *Path);
 	}
+}
+
+void UBBPNetSubsystem::SaveRadioStations() const
+{
+	FString Json;
+	const FString Path = GetRadioStationsPath();
+	if (!FJsonObjectConverter::UStructToJsonObjectString(RadioStations, Json) || !FFileHelper::SaveStringToFile(Json, *Path))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not write '%s'"), *Path);
+	}
+}
+
+FString UBBPNetSubsystem::GetRadioStationsPath() const
+{
+	return FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("BoomBoxPlus") / TEXT("RadioStations.json"));
 }
 
 FString UBBPNetSubsystem::GetCacheDir() const

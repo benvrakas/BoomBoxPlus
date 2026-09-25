@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.1.0 — Internet radio
+
+**New: Radio.** The Custom Music page has a **Radio** box. Paste a live stream address and press **Play Now**
+or **Add to Queue**.
+
+- Plays internet radio stations (MP3, AAC, OGG and HLS streams, and `.pls`/`.m3u` station links), for
+  example `http://stream.sunshine-live.de/dnb/mp3-192`.
+- **YouTube live streams** work too: paste a live video's link into the Radio box, or find it with the
+  normal search (live videos are tagged LIVE).
+- The station's name is read automatically. When a station announces its songs, the current one shows
+  under Now Playing and in the "now playing" notification.
+- Your last 4 stations are one click away.
+- Everyone near the Boom Box hears the station. Live streams can't be synced to the second like songs, so
+  players may hear it a few seconds apart. Pausing disconnects; resuming picks up the live broadcast.
+
+**Changes since 1.0.0**
+
+- A **My Volume** slider on the Custom Music page, next to the transport controls. It's the same setting
+  as Music volume in the Mods menu and only affects what you hear.
+- Custom Music now follows the game's **Master** volume slider (it used to ignore it and play too loud).
+  Final volume is Master × Boom Box volume slider × the Boom Box's own volume × Music volume.
+- Music volume now goes from 0 to 1, default 0.5.
+- **Linked Boom Boxes stay linked** across saves and restarts. The button is now **Leave Group**, which takes
+  just that Boom Box out; the others stay together.
+- The Custom Music page keeps a fixed size instead of resizing while lists load, and long titles are cut
+  off cleanly.
+- Dedicated server builds (Windows and Linux) are included. They haven't been tested much yet.
+
 ## 1.0.0 — Initial release
 
 **The Boom Box plays your music.** Open any Boom Box and press **Custom Music**.

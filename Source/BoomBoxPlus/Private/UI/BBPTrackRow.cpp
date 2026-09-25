@@ -84,7 +84,8 @@ void UBBPTrackRow::SetupAsResult(const FBBPTrack& InTrack)
 
 	if (TitleText) TitleText->SetText(FText::FromString(Track.Title));
 	ShowSourceTag();
-	if (DetailText) DetailText->SetText(FText::FromString(FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
+	if (DetailText) DetailText->SetText(FText::FromString(Track.IsLive() ? Track.Artist
+		: FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
 	if (RowBackground) RowBackground->SetBrushColor(BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, false);
 
@@ -109,7 +110,7 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 	ShowSourceTag();
 	if (RowBackground) RowBackground->SetBrushColor(bPlaying ? BBPWidgetStyle::PlayingRowColor : BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, bPlaying);
-	FString Detail = FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration));
+	FString Detail = Track.IsLive() ? Track.Artist : FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration));
 	if (bMissing)
 	{
 		Detail += TEXT("   (not in your library)");
@@ -179,7 +180,8 @@ void UBBPTrackRow::SetBoomBox(AFGBoomBoxPlayer* InBoomBox)
 
 void UBBPTrackRow::ShowSourceTag()
 {
-	const TCHAR* Tag = Track.Source == EBBPTrackSource::YouTube ? TEXT("YOUTUBE") : Track.Source == EBBPTrackSource::SoundCloud ? TEXT("SOUNDCLOUD") : TEXT("");
+	const TCHAR* Tag = Track.Source == EBBPTrackSource::YouTube ? TEXT("YOUTUBE") : Track.Source == EBBPTrackSource::SoundCloud ? TEXT("SOUNDCLOUD")
+		: Track.IsLive() ? TEXT("LIVE") : TEXT("");
 	if (SourceText)
 	{
 		SourceText->SetText(FText::FromString(Tag));

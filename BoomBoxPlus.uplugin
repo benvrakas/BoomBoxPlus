@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0.0",
-	"SemVersion": "1.0.0",
+	"Version": 2,
+	"VersionName": "1.1.0",
+	"SemVersion": "1.1.0",
 	"GameVersion": ">=502094",
 	"FriendlyName": "BoomBoxPlus",
 	"Description": "Play your own music, YouTube and SoundCloud through the Boom Box, synced for everyone in the session.",

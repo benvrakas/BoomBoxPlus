@@ -5,6 +5,7 @@
 #include "FGPlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Algo/AllOf.h"
+#include "Net/BBPRadio.h"
 #include "Net/UnrealNetwork.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
@@ -77,8 +78,28 @@ namespace
 	{
 		return Track.Id.Len() <= MaxTextLength && Track.Title.Len() <= MaxTextLength
 			&& Track.Artist.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
-			&& Track.Duration >= 0.f && Track.Duration < 24.f * 3600.f;
+			&& Track.Duration >= 0.f && Track.Duration < 24.f * 3600.f
+			// Every player's game opens a radio entry's URL, so only plain web stream URLs are accepted.
+			&& (!Track.IsLive() || BBPRadio::IsStreamUrl(Track.SourceRef));
 	}
+}
+
+void UBBPRemoteCallObject::Server_PlayTrackNow_Implementation(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track)
+{
+	if (ABBPMusicChannel* Channel = GetChannelForRequest(BoomBox, TEXT("PlayTrackNow")))
+	{
+		Channel->PlayTrackNow(Track, GetRequesterName());
+	}
+}
+
+bool UBBPRemoteCallObject::Server_PlayTrackNow_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track)
+{
+	const bool bValid = IsTrackValid(Track);
+	if (!bValid)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: PlayTrackNow failed validation (source %d, ref '%s')"), (int32)Track.Source, *Track.SourceRef.Left(80));
+	}
+	return bValid;
 }
 
 void UBBPRemoteCallObject::Server_AddTracks_Implementation(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks)

@@ -1,6 +1,9 @@
 #include "Audio/BBPStreamingSoundWave.h"
 #include "Audio/BBPDecoder.h"
+#include "Audio/BBPLiveStreamWorker.h"
+#include "Audio/BBPStreamState.h"
 #include "BoomBoxPlus.h"
+#include "Net/BBPRadio.h"
 #include "HAL/Event.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/Runnable.h"
@@ -15,110 +18,11 @@ namespace
 	constexpr int32 DecodeChunkFrames = 2048;
 	constexpr int32 MaxOutputChannels = 2;
 	constexpr uint32 IdleWaitMs = 10;
+
+	// Live streams keep more audio in hand, and wait for LivePrebufferSeconds of it before playing, to ride out network hiccups.
+	constexpr float LiveBufferSeconds = 6.0f;
+	constexpr float LivePrebufferSeconds = 2.0f;
 }
-
-// Audio shared between the game thread, the decode thread and the audio render thread.
-class FBBPStreamState
-{
-public:
-	FBBPStreamState(int32 InSampleRate, int32 InChannels, int64 InStartFrame)
-		: SampleRate(InSampleRate)
-		, Channels(InChannels)
-		, PlaybackFrame(InStartFrame)
-		, PendingSeekFrame(InStartFrame)
-	{
-		Ring.SetNumZeroed(FMath::CeilToInt(BufferAheadSeconds * InSampleRate) * InChannels);
-		WakeEvent = FPlatformProcess::GetSynchEventFromPool(false);
-	}
-
-	~FBBPStreamState()
-	{
-		FPlatformProcess::ReturnSynchEventToPool(WakeEvent);
-	}
-
-	// Returns the number of samples that can be written without overwriting unplayed audio.
-	int32 GetFreeSamples()
-	{
-		FScopeLock ScopeLock(&Lock);
-		return Ring.Num() - NumBuffered;
-	}
-
-	// Appends interleaved samples after the buffered audio.
-	void Write(const int16* Src, int32 NumSamples)
-	{
-		FScopeLock ScopeLock(&Lock);
-		const int32 Capacity = Ring.Num();
-		NumSamples = FMath::Min(NumSamples, Capacity - NumBuffered);
-		int32 WriteIndex = (ReadIndex + NumBuffered) % Capacity;
-		for (int32 Remaining = NumSamples; Remaining > 0;)
-		{
-			const int32 Span = FMath::Min(Remaining, Capacity - WriteIndex);
-			FMemory::Memcpy(Ring.GetData() + WriteIndex, Src, Span * sizeof(int16));
-			Src += Span;
-			Remaining -= Span;
-			WriteIndex = (WriteIndex + Span) % Capacity;
-		}
-		NumBuffered += NumSamples;
-	}
-
-	// Moves up to NumSamples buffered samples (whole frames only) into Dst and returns how many were moved.
-	int32 Read(int16* Dst, int32 NumSamples)
-	{
-		FScopeLock ScopeLock(&Lock);
-		const int32 Capacity = Ring.Num();
-		const int32 ToRead = (FMath::Min(NumSamples, NumBuffered) / Channels) * Channels;
-		for (int32 Remaining = ToRead; Remaining > 0;)
-		{
-			const int32 Span = FMath::Min(Remaining, Capacity - ReadIndex);
-			FMemory::Memcpy(Dst, Ring.GetData() + ReadIndex, Span * sizeof(int16));
-			Dst += Span;
-			Remaining -= Span;
-			ReadIndex = (ReadIndex + Span) % Capacity;
-		}
-		NumBuffered -= ToRead;
-		PlaybackFrame += ToRead / Channels;
-		return ToRead;
-	}
-
-	// Discards buffered audio and sets the file frame that playback continues from.
-	void Reset(int64 NewPlaybackFrame)
-	{
-		FScopeLock ScopeLock(&Lock);
-		ReadIndex = 0;
-		NumBuffered = 0;
-		PlaybackFrame = NewPlaybackFrame;
-	}
-
-	// Returns true when the decoder has reached the end and nothing is left to play.
-	bool IsDrained()
-	{
-		FScopeLock ScopeLock(&Lock);
-		return bEndOfStream && NumBuffered == 0;
-	}
-
-	const int32 SampleRate;
-	const int32 Channels;
-
-	// File frame index of the next frame handed to the mixer.
-	std::atomic<int64> PlaybackFrame;
-
-	// Frame to seek to on the decode thread, or -1 if none is pending.
-	std::atomic<int64> PendingSeekFrame;
-
-	std::atomic<int32> UnderrunCount{0};
-	std::atomic<bool> bStopRequested{false};
-	std::atomic<bool> bEndOfStream{false};
-	std::atomic<bool> bFailed{false};
-
-	// Wakes the decode thread early for seeks and stop requests.
-	FEvent* WakeEvent = nullptr;
-
-private:
-	FCriticalSection Lock;
-	TArray<int16> Ring;
-	int32 ReadIndex = 0;
-	int32 NumBuffered = 0;
-};
 
 // Decodes a file into an FBBPStreamState, keeping BufferAheadSeconds of audio ready.
 class FBBPDecodeWorker : public FRunnable
@@ -257,7 +161,7 @@ bool UBBPStreamingSoundWave::StartStream(const FString& FilePath, int32 InSample
 	SetSampleRate((uint32)InSampleRate);
 
 	const int64 StartFrame = FMath::Max<int64>(0, (int64)(StartSeconds * InSampleRate));
-	State = MakeShared<FBBPStreamState, ESPMode::ThreadSafe>(InSampleRate, OutChannels, StartFrame);
+	State = MakeShared<FBBPStreamState, ESPMode::ThreadSafe>(InSampleRate, OutChannels, StartFrame, BufferAheadSeconds, 0.f);
 	Worker = new FBBPDecodeWorker(State.ToSharedRef(), FilePath);
 	WorkerThread = FRunnableThread::Create(Worker, TEXT("BBPDecode"), 0, TPri_AboveNormal);
 	if (!WorkerThread)
@@ -270,8 +174,43 @@ bool UBBPStreamingSoundWave::StartStream(const FString& FilePath, int32 InSample
 	return true;
 }
 
+bool UBBPStreamingSoundWave::StartLiveStream(const FString& FfmpegPath, const FString& YtDlpPath, const FString& Url)
+{
+	if (State.IsValid())
+	{
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("StartLiveStream called on a wave that is already streaming ('%s' then '%s')"), *StreamPath, *Url);
+		return false;
+	}
+	if (!BBPRadio::IsStreamUrl(Url))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("StartLiveStream refused '%s': not an http(s) stream URL"), *Url);
+		return false;
+	}
+	StreamPath = Url;
+	bLive = true;
+	NumChannels = BBPRadio::Channels;
+	SetSampleRate((uint32)BBPRadio::SampleRate);
+
+	State = MakeShared<FBBPStreamState, ESPMode::ThreadSafe>(BBPRadio::SampleRate, BBPRadio::Channels, 0, LiveBufferSeconds, LivePrebufferSeconds);
+	State->PendingSeekFrame = -1;
+	Worker = new FBBPLiveStreamWorker(State.ToSharedRef(), FfmpegPath, YtDlpPath, Url);
+	WorkerThread = FRunnableThread::Create(Worker, TEXT("BBPRadio"), 0, TPri_AboveNormal);
+	if (!WorkerThread)
+	{
+		UE_LOG(LogBoomBoxPlus, Error, TEXT("Could not create radio thread for '%s'"), *Url);
+		State->bFailed = true;
+		return false;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Streaming radio '%s'"), *Url);
+	return true;
+}
+
 void UBBPStreamingSoundWave::Seek(float PositionSeconds)
 {
+	if (bLive)
+	{
+		return;
+	}
 	if (!State.IsValid())
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Seek(%.2f) on a wave that was never started"), PositionSeconds);
@@ -314,6 +253,16 @@ bool UBBPStreamingSoundWave::HasFailed() const
 	return State.IsValid() && State->bFailed;
 }
 
+bool UBBPStreamingSoundWave::IsBuffering() const
+{
+	return State.IsValid() && State->IsBuffering();
+}
+
+FString UBBPStreamingSoundWave::GetLiveTitle() const
+{
+	return State.IsValid() ? State->GetLiveTitle() : FString();
+}
+
 int32 UBBPStreamingSoundWave::GetUnderrunCount() const
 {
 	return State.IsValid() ? State->UnderrunCount.load() : 0;
@@ -327,7 +276,7 @@ int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 
 	if (Read < NumSamples)
 	{
 		FMemory::Memzero(Dst + Read, (NumSamples - Read) * sizeof(int16));
-		if (State.IsValid() && !State->bEndOfStream)
+		if (State.IsValid() && !State->bEndOfStream && (Read > 0 || !State->IsBuffering()))
 		{
 			++State->UnderrunCount;
 		}

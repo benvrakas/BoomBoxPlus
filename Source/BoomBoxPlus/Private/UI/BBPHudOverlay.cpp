@@ -91,11 +91,30 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	{
 		LastEntryId = EntryId;
 		LastChannel = Channel;
+		LastLiveTitle.Reset();
 		if (bPlaying && bShowNowPlaying)
 		{
 			NowPlayingTimeLeft = NowPlayingSeconds;
 			if (NowPlayingTitleText) NowPlayingTitleText->SetText(FText::FromString(Current.Track.Title));
 			if (NowPlayingArtistText) NowPlayingArtistText->SetText(FText::FromString(Current.Track.Artist));
+		}
+	}
+	else if (bPlaying && Current.Track.IsLive())
+	{
+		// Radio: the station's own song announcements, shown as they change (with the station as the second line).
+		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+		const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+		FString SongTitle;
+		bool bBuffering = false;
+		if (Controller && Controller->GetLiveStatus(Channel, SongTitle, bBuffering) && SongTitle != LastLiveTitle)
+		{
+			LastLiveTitle = SongTitle;
+			if (bShowNowPlaying && !SongTitle.IsEmpty() && SongTitle != Current.Track.Title)
+			{
+				NowPlayingTimeLeft = NowPlayingSeconds;
+				if (NowPlayingTitleText) NowPlayingTitleText->SetText(FText::FromString(SongTitle));
+				if (NowPlayingArtistText) NowPlayingArtistText->SetText(FText::FromString(Current.Track.Title));
+			}
 		}
 	}
 

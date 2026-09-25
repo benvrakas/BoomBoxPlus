@@ -24,6 +24,7 @@ enum class EBBPLinkKind : uint8
 
 DECLARE_DELEGATE_TwoParams(FBBPOnNetTracks, const TArray<FBBPTrack>& /*Tracks*/, const FString& /*Error*/);
 DECLARE_DELEGATE_TwoParams(FBBPOnNetText, const FString& /*Text*/, const FString& /*Error*/);
+DECLARE_DELEGATE_TwoParams(FBBPOnRadioTuned, const FBBPTrack& /*Station*/, const FString& /*Error*/);
 
 // Progress of matching a Spotify playlist or album on YouTube.
 struct FBBPMatchProgress
@@ -74,6 +75,16 @@ struct FBBPNetCache
 	TArray<FBBPNetCacheEntry> Entries;
 };
 
+// Radio stations this player tuned in to recently, written between sessions.
+USTRUCT()
+struct FBBPRadioStations
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FBBPTrack> Stations;
+};
+
 // YouTube/SoundCloud search and downloads through the bundled yt-dlp and ffmpeg, and Spotify link resolution.
 UCLASS()
 class BOOMBOXPLUS_API UBBPNetSubsystem : public UGameInstanceSubsystem
@@ -85,6 +96,26 @@ public:
 
 	// Returns true if the bundled yt-dlp and ffmpeg were found.
 	bool AreToolsAvailable() const { return bToolsAvailable; }
+
+	// Returns the bundled ffmpeg, which plays radio streams, or empty if it is missing.
+	FString GetFfmpegPath() const { return bFfmpegAvailable ? FfmpegDir / TEXT("ffmpeg.exe") : FString(); }
+
+	// Returns the bundled yt-dlp, which finds YouTube live streams, or empty if the tools are missing.
+	FString GetYtDlpPath() const { return bToolsAvailable ? YtDlpPath : FString(); }
+
+	// Checks that Text is a playable radio stream (following .pls/.m3u station playlists, or a YouTube video that is live
+	// right now) and reads the station's name.
+	// Calls back on the game thread with a queueable track, or an error for the player.
+	void TuneRadio(const FString& Text, FBBPOnRadioTuned OnDone);
+
+	// Stations tuned in to recently, newest first.
+	const TArray<FBBPTrack>& GetRecentStations() const { return RadioStations.Stations; }
+
+	// Moves Station to the top of the recent stations and saves the list.
+	void RememberStation(const FBBPTrack& Station);
+
+	// How many recent stations are kept (the music page has a button for each).
+	static constexpr int32 MaxRecentStations = 4;
 
 	// Identifies a supported link in the search box text.
 	static EBBPLinkKind ClassifyLink(const FString& Text);
@@ -145,12 +176,20 @@ private:
 	void EvictOldDownloads();
 
 	void SaveCache() const;
+	void SaveRadioStations() const;
+	FString GetRadioStationsPath() const;
+
+	// Game thread. Runs ffmpeg briefly on a stream URL to confirm it plays and read its station name.
+	void ProbeRadio(const FString& Url, FBBPOnRadioTuned OnDone);
 	FString GetCacheDir() const;
 	UBBPLibrarySubsystem* GetLibrary() const;
 
 	FString YtDlpPath;
 	FString FfmpegDir;
 	bool bToolsAvailable = false;
+	bool bFfmpegAvailable = false;
+
+	FBBPRadioStations RadioStations;
 
 	FBBPNetCache Cache;
 	TArray<FBBPTrack> DownloadQueue;

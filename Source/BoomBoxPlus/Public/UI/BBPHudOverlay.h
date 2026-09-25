@@ -46,5 +46,8 @@ private:
 
 	int32 LastEntryId = INDEX_NONE;
 	TWeakObjectPtr<const ABBPMusicChannel> LastChannel;
+
+	// Song title last shown for the radio station being heard.
+	FString LastLiveTitle;
 	float NowPlayingTimeLeft = 0.f;
 };

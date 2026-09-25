@@ -19,6 +19,11 @@ public:
 	void Server_AddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 	bool Server_AddTrack_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
+	// Adds a track right after the current one and starts playing it (used to tune in to a radio station).
+	UFUNCTION(Server, Reliable, WithValidation = Server_PlayTrackNow_Validate)
+	void Server_PlayTrackNow(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track);
+	bool Server_PlayTrackNow_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track);
+
 	// Adds several tracks to the end of the queue, in order. At most MaxTracksPerBatch per call.
 	UFUNCTION(Server, Reliable, WithValidation = Server_AddTracks_Validate)
 	void Server_AddTracks(AFGBoomBoxPlayer* BoomBox, const TArray<FBBPTrack>& Tracks);

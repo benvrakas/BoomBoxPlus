@@ -1,7 +1,7 @@
 # BoomBoxPlus
 
 A Satisfactory mod (game build 502094 / 1.2.4, SML 3.12) that makes the Boom Box play your own music,
-YouTube, SoundCloud and Spotify playlists, synced for everyone in the session, with lyrics. Inspired by the
+YouTube, SoundCloud, Spotify playlists and live internet radio, synced for everyone in the session, with lyrics. Inspired by the
 PEAK mod sPEAKer.
 
 **Status:** release candidate. Tested in game on a hosted session; dedicated servers not tested yet.

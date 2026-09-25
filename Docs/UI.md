@@ -149,6 +149,20 @@ Shows this Boom Box's channel code and how many Boom Boxes share it, a 4-digit c
 (Unlink only while shared). The line under it shows a pending link request with its countdown, or the
 server's last reply for 8 s. See Multiplayer.md.
 
+## Radio panel
+
+The bottom row is split: the **Radio** panel on the left, the Link panel on the right. Radio has a stream
+address field (Enter = Play Now), **Play Now** (`RequestPlayTrackNow`) and **Add to Queue**, and a row of up
+to four compact buttons for recent stations (newest first, from `UBBPNetSubsystem::GetRecentStations`),
+which play that station now. Each button has its own `HandleRecentStationN` handler because
+`UBBPGameButton::OnClicked` carries no payload. The status text next to them shows tuning progress or the
+reason a stream failed. A stream address pasted into the search box is moved into the Radio field instead
+of being searched on YouTube.
+
+While a live entry plays, the position text shows **LIVE**, the seek bar is disabled (duration 0) and the
+lyric line shows the song the station announces, "Connecting to the station..." while the prebuffer fills,
+or a note that resuming reconnects. See Radio.md.
+
 ## Controls in v1
 
 Queue reordering uses **Up/Down buttons** plus a remove `X` on every row; drag-and-drop can be added in the

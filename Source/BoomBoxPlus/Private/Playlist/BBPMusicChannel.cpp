@@ -48,7 +48,11 @@ void ABBPMusicChannel::Tick(float DeltaSeconds)
 	FBBPQueueEntry Current;
 	if (IsPlaying() && GetCurrentEntry(Current))
 	{
-		if (Current.Track.Duration <= 0.f)
+		if (Current.Track.IsLive())
+		{
+			// Radio plays until someone skips it.
+		}
+		else if (Current.Track.Duration <= 0.f)
 		{
 			if (!bWarnedMissingDuration)
 			{
@@ -142,6 +146,21 @@ bool ABBPMusicChannel::AddTrack(const FBBPTrack& Track, bool bFront, const FStri
 	if (PlaybackState.CurrentEntryId == INDEX_NONE)
 	{
 		StartEntry(Entry.EntryId, 0.f);
+	}
+	return true;
+}
+
+bool ABBPMusicChannel::PlayTrackNow(const FBBPTrack& Track, const FString& AddedBy)
+{
+	BBP_REQUIRE_AUTHORITY(false)
+	const int32 NewEntryId = NextEntryId;
+	if (!AddTrack(Track, true, AddedBy))
+	{
+		return false;
+	}
+	if (PlaybackState.CurrentEntryId != NewEntryId)
+	{
+		StartEntry(NewEntryId, 0.f);
 	}
 	return true;
 }

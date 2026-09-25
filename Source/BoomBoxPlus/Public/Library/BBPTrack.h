@@ -9,7 +9,9 @@ enum class EBBPTrackSource : uint8
 {
 	Local,
 	YouTube,
-	SoundCloud
+	SoundCloud,
+	// A live internet radio stream: no length, never downloaded, plays until skipped.
+	Radio
 };
 
 // A track as shared between players. Contains nothing specific to one machine.
@@ -28,18 +30,20 @@ struct BOOMBOXPLUS_API FBBPTrack
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	FString Artist;
 
-	// Length in seconds.
+	// Length in seconds; 0 for radio.
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	float Duration = 0.f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	EBBPTrackSource Source = EBBPTrackSource::Local;
 
-	// Video or track reference used to fetch network tracks; empty for local files.
+	// Video or track reference used to fetch network tracks, or the stream URL for radio; empty for local files.
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	FString SourceRef;
 
 	bool IsValid() const { return !Id.IsEmpty(); }
+
+	bool IsLive() const { return Source == EBBPTrackSource::Radio; }
 };
 
 // A track available on this machine, with the details needed to play it.

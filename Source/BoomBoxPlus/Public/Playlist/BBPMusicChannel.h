@@ -26,6 +26,9 @@ public:
 	// Server only. Adds a track right after the current one (bFront) or at the end. Starts playback if nothing is playing.
 	bool AddTrack(const FBBPTrack& Track, bool bFront, const FString& AddedBy);
 
+	// Server only. Adds a track right after the current one and starts playing it.
+	bool PlayTrackNow(const FBBPTrack& Track, const FString& AddedBy);
+
 	// Server only. Removes a queue entry; skips ahead if it is playing.
 	bool RemoveEntry(int32 EntryId);
 

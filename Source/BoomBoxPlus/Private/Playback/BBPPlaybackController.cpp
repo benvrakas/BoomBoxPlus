@@ -284,7 +284,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 		for (int32 i = CurrentIndex; i < Queue.Num() && i <= CurrentIndex + PrefetchAhead; ++i)
 		{
 			const FBBPTrack& Track = Queue[i].Track;
-			if (Track.Source != EBBPTrackSource::Local && !Library->HasTrack(Track.Id))
+			if (Track.Source != EBBPTrackSource::Local && !Track.IsLive() && !Library->HasTrack(Track.Id))
 			{
 				Wanted.Add(Track.Id);
 				ToFetch.Add(&Track);
@@ -388,6 +388,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		Emitter.Channel = Channel;
 		Emitter.AppliedRevision = -1;
 		Emitter.bWaitingForFile = false;
+		Emitter.bLive = false;
 	}
 	if (!Channel)
 	{
@@ -416,6 +417,35 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		{
 			Emitter.Component->SetPaused(State.bPaused);
 		}
+		return;
+	}
+
+	if (Emitter.bLive)
+	{
+		// Pausing disconnects a live stream; resuming reconnects to whatever the station is playing now.
+		if (State.bPaused)
+		{
+			if (Emitter.Wave)
+			{
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: radio paused on %s; disconnecting"), *GetNameSafe(Emitter.BoomBox.Get()));
+				ReleaseWave(Emitter);
+			}
+			Emitter.bReportedProblem = false;
+		}
+		else if (!Emitter.Wave && !Emitter.bReportedProblem)
+		{
+			FBBPQueueEntry Entry;
+			if (Channel->GetCurrentEntry(Entry))
+			{
+				StartLiveStream(Emitter, Entry);
+			}
+		}
+		else if (Emitter.Wave && Emitter.Wave->HasFailed() && !Emitter.bReportedProblem)
+		{
+			Emitter.bReportedProblem = true;
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: radio stream for entry %d failed; silent until it is paused and resumed, or skipped"), Emitter.EntryId);
+		}
+		Emitter.AppliedRevision = State.Revision;
 		return;
 	}
 
@@ -496,6 +526,7 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 	Emitter.EntryId = EntryId;
 	Emitter.bReportedProblem = false;
 	Emitter.bWaitingForFile = false;
+	Emitter.bLive = false;
 	Emitter.DriftCheckTimer = DriftCheckInterval;
 
 	FBBPQueueEntry Entry;
@@ -503,6 +534,17 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 	{
 		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: entry %d not replicated yet; waiting"), EntryId);
 		Emitter.EntryId = INDEX_NONE;
+		return;
+	}
+
+	if (Entry.Track.IsLive())
+	{
+		Emitter.bLive = true;
+		// A paused station isn't connected until it's resumed (see UpdateEmitter).
+		if (!Channel.GetPlaybackState().bPaused)
+		{
+			StartLiveStream(Emitter, Entry);
+		}
 		return;
 	}
 
@@ -543,6 +585,35 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: could not start stream for '%s'"), *Local->FilePath);
 		return;
 	}
+	PlayWave(Emitter, Wave);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: playing '%s' on %s from %.2f s"), *Entry.Track.Title, *GetNameSafe(Emitter.BoomBox.Get()), Position);
+}
+
+void UBBPPlaybackController::StartLiveStream(FBBPEmitter& Emitter, const FBBPQueueEntry& Entry)
+{
+	const UWorld* World = Playlist->GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	const UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	const FString Ffmpeg = Net ? Net->GetFfmpegPath() : FString();
+	if (Ffmpeg.IsEmpty())
+	{
+		Emitter.bReportedProblem = true;
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: can't play radio '%s': the bundled ffmpeg is missing"), *Entry.Track.Title);
+		return;
+	}
+	UBBPStreamingSoundWave* Wave = NewObject<UBBPStreamingSoundWave>(this);
+	if (!Wave->StartLiveStream(Ffmpeg, Net->GetYtDlpPath(), Entry.Track.SourceRef))
+	{
+		Emitter.bReportedProblem = true;
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: could not start radio '%s' (%s)"), *Entry.Track.Title, *Entry.Track.SourceRef);
+		return;
+	}
+	PlayWave(Emitter, Wave);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: tuning %s in to radio '%s'"), *GetNameSafe(Emitter.BoomBox.Get()), *Entry.Track.Title);
+}
+
+void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWave* Wave)
+{
 	Emitter.Wave = Wave;
 	Emitter.Component->SetSound(Wave);
 	Emitter.Component->Play();
@@ -551,10 +622,9 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 		bReportedNoAudioDevice = true;
 		UE_LOG(LogBoomBoxPlus, Error, TEXT("Playback: no Unreal audio device for %s; the track is streaming but nothing will be heard"), *GetNameSafe(Emitter.BoomBox.Get()));
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: playing '%s' on %s from %.2f s"), *Entry.Track.Title, *GetNameSafe(Emitter.BoomBox.Get()), Position);
 }
 
-void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
+void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 {
 	if (Emitter.Component)
 	{
@@ -566,5 +636,24 @@ void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
 		Emitter.Wave->StopStream();
 		Emitter.Wave = nullptr;
 	}
+}
+
+void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
+{
+	ReleaseWave(Emitter);
 	Emitter.EntryId = INDEX_NONE;
+}
+
+bool UBBPPlaybackController::GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const
+{
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		if (Channel && Emitter.Channel.Get() == Channel && Emitter.bLive && Emitter.Wave && !Emitter.Wave->HasFailed())
+		{
+			OutSongTitle = Emitter.Wave->GetLiveTitle();
+			bOutBuffering = Emitter.Wave->IsBuffering();
+			return true;
+		}
+	}
+	return false;
 }
