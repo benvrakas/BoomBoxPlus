@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.3 — Queue persistence, boostable volume
+## 1.2.4 — Turbo Bass fix
 
 - Fixed **Turbo Bass** refusing to fire ("the music is paused") while Custom Music was actually playing.
 - **Boom Boxes remember their queue.** The queue, the song that was playing and where it was, pause,
