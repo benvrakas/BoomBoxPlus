@@ -10,6 +10,7 @@ void UBBPGameInstanceModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	// SML registers the configuration during initialization; its editor classes must be in place first.
 	if (Phase == ELifecyclePhase::INITIALIZATION)
 	{
+		UBBPConfig::MigrateOldConfigFile();
 		UBBPConfig::UseSMLEditorClasses();
 	}
 	Super::DispatchLifecycleEvent(Phase);

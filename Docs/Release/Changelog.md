@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 — Settings fix
+
+- Fixed the **My Volume** slider being stuck at 50%. Since 1.2.0 the mod couldn't read or save any of its
+  settings, so every setting in **Mods → BoomBoxPlus** was ignored and its default used instead.
+- Settings saved by 1.1.0 or earlier are carried over instead of being reset. (Updating to 1.2.0 or 1.2.1
+  reset them, including the Spotify Client ID and Secret; if that happened to you, enter them again.)
+
 ## 1.2.1 — Linked Boom Box fix
 
 - Fixed a linked Boom Box getting stuck replaying the tape-change animation and never playing, and its

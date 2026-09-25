@@ -107,8 +107,17 @@ lambda), one level below the root, which is what makes them stack vertically lik
 settings. `UseSMLEditorClasses` had to become recursive (`ConvertSectionRecursive`) to reach properties
 nested this way — it previously only converted RootSection's direct children, which was fine when they
 were all leaf properties but would leave the new per-setting wrapper sections' children on their
-invisible C++ classes. `FindProperty` (`GetBool`/`GetFloat`/`GetInt`/`GetString`/`SetFloat`) also searches
-one level deep now, for the same reason.
+invisible C++ classes. `FindProperty` (`GetBool`/`GetFloat`/`GetInt`/`GetString`/`SetFloat`) has to look inside the wrapper:
+the root key names the wrapper section, and the value sits inside it under the same key. 1.2.0 and 1.2.1
+returned the wrapper itself, so every `Get*` fell back to its default and every `SetFloat` failed ("could
+not set 'MusicVolume'; configuration not available"): My Volume was stuck at 50% and no Mods-menu setting
+had any effect.
+
+The nesting also changed the config file from `"MusicVolume": 0.5` to `"MusicVolume": { "MusicVolume": 0.5 }`.
+SML can't read the old layout into the new one, so it rewrote the file with defaults on the first start
+after updating from 1.1.0, losing everything including the Spotify app key.
+`UBBPConfig::MigrateOldConfigFile` (called just before `UseSMLEditorClasses`, before SML loads the file)
+wraps any top-level non-object values in `<ProjectDir>/Configs/BoomBoxPlus.cfg` so they survive.
 
 | Key | Default | Used by |
 |---|---|---|

@@ -24,6 +24,10 @@ public:
 	static const FString SpotifyClientIdKey;
 	static const FString SpotifyClientSecretKey;
 
+	// Rewrites a config file saved by 1.1.0 or earlier (settings as top-level values) into the current layout (each
+	// setting in a section of its own), so updating doesn't reset settings. Call before SML loads the file.
+	static void MigrateOldConfigFile();
+
 	// Rebuilds the default configuration with SML's Blueprint property classes, which carry the editor widgets
 	// SML's Mods menu shows. Call before SML registers the configuration.
 	static void UseSMLEditorClasses();
