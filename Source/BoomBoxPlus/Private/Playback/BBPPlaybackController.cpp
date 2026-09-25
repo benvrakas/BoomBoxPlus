@@ -470,7 +470,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		Emitter.AppliedRevision = State.Revision;
 		if (Emitter.Component && Emitter.Wave)
 		{
-			Emitter.Component->SetPaused(State.bPaused || State.bLoading);
+			ApplyPaused(Emitter, State.bPaused || State.bLoading);
 		}
 		return;
 	}
@@ -517,7 +517,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 			Emitter.AppliedRevision = State.Revision;
 			if (Emitter.Component && Emitter.Wave)
 			{
-				Emitter.Component->SetPaused(State.bPaused || State.bLoading);
+				ApplyPaused(Emitter, State.bPaused || State.bLoading);
 			}
 		}
 		return;
@@ -541,7 +541,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	if (Emitter.AppliedRevision != State.Revision)
 	{
 		Emitter.AppliedRevision = State.Revision;
-		Emitter.Component->SetPaused(State.bPaused || State.bLoading);
+		ApplyPaused(Emitter, State.bPaused || State.bLoading);
 		// Only seek when the change moved the position (seek/restart), not for shuffle or repeat changes.
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
 		const bool bNeedsSeek = FMath::Abs(Actual - Expected) > DriftTolerance;
@@ -691,6 +691,41 @@ void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 		Emitter.Wave->StopStream();
 		Emitter.Wave = nullptr;
 	}
+	SetVanillaPlaybackFlag(Emitter, false);
+}
+
+void UBBPPlaybackController::ApplyPaused(FBBPEmitter& Emitter, bool bPaused)
+{
+	if (Emitter.Component)
+	{
+		Emitter.Component->SetPaused(bPaused);
+	}
+	SetVanillaPlaybackFlag(Emitter, !bPaused);
+}
+
+void UBBPPlaybackController::SetVanillaPlaybackFlag(FBBPEmitter& Emitter, bool bPlaying)
+{
+	AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+	if (!BoomBox || Emitter.bAppliedVanillaPlaying == bPlaying)
+	{
+		return;
+	}
+	Emitter.bAppliedVanillaPlaying = bPlaying;
+	// Custom Music never runs the vanilla play/pause code that would normally set this (we cancel it in the hooks),
+	// so without this, IsCurrentlyPlaying()/CanFireTurboBass() always see "not playing" and Turbo Bass refuses to
+	// fire with a "the music is paused" message even while a track is actually playing. mState isn't replicated,
+	// so this has to be set locally on every machine that plays this Boom Box's audio, not just the server.
+	FBoomBoxPlayerState VanillaState = BoomBox->GetmState();
+	constexpr int32 PlaybackEnabledBit = static_cast<int32>(EBoomBoxPlaybackStateBitfield::PlaybackEnabled);
+	if (bPlaying)
+	{
+		VanillaState.mPlaybackState |= PlaybackEnabledBit;
+	}
+	else
+	{
+		VanillaState.mPlaybackState &= ~PlaybackEnabledBit;
+	}
+	BoomBox->SetmState(VanillaState);
 }
 
 void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)

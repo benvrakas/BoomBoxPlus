@@ -2,6 +2,7 @@
 
 ## 1.2.3 — Queue persistence, boostable volume
 
+- Fixed **Turbo Bass** refusing to fire ("the music is paused") while Custom Music was actually playing.
 - **Boom Boxes remember their queue.** The queue, the song that was playing and where it was, pause,
   shuffle and repeat are now kept in your save, along with which Boom Boxes are linked. Load the game and
   the music carries on from where it was. (Link codes are still new each session.)

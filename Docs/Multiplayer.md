@@ -171,6 +171,18 @@ A client without the file stays silent for that track but keeps following the ti
 downloaded by each client itself (current + next three of every channel a nearby Boom Box plays), and a
 client joins mid-song as soon as its download finishes.
 
+## Turbo Bass
+
+The vanilla `CanFireTurboBass()`/`IsCurrentlyPlaying()` checks read `mState.mPlaybackState`'s
+`PlaybackEnabled` bit (`EBoomBoxPlaybackStateBitfield`), which is normally set by the real
+`BeginPlaySequence`/Wwise playback path. Custom Music cancels that path (see the hook table above), so the
+bit was never set and Turbo Bass always refused with "the music is paused", even while a track was actually
+playing. `UBBPPlaybackController::ApplyPaused` (used everywhere an emitter's audio component is
+paused/resumed) now also writes this bit through `GetmState()`/`SetmState()`, and `ReleaseWave` clears it
+when an emitter's audio is torn down. `mState` isn't replicated, so this runs locally on every machine that
+plays a given Boom Box's audio, not just the server - matching how Turbo Bass is itself a local, per-player
+check on whichever Boom Box a player is currently holding.
+
 ## Volume
 
 Final volume of a Boom Box's audio is the product of four sliders, each 0–1:

@@ -50,6 +50,10 @@ struct FBBPEmitter
 
 	// True while EntryId is a live radio stream.
 	bool bLive = false;
+
+	// Last value written to the Boom Box's own (vanilla, unreplicated) "is playing" flag; see
+	// UBBPPlaybackController::ApplyPaused. Lets Turbo Bass and anything else reading it work with Custom Music.
+	bool bAppliedVanillaPlaying = false;
 };
 
 // Plays each Custom Music Boom Box's channel through that Boom Box, kept in sync with the server clock.
@@ -95,6 +99,14 @@ private:
 
 	// Stops and releases an emitter's wave.
 	void StopTrack(FBBPEmitter& Emitter);
+
+	// Pauses or resumes an emitter's audio component, and keeps the Boom Box's own (vanilla) "is playing" flag in
+	// step, since the game's own turbo bass check reads it and Custom Music never runs the code path that would
+	// normally set it.
+	void ApplyPaused(FBBPEmitter& Emitter, bool bPaused);
+
+	// Sets the Boom Box's own "is playing" flag (mState.mPlaybackState's PlaybackEnabled bit) for this machine.
+	void SetVanillaPlaybackFlag(FBBPEmitter& Emitter, bool bPlaying);
 
 	UAudioComponent* CreateAudioComponent(AFGBoomBoxPlayer* BoomBox);
 
