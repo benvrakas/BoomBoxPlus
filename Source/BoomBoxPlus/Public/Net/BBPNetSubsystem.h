@@ -141,8 +141,9 @@ public:
 	// Stops a running job unless it is queueing into a Boom Box.
 	void CancelJob(int32 JobId);
 
-	// Downloads a network track if it isn't cached yet, then makes it available in the library.
-	void EnsureDownloaded(const FBBPTrack& Track);
+	// Downloads a network track if it isn't cached yet, then makes it available in the library. bFirst puts it ahead of
+	// the other waiting downloads (for a track that is playing now).
+	void EnsureDownloaded(const FBBPTrack& Track, bool bFirst = false);
 
 	// Drops queued downloads (not the one in progress) whose track id isn't in WantedIds.
 	void SetWantedDownloads(const TSet<FString>& WantedIds);

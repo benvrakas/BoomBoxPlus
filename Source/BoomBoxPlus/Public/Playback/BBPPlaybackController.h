@@ -104,6 +104,12 @@ private:
 	// Starts downloads for the current and next few network tracks in the queue.
 	void PrefetchNetworkTracks();
 
+	// Tells the server when this machine has the current track of a loading channel ready (or can't play it).
+	void ReportLoadedTracks();
+
+	// Load generation last reported per channel.
+	TMap<TWeakObjectPtr<const ABBPMusicChannel>, int32> ReportedLoads;
+
 	// Lowers or restores the game's music depending on whether Custom Music is audible.
 	void UpdateGameMusic(float DeltaSeconds);
 

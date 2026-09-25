@@ -1122,7 +1122,7 @@ bool UBBPNetSubsystem::IsDownloadPending(const FString& TrackId) const
 	return DownloadingId == TrackId || DownloadQueue.ContainsByPredicate([&TrackId](const FBBPTrack& T) { return T.Id == TrackId; });
 }
 
-void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track)
+void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track, bool bFirst)
 {
 	if (Track.Source == EBBPTrackSource::Local || Track.IsLive() || !Track.IsValid())
 	{
@@ -1137,6 +1137,14 @@ void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track)
 		}
 		return;
 	}
+	const int32 QueuedIndex = DownloadQueue.IndexOfByPredicate([&Track](const FBBPTrack& T) { return T.Id == Track.Id; });
+	if (bFirst && QueuedIndex > 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: moving '%s' to the front of the downloads (it's playing now)"), *Track.Title);
+		DownloadQueue.RemoveAt(QueuedIndex);
+		DownloadQueue.Insert(Track, 0);
+		return;
+	}
 	if (!bToolsAvailable || IsDownloadPending(Track.Id))
 	{
 		return;
@@ -1148,8 +1156,8 @@ void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track)
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: refusing to download '%s' from unsupported host '%s'"), *Track.Title, *Host);
 		return;
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: queued download of '%s' (%s)"), *Track.Title, *Track.Id);
-	DownloadQueue.Add(Track);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: queued download of '%s' (%s)%s"), *Track.Title, *Track.Id, bFirst ? TEXT(", first") : TEXT(""));
+	DownloadQueue.Insert(Track, bFirst ? 0 : DownloadQueue.Num());
 	StartNextDownload();
 }
 

@@ -29,6 +29,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
+	// Tells the server this player has Channel's current track ready (or can't play it), ending its load wait for this player.
+	static void ReportTrackLoaded(ABBPMusicChannel* Channel, int32 LoadGeneration);
+
 	// Adds a track right after BoomBox's current one and starts playing it.
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestPlayTrackNow(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track);

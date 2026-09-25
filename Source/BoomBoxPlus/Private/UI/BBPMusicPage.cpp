@@ -837,6 +837,7 @@ void UBBPMusicPage::RefreshTransport()
 	{
 		PositionText->SetText(!bHasCurrent ? FText::GetEmpty()
 			: bLive ? LOCTEXT("LivePosition", "LIVE")
+			: Channel->GetPlaybackState().bLoading ? LOCTEXT("LoadingPosition", "Loading...")
 			: FText::FromString(FString::Printf(TEXT("%s / %s"), *UBBPBlueprintLibrary::FormatDuration(Channel->GetPlaybackPosition()), *UBBPBlueprintLibrary::FormatDuration(Current.Track.Duration))));
 	}
 	if (SeekSlider)

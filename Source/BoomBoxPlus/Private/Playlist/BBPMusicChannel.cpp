@@ -2,6 +2,8 @@
 #include "BoomBoxPlus.h"
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerState.h"
+#include "Playlist/BBPPlaylistSubsystem.h"
 #include "Net/UnrealNetwork.h"
 
 // Returns early (with the given value) and logs when a server-only function is called on a client.
@@ -17,6 +19,12 @@ namespace
 	constexpr int32 MaxQueueLength = 1000;
 	constexpr float PreviousRestartThreshold = 3.f;
 	constexpr double SkipDebounceSeconds = 0.25;
+
+	// With more than one player, a track waits at most this long for everyone to load it.
+	constexpr double MultiplayerLoadGraceSeconds = 10.0;
+
+	// A load wait ends if no Boom Box has played the channel for this long (nobody to wait for).
+	constexpr double NobodyListeningGraceSeconds = 3.0;
 }
 
 ABBPMusicChannel::ABBPMusicChannel()
@@ -45,6 +53,7 @@ void ABBPMusicChannel::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	UpdateLoading();
 	FBBPQueueEntry Current;
 	if (IsPlaying() && GetCurrentEntry(Current))
 	{
@@ -85,7 +94,7 @@ float ABBPMusicChannel::GetPlaybackPosition() const
 	{
 		return 0.f;
 	}
-	if (PlaybackState.bPaused)
+	if (PlaybackState.bPaused || PlaybackState.bLoading)
 	{
 		return PlaybackState.PausedPosition;
 	}
@@ -318,7 +327,7 @@ void ABBPMusicChannel::SeekTo(float PositionSeconds)
 		return;
 	}
 	PositionSeconds = FMath::Max(0.f, PositionSeconds);
-	if (PlaybackState.bPaused)
+	if (PlaybackState.bPaused || PlaybackState.bLoading)
 	{
 		PlaybackState.PausedPosition = PositionSeconds;
 	}
@@ -480,11 +489,101 @@ void ABBPMusicChannel::StartEntry(int32 EntryId, float StartPosition)
 	PlaybackState.bPaused = false;
 	PlaybackState.PausedPosition = StartPosition;
 	PlaybackState.TrackStartServerTime = GetServerTime() - StartPosition;
+	// Radio is live: there's nothing to load ahead, and waiting would only make players hear it later.
+	PlaybackState.bLoading = !Queue[Index].Track.IsLive();
+	if (PlaybackState.bLoading)
+	{
+		++PlaybackState.LoadGeneration;
+		LoadedPlayers.Reset();
+		LoadStartTime = GetServerTime();
+		NobodyListeningSince = -1.0;
+	}
 	ShufflePlayed.Add(EntryId);
 	bWarnedMissingDuration = false;
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: now playing '%s' - '%s' (entry %d, %.1f s)"),
 		LinkCode, *Queue[Index].Track.Artist, *Queue[Index].Track.Title, EntryId, Queue[Index].Track.Duration);
 	MarkPlaybackChanged();
+}
+
+void ABBPMusicChannel::ReportLoaded(const APlayerState* Player, int32 LoadGeneration)
+{
+	BBP_REQUIRE_AUTHORITY()
+	if (!Player || !PlaybackState.bLoading || LoadGeneration != PlaybackState.LoadGeneration)
+	{
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Channel %04d: stale load report from %s (generation %d, current %d%s)"), LinkCode,
+			Player ? *Player->GetPlayerName() : TEXT("?"), LoadGeneration, PlaybackState.LoadGeneration, PlaybackState.bLoading ? TEXT("") : TEXT(", not loading"));
+		return;
+	}
+	LoadedPlayers.Add(Player);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: %s has the track loaded (%.1f s after it started loading)"), LinkCode,
+		*Player->GetPlayerName(), GetServerTime() - LoadStartTime);
+	UpdateLoading();
+}
+
+void ABBPMusicChannel::UpdateLoading()
+{
+	if (!PlaybackState.bLoading)
+	{
+		return;
+	}
+	const double Now = GetServerTime();
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+	int32 NumPlayers = 0;
+	int32 NumLoaded = 0;
+	if (GameState)
+	{
+		for (const APlayerState* Player : GameState->PlayerArray)
+		{
+			if (Player && !Player->IsInactive())
+			{
+				++NumPlayers;
+				NumLoaded += LoadedPlayers.Contains(Player) ? 1 : 0;
+			}
+		}
+	}
+	if (IsHeard())
+	{
+		NobodyListeningSince = -1.0;
+	}
+	else if (NobodyListeningSince < 0.0)
+	{
+		NobodyListeningSince = Now;
+	}
+
+	// A single player always waits for their own download; with more, one slow player can't hold everyone for long.
+	const TCHAR* Reason = nullptr;
+	if (NumLoaded >= NumPlayers)
+	{
+		Reason = TEXT("everyone has it loaded");
+	}
+	else if (NobodyListeningSince >= 0.0 && Now - NobodyListeningSince >= NobodyListeningGraceSeconds)
+	{
+		Reason = TEXT("no Boom Box is playing this channel");
+	}
+	else if (NumPlayers > 1 && Now - LoadStartTime >= MultiplayerLoadGraceSeconds)
+	{
+		Reason = TEXT("the grace period ran out");
+	}
+	if (!Reason)
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: starting the track after %.1f s of loading; %s (%d of %d players loaded)"),
+		LinkCode, Now - LoadStartTime, Reason, NumLoaded, NumPlayers);
+	PlaybackState.bLoading = false;
+	PlaybackState.TrackStartServerTime = Now - PlaybackState.PausedPosition;
+	MarkPlaybackChanged();
+}
+
+bool ABBPMusicChannel::IsHeard() const
+{
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	if (!Playlist)
+	{
+		return false;
+	}
+	return Playlist->GetActiveBoomBoxes().ContainsByPredicate([this](const FBBPActiveBoomBox& Active) { return Members.Contains(Active.BoomBox); });
 }
 
 void ABBPMusicChannel::StopPlayback()
@@ -496,6 +595,7 @@ void ABBPMusicChannel::StopPlayback()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: stopped"), LinkCode);
 	PlaybackState.CurrentEntryId = INDEX_NONE;
 	PlaybackState.bPaused = true;
+	PlaybackState.bLoading = false;
 	PlaybackState.PausedPosition = 0.f;
 	MarkPlaybackChanged();
 }

@@ -19,6 +19,11 @@ public:
 	void Server_AddTrack(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 	bool Server_AddTrack_Validate(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track, bool bFront);
 
+	// Tells the server this player has Channel's current track ready (or can't play it) for its load wait.
+	// Not subject to HostOnlyControl: it's a status report, not a request.
+	UFUNCTION(Server, Reliable)
+	void Server_ReportLoaded(ABBPMusicChannel* Channel, int32 LoadGeneration);
+
 	// Adds a track right after the current one and starts playing it (used to tune in to a radio station).
 	UFUNCTION(Server, Reliable, WithValidation = Server_PlayTrackNow_Validate)
 	void Server_PlayTrackNow(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track);

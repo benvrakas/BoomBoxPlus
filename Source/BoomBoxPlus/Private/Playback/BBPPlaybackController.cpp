@@ -3,6 +3,7 @@
 #include "Audio/BBPStreamingSoundWave.h"
 #include "AudioDevice.h"
 #include "BoomBoxPlus.h"
+#include "BBPBlueprintLibrary.h"
 #include "BBPConfig.h"
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
@@ -110,6 +111,7 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	{
 		UpdateEmitter(Emitter, DeltaSeconds);
 	}
+	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);
 	UpdateVanillaPages(DeltaSeconds);
 }
@@ -222,6 +224,59 @@ const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireS
 		}
 	}
 	return Nearest;
+}
+
+void UBBPPlaybackController::ReportLoadedTracks()
+{
+	const UWorld* World = Playlist->GetWorld();
+	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	const UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	const UBBPLibrarySubsystem* Library = GameInstance ? GameInstance->GetSubsystem<UBBPLibrarySubsystem>() : nullptr;
+	for (auto It = ReportedLoads.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		ABBPMusicChannel* Channel = Emitter.Channel.Get();
+		if (!Channel)
+		{
+			continue;
+		}
+		const FBBPPlaybackState& State = Channel->GetPlaybackState();
+		const int32* Reported = ReportedLoads.Find(Channel);
+		if (!State.bLoading || Emitter.EntryId != State.CurrentEntryId || (Reported && *Reported == State.LoadGeneration))
+		{
+			continue;
+		}
+		// Ready: the stream is running (paused at the start). Also "ready" when this machine can't play the track at all
+		// (download failed, file not in the library, stream failed), so nobody waits for audio that will never come.
+		const TCHAR* Status = nullptr;
+		if (Emitter.Wave)
+		{
+			Status = Emitter.Wave->HasFailed() ? TEXT("can't decode it") : TEXT("loaded");
+		}
+		else if (Emitter.bWaitingForFile)
+		{
+			FBBPQueueEntry Entry;
+			const bool bGaveUp = Channel->GetCurrentEntry(Entry) && Net && Library
+				&& !Net->IsDownloadPending(Entry.Track.Id) && !Library->HasTrack(Entry.Track.Id);
+			Status = bGaveUp ? TEXT("can't get it") : nullptr;
+		}
+		else if (Emitter.bReportedProblem)
+		{
+			Status = TEXT("can't play it");
+		}
+		if (Status)
+		{
+			ReportedLoads.Add(Channel, State.LoadGeneration);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: reporting entry %d of channel %04d as ready here (%s)"), State.CurrentEntryId, Channel->GetLinkCode(), Status);
+			UBBPBlueprintLibrary::ReportTrackLoaded(Channel, State.LoadGeneration);
+		}
+	}
 }
 
 void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
@@ -415,7 +470,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		Emitter.AppliedRevision = State.Revision;
 		if (Emitter.Component && Emitter.Wave)
 		{
-			Emitter.Component->SetPaused(State.bPaused);
+			Emitter.Component->SetPaused(State.bPaused || State.bLoading);
 		}
 		return;
 	}
@@ -462,7 +517,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 			Emitter.AppliedRevision = State.Revision;
 			if (Emitter.Component && Emitter.Wave)
 			{
-				Emitter.Component->SetPaused(State.bPaused);
+				Emitter.Component->SetPaused(State.bPaused || State.bLoading);
 			}
 		}
 		return;
@@ -486,7 +541,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	if (Emitter.AppliedRevision != State.Revision)
 	{
 		Emitter.AppliedRevision = State.Revision;
-		Emitter.Component->SetPaused(State.bPaused);
+		Emitter.Component->SetPaused(State.bPaused || State.bLoading);
 		// Only seek when the change moved the position (seek/restart), not for shuffle or repeat changes.
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
 		const bool bNeedsSeek = FMath::Abs(Actual - Expected) > DriftTolerance;
@@ -500,7 +555,7 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		return;
 	}
 
-	if (State.bPaused)
+	if (State.bPaused || State.bLoading)
 	{
 		return;
 	}
@@ -566,7 +621,7 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 		{
 			if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
 			{
-				Net->EnsureDownloaded(Entry.Track);
+				Net->EnsureDownloaded(Entry.Track, true);
 			}
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: '%s' not downloaded yet; silent until it is"), *Entry.Track.Title);
 		}

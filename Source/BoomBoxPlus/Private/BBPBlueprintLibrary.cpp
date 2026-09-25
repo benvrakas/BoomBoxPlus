@@ -41,6 +41,14 @@ void UBBPBlueprintLibrary::RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBP
 	}
 }
 
+void UBBPBlueprintLibrary::ReportTrackLoaded(ABBPMusicChannel* Channel, int32 LoadGeneration)
+{
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(Channel, TEXT("ReportLoaded")))
+	{
+		RCO->Server_ReportLoaded(Channel, LoadGeneration);
+	}
+}
+
 void UBBPBlueprintLibrary::RequestPlayTrackNow(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track)
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("PlayTrackNow")))

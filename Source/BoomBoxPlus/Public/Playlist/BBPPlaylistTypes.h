@@ -79,6 +79,14 @@ struct BOOMBOXPLUS_API FBBPPlaybackState
 	// Increments on every change so clients can tell a restart of the same track from no change.
 	UPROPERTY()
 	int32 Revision = 0;
+
+	// True while the current track waits at PausedPosition for players to load it (see ABBPMusicChannel::UpdateLoading).
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	bool bLoading = false;
+
+	// Increments every time a track starts loading, so a player's "loaded" report can't count for an earlier start.
+	UPROPERTY()
+	int32 LoadGeneration = 0;
 };
 
 // A Boom Box's request to link with another; completes when the other enters this one's code before it expires.

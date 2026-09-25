@@ -17,6 +17,8 @@ or **Add to Queue**.
 
 **Changes since 1.0.0**
 
+- **Songs no longer start in silence.** Each song now waits until it's loaded before it starts. Alone, it waits
+  for you; with other players, it waits until everyone has it (at most 10 seconds), then everyone starts it together.
 - Search results have a **Play Now** button, next to Play Next and Add.
 - The demo track is now copied into your music folder once, so you can delete it.
 - Moving songs in the queue uses a small stacked ^ / v control instead of separate Up and Down buttons.

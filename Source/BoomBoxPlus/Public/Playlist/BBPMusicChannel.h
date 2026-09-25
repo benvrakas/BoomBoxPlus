@@ -6,6 +6,7 @@
 #include "BBPMusicChannel.generated.h"
 
 class AFGBoomBoxPlayer;
+class APlayerState;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FBBPOnChannelChanged);
 
@@ -49,6 +50,10 @@ public:
 
 	// Server only. Starts playing a specific queue entry from the beginning.
 	bool PlayEntry(int32 EntryId);
+
+	// Server only. Records that Player has the current track ready to play (or can't play it at all) for load
+	// generation LoadGeneration; the track starts once every player has reported (see UpdateLoading).
+	void ReportLoaded(const APlayerState* Player, int32 LoadGeneration);
 
 	// Server only. Jumps to a position in the current track.
 	void SeekTo(float PositionSeconds);
@@ -128,8 +133,22 @@ private:
 	UFUNCTION()
 	void OnRep_Members();
 
-	// Server only. Makes EntryId the current track, starting at StartPosition.
+	// Server only. Makes EntryId the current track, starting at StartPosition once players have loaded it.
 	void StartEntry(int32 EntryId, float StartPosition);
+
+	// Server only. Ends the load wait when every player has the track, when no Boom Box plays this channel, or (with
+	// more than one player) after the grace period, and starts the clock from PausedPosition.
+	void UpdateLoading();
+
+	// Server only. Returns true if a Boom Box with Custom Music loaded plays this channel.
+	bool IsHeard() const;
+
+	// Server only. Players who reported the current load generation.
+	TSet<TWeakObjectPtr<const APlayerState>> LoadedPlayers;
+
+	// Server only. When the current load wait began, and since when no Boom Box has been playing this channel (-1: one is).
+	double LoadStartTime = 0.0;
+	double NobodyListeningSince = -1.0;
 
 	// Server only. Stops playback and clears the current entry.
 	void StopPlayback();

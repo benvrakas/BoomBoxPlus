@@ -84,6 +84,17 @@ namespace
 	}
 }
 
+void UBBPRemoteCallObject::Server_ReportLoaded_Implementation(ABBPMusicChannel* Channel, int32 LoadGeneration)
+{
+	const AFGPlayerController* Controller = GetOwnerPlayerController();
+	if (!Channel || !Controller)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: ReportLoaded ignored (channel %s, controller %s)"), *GetNameSafe(Channel), *GetNameSafe(Controller));
+		return;
+	}
+	Channel->ReportLoaded(Controller->PlayerState, LoadGeneration);
+}
+
 void UBBPRemoteCallObject::Server_PlayTrackNow_Implementation(AFGBoomBoxPlayer* BoomBox, const FBBPTrack& Track)
 {
 	if (ABBPMusicChannel* Channel = GetChannelForRequest(BoomBox, TEXT("PlayTrackNow")))

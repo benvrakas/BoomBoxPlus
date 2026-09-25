@@ -120,6 +120,27 @@ replays the song when it ends, but Next still moves on.
 
 Adding to an empty/stopped queue starts playback immediately. "Play Next" inserts after the current entry.
 
+## Waiting for players to load a track
+
+Every time a track starts (`StartEntry`, except radio), the channel sets `PlaybackState.bLoading`, bumps
+`LoadGeneration` and holds the position at `PausedPosition`: `GetPlaybackPosition` doesn't advance, so nothing
+auto-advances and everyone who starts the stream starts it at the same place. Each machine starts the stream
+**paused** and, once it is running (or once it's clear this machine can't play the track: download failed, file not
+in the library, stream failed), sends `Server_ReportLoaded(Channel, LoadGeneration)`
+(`UBBPPlaybackController::ReportLoadedTracks`). The server (`ABBPMusicChannel::UpdateLoading`) ends the wait and
+starts the clock from `PausedPosition` when:
+
+- every player in `GameState->PlayerArray` has reported the current generation (a lone player always waits for
+  themselves, however long the download takes);
+- or no Boom Box with Custom Music loaded has played the channel for 3 s (nobody to wait for);
+- or there is more than one player and 10 s have passed, so one slow download can't hold everyone. That player
+  joins mid-track once their download finishes, as before.
+
+This replaces the old behaviour, where the clock started immediately and anyone still downloading joined a few
+seconds into the song (which sounded like silence at the start of every new song). The generation number keeps a
+late report for an earlier start (for example the same song replayed by Repeat One) from counting. A track that is
+playing now also moves to the front of the download queue (`EnsureDownloaded(Track, true)`).
+
 ## Missing tracks
 
 A client without the file stays silent for that track but keeps following the timeline. Network tracks are
