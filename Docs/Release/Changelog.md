@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 — Linking fixes
+
+- **Linking now switches every Boom Box in the group onto Custom Music automatically.** Previously, a Boom
+  Box you linked in kept playing (or sitting silent on) whatever tape it already had until you opened its
+  own page and pressed something. This also now applies generally: any Boom Box that ends up sharing a
+  channel that's already playing (linking, being reunited after a save reload, or having had its tape
+  changed away mid-song) gets Custom Music loaded automatically.
+- **Linking no longer restarts a song that was already playing.** If the Boom Box you linked to had nothing
+  playing yet, it used to pick up the other side's song from 0:00 instead of from where it already was.
+- Music volume is no longer a separate setting in **Mods → BoomBoxPlus**; it's the same value as "My Volume"
+  on the Custom Music page, which is the easier place to reach it from.
+- Smaller download: dedicated server packages no longer carry the bundled ffmpeg/yt-dlp, which they never
+  use (only players' own games download and play music; the server just relays the queue).
+
 ## 1.1.0 — Internet radio
 
 **New: Radio.** The Custom Music page has a **Radio** box. Paste a live stream address and press **Play Now**
