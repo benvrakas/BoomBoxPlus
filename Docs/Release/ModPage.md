@@ -20,7 +20,7 @@ everyone within earshot hears the same song at the same moment.
 
 Inspired by the PEAK mod sPEAKer.
 
-![The Custom Music page: now playing, search results, the queue and internet radio](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+![The Custom Music page: now playing, search results and the queue](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
 
 ![Search results with Play Now, Play Next and Add](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/search-results.png)
 
@@ -39,8 +39,8 @@ Inspired by the PEAK mod sPEAKer.
   whole list.
 - **Internet radio.** Paste a station's stream address into the search box and press Enter, same as any
   other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
-  streams**. The station's name is filled in automatically, the song the station announces shows under Now
-  Playing, and your last 4 stations are one click away underneath the search box.
+  streams**. The station's name is filled in automatically, the song the station announces becomes the title
+  (and updates as the station moves on), and your last 4 stations are one click away underneath the search box.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
@@ -54,13 +54,16 @@ Inspired by the PEAK mod sPEAKer.
   players enter each other's 4-digit link code within 3 minutes; both queues are merged, alternating songs
   from each. Queues, the song that was playing and groups are kept in your save. A group stays paired across restarts — press **Leave Group** on any Boom Box to take
   just that one out again.
+- **Always know what's playing.** The Custom Music page, the Boom Box's own screen and a short notification
+  at the bottom of the screen all show the song, and under it the artist and where it's from, e.g.
+  "Koven, YouTube: Monstercat Uncaged". **Copy Link** copies the song's YouTube or SoundCloud page (or the
+  station's stream address) to share it.
 - **Synced lyrics.** The current line appears at the bottom of the screen while you can hear the music
   (from LRCLIB, or a `.lrc` file next to your song).
-- **Now playing card.** A short notification shows each new song.
 - **Game music steps aside.** The game's soundtrack fades out while Custom Music plays and fades back in
   when it stops.
-- **Looks like Satisfactory.** Built from the game's own buttons, fonts and colours. The vanilla Boom Box
-  screen shows the current song and progress too.
+- **Looks like Satisfactory.** Built from the game's own buttons, fonts and colours. The Boom Box's own
+  screen follows along too, with the song, its source and a working progress bar.
 
 ### Getting started
 
@@ -126,8 +129,7 @@ itself, next to the transport controls, rather than a setting here.
 | Setting | Default | What it does |
 |---|---|---|
 | Show lyrics | On | The lyric line at the bottom of the screen. Turning it off also stops lyric lookups. |
-
-| Show "now playing" | On | The notification when the song changes. |
+| Show 'now playing' | On | The notification at the bottom of the screen when a new song starts, or a radio station announces one. |
 | Only the host controls music | Off | On a hosted game, only the host can change queues and playback. |
 | Downloaded songs to keep | 50 | How many YouTube/SoundCloud downloads stay on disk. The oldest unused ones are deleted first. |
 | Game music level while playing | 0 | How loud the game's music is while custom music is playing. (0 = silent, 1 = unchanged). |
@@ -164,6 +166,9 @@ Lines starting with `LogBoomBoxPlus` explain most problems.
 
 ### Credits
 
+- Mod icon: rendered from ["Satisfactory Boombox"](https://sketchfab.com/3d-models/satisfactory-boombox-f1d2455b48a34df6a9d2536f056e4fb2)
+  by Laxity ([JME.3D](https://sketchfab.com/JME.3D)), licensed under
+  [Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/).
 - Demo track: "Monkeys Spinning Monkeys" by Kevin MacLeod ([incompetech.com](https://incompetech.com)),
   licensed under [Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/).
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense) and [FFmpeg](https://ffmpeg.org) 8.1.3
@@ -190,9 +195,9 @@ BoomBoxPlus connects to these services. Multiplayer sync between players uses th
   for Spotify's reply. Your sign-in is stored locally in
   `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\SpotifyLogin.json`.
 - **Internet radio stations**: when a radio station is playing on a Boom Box you can hear, your game
-  connects to that station's stream address, including stations other players added. When you press
-  pressing Enter on a stream address, your game briefly connects to check the stream and read its name. Your recent stations are stored locally in
-  `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
+  connects to that station's stream address, including stations other players added. When you press Enter
+  on a stream address, your game briefly connects to check the stream and read its name. Your recent
+  stations are stored locally in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
 - **YouTube live streams** (through the bundled yt-dlp): looks up the live stream's address when one plays
   near you, then streams it from YouTube like a radio station.
 - **LRCLIB** (lrclib.net): looks up synced lyrics for each song that plays. Sends the song's title, artist
@@ -210,6 +215,6 @@ This mod was built with the help of an AI coding assistant (Anthropic's Claude):
   in game by the author.
 - **Mod page text:** this description was drafted by the AI and edited by the author.
 - **Developer documentation** in the source repository was written by the AI.
-- **Art and audio:** no AI-generated assets. The UI uses the game's own widgets, fonts and icons. The demo
-  track is by Kevin MacLeod.
+- **Art and audio:** no AI-generated assets. The UI uses the game's own widgets, fonts and icons. The mod
+  icon is a render of Laxity's Boom Box model and the demo track is by Kevin MacLeod (see Credits).
 - **In game:** the mod doesn't use or give access to generative AI.
