@@ -31,7 +31,7 @@ found while the rest are still being matched.
 
 ![A Spotify playlist being matched](Docs/Images/spotify-matching.png)
 
-![Matches queueing while matching continues](Docs/Images/spotify-queueing.png)
+![The whole playlist matched and in the queue, its first song already playing](Docs/Images/spotify-queueing.png)
 
 The current lyric line while a Boom Box plays nearby, placed or carried.
 

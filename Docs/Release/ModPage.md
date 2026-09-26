@@ -115,9 +115,9 @@ To read whole playlists you own (up to 1000 songs):
 Pasting a playlist link shows the matches as they're found; **Add all** starts playing right away and
 keeps adding the rest in order:
 
-![A 357-song Spotify playlist being matched on YouTube, with Add all](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-matching.png)
+![A Spotify playlist being matched on YouTube, with Add all](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-matching.png)
 
-![Matches queueing while the rest of the playlist is still being matched](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-queueing.png)
+![The whole playlist matched and in the queue, its first song already playing](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/spotify-queueing.png)
 
 Use the Spotify account that created the app. The mod only asks for permission to read playlists. The
 Client Secret is only ever sent to Spotify. Spotify albums work with just the Client ID and Secret, with
