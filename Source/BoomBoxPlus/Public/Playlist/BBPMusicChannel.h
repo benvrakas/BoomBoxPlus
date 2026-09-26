@@ -157,6 +157,9 @@ private:
 	double LoadStartTime = 0.0;
 	double NobodyListeningSince = -1.0;
 
+	// Server only. When more than half the players first had the current track loaded (-1: not yet).
+	double MajorityLoadedSince = -1.0;
+
 	// Server only. Stops playback and clears the current entry.
 	void StopPlayback();
 

@@ -11,6 +11,10 @@
   in another window and picks up at the right spot when you come back.
 - **Type your volume.** Click the percentage next to the My Volume slider, type a number from 0 to 200 and press
   Enter.
+- **Fairer start in multiplayer.** A new song still starts the moment everyone has it loaded. If some players are
+  slower, it now waits until most players have it, then gives the rest 10 more seconds (it used to start 10 seconds
+  after the song began loading, even if hardly anyone had it yet). A download that hangs can hold a song up for at
+  most 2 minutes.
 
 **Good to know**
 

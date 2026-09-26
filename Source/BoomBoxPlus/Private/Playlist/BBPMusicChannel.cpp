@@ -20,8 +20,11 @@ namespace
 	constexpr float PreviousRestartThreshold = 3.f;
 	constexpr double SkipDebounceSeconds = 0.25;
 
-	// With more than one player, a track waits at most this long for everyone to load it.
-	constexpr double MultiplayerLoadGraceSeconds = 10.0;
+	// Once more than half the players have a track loaded, the rest get this long before it starts without them.
+	constexpr double MajorityLoadGraceSeconds = 10.0;
+
+	// With more than one player, a track never waits longer than this in total (a hung download can't hold everyone).
+	constexpr double MultiplayerMaxLoadSeconds = 120.0;
 
 	// A load wait ends if no Boom Box has played the channel for this long (nobody to wait for).
 	constexpr double NobodyListeningGraceSeconds = 3.0;
@@ -551,6 +554,7 @@ void ABBPMusicChannel::StartEntry(int32 EntryId, float StartPosition)
 		LoadedPlayers.Reset();
 		LoadStartTime = GetServerTime();
 		NobodyListeningSince = -1.0;
+		MajorityLoadedSince = -1.0;
 	}
 	ShufflePlayed.Add(EntryId);
 	bWarnedMissingDuration = false;
@@ -605,7 +609,15 @@ void ABBPMusicChannel::UpdateLoading()
 		NobodyListeningSince = Now;
 	}
 
-	// A single player always waits for their own download; with more, one slow player can't hold everyone for long.
+	// Everyone ready starts it at once. Otherwise the stragglers' countdown only begins once most players are ready,
+	// so a track isn't started for a minority just because everyone's downloads are slow. A single player always
+	// waits for their own download.
+	if (MajorityLoadedSince < 0.0 && NumLoaded * 2 > NumPlayers && NumLoaded < NumPlayers)
+	{
+		MajorityLoadedSince = Now;
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: %d of %d players have the track loaded; starting it in %.0f s unless the rest are ready sooner"),
+			LinkCode, NumLoaded, NumPlayers, MajorityLoadGraceSeconds);
+	}
 	const TCHAR* Reason = nullptr;
 	if (NumLoaded >= NumPlayers)
 	{
@@ -615,9 +627,13 @@ void ABBPMusicChannel::UpdateLoading()
 	{
 		Reason = TEXT("no Boom Box is playing this channel");
 	}
-	else if (NumPlayers > 1 && Now - LoadStartTime >= MultiplayerLoadGraceSeconds)
+	else if (MajorityLoadedSince >= 0.0 && Now - MajorityLoadedSince >= MajorityLoadGraceSeconds)
 	{
-		Reason = TEXT("the grace period ran out");
+		Reason = TEXT("most players have had it loaded for the grace period");
+	}
+	else if (NumPlayers > 1 && Now - LoadStartTime >= MultiplayerMaxLoadSeconds)
+	{
+		Reason = TEXT("the longest load wait ran out");
 	}
 	if (!Reason)
 	{

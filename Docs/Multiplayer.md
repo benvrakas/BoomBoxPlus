@@ -154,11 +154,17 @@ in the library, stream failed), sends `Server_ReportLoaded(Channel, LoadGenerati
 (`UBBPPlaybackController::ReportLoadedTracks`). The server (`ABBPMusicChannel::UpdateLoading`) ends the wait and
 starts the clock from `PausedPosition` when:
 
-- every player in `GameState->PlayerArray` has reported the current generation (a lone player always waits for
-  themselves, however long the download takes);
+- every player in `GameState->PlayerArray` has reported the current generation: it starts at once (a lone player
+  always waits for themselves, however long the download takes);
 - or no Boom Box with Custom Music loaded has played the channel for 3 s (nobody to wait for);
-- or there is more than one player and 10 s have passed, so one slow download can't hold everyone. That player
-  joins mid-track once their download finishes, as before.
+- or 10 s have passed since more than half the players reported (`MajorityLoadedSince`, 1.3.0), so a few slow
+  downloads can't hold everyone. Before 1.3.0 the 10 s counted from the track's start, which with everyone's
+  downloads being slow could start a track almost nobody had yet. With 2 players a majority is both of them, so
+  this rule never fires there;
+- or there is more than one player and 2 minutes have passed since the track started (`MultiplayerMaxLoadSeconds`),
+  a backstop so a download that hangs (rather than failing, which reports as ready) can't hold everyone forever.
+
+Players still loading join mid-track once their download finishes.
 
 This replaces the old behaviour, where the clock started immediately and anyone still downloading joined a few
 seconds into the song (which sounded like silence at the start of every new song). The generation number keeps a
