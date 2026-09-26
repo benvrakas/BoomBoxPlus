@@ -214,7 +214,11 @@ from sharing a row with Radio, is back to a plain full-width panel.
 
 The Now Playing panel has three text lines: the title ("Artist - Title"; for radio, the song the station
 announces, or the station name until it announces one), the source ("Source: Radio: <station>", see
-`GetSourceName` below), and a line of its own for synced lyrics. While a live entry plays, the position text shows
+`GetSourceName` below) with a **Copy Link** button, and a line of its own for synced lyrics. Copy Link puts the
+track's `SourceRef` on the clipboard (`FPlatformApplicationMisc::ClipboardCopy`, module `ApplicationCore`): the
+YouTube/SoundCloud page or the station's stream address. It reads "Copied!" for 2 s and is hidden for local
+files. Since 1.2.6, `SourceRef` is yt-dlp's `webpage_url` when it gives one: SoundCloud's `url` is an
+api.soundcloud.com address that can't be opened in a browser. While a live entry plays, the position text shows
 **LIVE**, the seek bar is disabled (duration 0), and the lyric line shows "Connecting to the station..." while the
 prebuffer fills, or a note that resuming reconnects. See Radio.md.
 

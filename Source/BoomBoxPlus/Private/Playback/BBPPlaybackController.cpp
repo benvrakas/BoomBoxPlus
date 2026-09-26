@@ -653,7 +653,7 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 	{
 		if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
 		{
-			Net->MarkPlayed(Entry.Track.Id);
+			Net->MarkPlayed(Entry.Track);
 		}
 	}
 

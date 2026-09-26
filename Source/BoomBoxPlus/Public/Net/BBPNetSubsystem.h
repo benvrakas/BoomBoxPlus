@@ -148,7 +148,7 @@ public:
 	void EnsureDownloaded(const FBBPTrack& Track, bool bFirst = false);
 
 	// Records that a downloaded track just started playing, so the cache deletes ones played longer ago first.
-	void MarkPlayed(const FString& TrackId);
+	void MarkPlayed(const FBBPTrack& Track);
 
 	// Drops queued downloads (not the one in progress) whose track id isn't in WantedIds.
 	void SetWantedDownloads(const TSet<FString>& WantedIds);

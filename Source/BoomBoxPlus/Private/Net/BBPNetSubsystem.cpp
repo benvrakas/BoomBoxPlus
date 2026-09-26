@@ -100,7 +100,12 @@ namespace
 		FString Id, Title, Artist, Url, Extractor;
 		Json->TryGetStringField(TEXT("id"), Id);
 		Json->TryGetStringField(TEXT("title"), Title);
-		Json->TryGetStringField(TEXT("url"), Url);
+		// The page link, which players can open and copy; SoundCloud's "url" is an api.soundcloud.com address.
+		Json->TryGetStringField(TEXT("webpage_url"), Url);
+		if (Url.IsEmpty())
+		{
+			Json->TryGetStringField(TEXT("url"), Url);
+		}
 		if (!Json->TryGetStringField(TEXT("ie_key"), Extractor))
 		{
 			Json->TryGetStringField(TEXT("extractor_key"), Extractor);
@@ -111,10 +116,6 @@ namespace
 		}
 		double Duration = 0.0;
 		Json->TryGetNumberField(TEXT("duration"), Duration);
-		if (Url.IsEmpty())
-		{
-			Json->TryGetStringField(TEXT("webpage_url"), Url);
-		}
 		if (Id.IsEmpty() || Url.IsEmpty())
 		{
 			return false;
@@ -1218,11 +1219,17 @@ void UBBPNetSubsystem::FinishDownload(const FBBPTrack& Track, const FString& Fil
 	StartNextDownload();
 }
 
-void UBBPNetSubsystem::MarkPlayed(const FString& TrackId)
+void UBBPNetSubsystem::MarkPlayed(const FBBPTrack& Track)
 {
-	if (FBBPNetCacheEntry* Cached = Cache.Entries.FindByPredicate([&TrackId](const FBBPNetCacheEntry& E) { return E.Track.Id == TrackId; }))
+	if (FBBPNetCacheEntry* Cached = Cache.Entries.FindByPredicate([&Track](const FBBPNetCacheEntry& E) { return E.Track.Id == Track.Id; }))
 	{
 		Cached->LastUsedTicks = FDateTime::UtcNow().GetTicks();
+		// Downloads from before 1.2.6 were saved without their uploader or page link; fill them in (used from the next session).
+		if (Cached->Track.Uploader.IsEmpty() && !Track.Uploader.IsEmpty())
+		{
+			Cached->Track.Uploader = Track.Uploader;
+			Cached->Track.SourceRef = Track.SourceRef;
+		}
 		SaveCache();
 	}
 }

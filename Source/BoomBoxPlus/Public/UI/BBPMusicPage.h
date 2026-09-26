@@ -86,6 +86,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> SourceText;
 
+	// Copies the playing track's page or stream link to the clipboard; hidden for local files.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> CopyLinkButton;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> PositionText;
 
@@ -253,6 +257,13 @@ private:
 
 	UFUNCTION()
 	void HandleClearQueue();
+
+	UFUNCTION()
+	void HandleCopyLink();
+
+	// When the link was last copied, so the button reads "Copied!" for LinkCopiedSeconds; -1 if never.
+	double LinkCopiedTime = -1.0;
+	static constexpr double LinkCopiedSeconds = 2.0;
 
 	UFUNCTION()
 	void HandleOpenFolder();

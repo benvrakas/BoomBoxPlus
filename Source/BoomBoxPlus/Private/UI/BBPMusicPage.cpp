@@ -20,6 +20,7 @@
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
+#include "HAL/PlatformApplicationMisc.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
 #include "Net/BBPRadio.h"
@@ -116,6 +117,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (ShuffleButton) ShuffleButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleShuffle);
 	if (RepeatButton) RepeatButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRepeat);
 	if (ClearQueueButton) ClearQueueButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleClearQueue);
+	if (CopyLinkButton) CopyLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleCopyLink);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
 	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowPlayerPage);
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
@@ -217,9 +219,12 @@ void UBBPMusicPage::BuildDefaultLayout()
 	NowPlayingText = MakeText(WidgetTree, 18, TextColor, FText::GetEmpty(), EFontWeight::Bold);
 	Truncate(NowPlayingText);
 	NowPlaying->AddChildToVerticalBox(NowPlayingText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	UHorizontalBox* SourceRow = AddRow(NowPlaying, 2.f);
 	SourceText = MakeText(WidgetTree, 12, DimTextColor);
 	Truncate(SourceText);
-	NowPlaying->AddChildToVerticalBox(SourceText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	AddToRow(SourceRow, SourceText, true, 10.f);
+	CopyLinkButton = MakeButton(WidgetTree, LOCTEXT("CopyLink", "Copy Link"), true);
+	AddToRow(SourceRow, CopyLinkButton, false, 0.f);
 	LyricText = MakeText(WidgetTree, 12, AccentColor);
 	NowPlaying->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
@@ -845,6 +850,13 @@ void UBBPMusicPage::RefreshTransport()
 		SourceText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(TEXT("Source: ") + UBBPBlueprintLibrary::GetSourceName(Current.Track)) : FText::GetEmpty());
 		BBPWidgetStyle::SetShown(SourceText, bHasCurrent);
 	}
+	if (CopyLinkButton)
+	{
+		// Local files have no link to share.
+		BBPWidgetStyle::SetShown(CopyLinkButton, bHasCurrent && !Current.Track.SourceRef.IsEmpty());
+		const bool bJustCopied = LinkCopiedTime >= 0.0 && FPlatformTime::Seconds() - LinkCopiedTime < LinkCopiedSeconds;
+		BBPWidgetStyle::SetButtonLabel(CopyLinkButton, bJustCopied ? LOCTEXT("LinkCopied", "Copied!") : LOCTEXT("CopyLink", "Copy Link"));
+	}
 	if (PositionText)
 	{
 		PositionText->SetText(!bHasCurrent ? FText::GetEmpty()
@@ -1409,6 +1421,20 @@ void UBBPMusicPage::HandleRepeat()
 		: Current == EBBPRepeatMode::One ? EBBPRepeatMode::Off
 		: EBBPRepeatMode::All;
 	UBBPBlueprintLibrary::RequestSetRepeatMode(GetBoomBox(), Next);
+}
+
+void UBBPMusicPage::HandleCopyLink()
+{
+	const ABBPMusicChannel* Channel = BoundChannel.Get();
+	FBBPQueueEntry Current;
+	if (!Channel || !Channel->GetCurrentEntry(Current) || Current.Track.SourceRef.IsEmpty())
+	{
+		return;
+	}
+	FPlatformApplicationMisc::ClipboardCopy(*Current.Track.SourceRef);
+	LinkCopiedTime = FPlatformTime::Seconds();
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: copied link of '%s': %s"), *Current.Track.Title, *Current.Track.SourceRef);
+	RefreshTransport();
 }
 
 void UBBPMusicPage::HandleClearQueue()

@@ -8,6 +8,10 @@
   updating as the station moves on.
 - The Custom Music page shows the same thing under the song title ("Source: YouTube: Monstercat"), and lyrics
   now have a line of their own. For radio, the announced song is the title line.
+- **Copy Link** next to the source copies the playing song's YouTube or SoundCloud page, or the radio
+  station's stream address, to the clipboard.
+- Songs queued before this update show just "YouTube"/"SoundCloud" as their source; queue them again to see the
+  channel. Songs downloaded before it pick up their channel after they've been played once from a search.
 - Fixed the progress bar on the Boom Box's own screen flickering between 0:00 and the real time. It now
   matches the Custom Music page's seek bar (and stays empty for radio, which has no length).
 - The "now playing" toast moved from a top-right corner card, where it could end up hidden behind the
