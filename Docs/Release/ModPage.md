@@ -216,5 +216,6 @@ This mod was built with the help of an AI coding assistant (Anthropic's Claude):
 - **Mod page text:** this description was drafted by the AI and edited by the author.
 - **Developer documentation** in the source repository was written by the AI.
 - **Art and audio:** no AI-generated assets. The UI uses the game's own widgets, fonts and icons. The mod
-  icon is a render of Laxity's Boom Box model and the demo track is by Kevin MacLeod (see Credits).
+  icon is a render of the "Satisfactory Boombox" 3D model by Laxity (CC BY 4.0), and the demo track is by
+  Kevin MacLeod.
 - **In game:** the mod doesn't use or give access to generative AI.
