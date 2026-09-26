@@ -82,7 +82,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> NowPlayingText;
 
-	// "Source: YouTube: <channel>" and the like, under the title.
+	// "Artist, Source" under the title, e.g. "Koven, YouTube: Monstercat Uncaged".
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> SourceText;
 

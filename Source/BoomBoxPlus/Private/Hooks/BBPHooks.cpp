@@ -191,12 +191,13 @@ void InstallBBPHooks()
 			return;
 		}
 		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(Self);
-		FBBPVanillaSong Info;
+		FBBPNowPlaying Info;
 		FSongData Song;
-		if (UBBPPlaybackController::DescribeForVanillaPage(ABBPPlaylistSubsystem::FindChannelFor(Self), Playlist ? Playlist->GetPlaybackController() : nullptr, Info))
+		if (UBBPPlaybackController::DescribeNowPlaying(ABBPPlaylistSubsystem::FindChannelFor(Self), Playlist ? Playlist->GetPlaybackController() : nullptr, Info))
 		{
+			// The artist line gets the same "Artist, Source" subtitle as the Custom Music page and the toast.
 			Song.SongName = FName(*Info.Title.Left(NAME_SIZE - 1));
-			Song.ArtistName = FName(*Info.Artist.Left(NAME_SIZE - 1));
+			Song.ArtistName = FName(*Info.Subtitle.Left(NAME_SIZE - 1));
 			Song.CachedMaximumSongDuration = Info.Duration;
 		}
 		else

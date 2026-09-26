@@ -822,33 +822,25 @@ void UBBPMusicPage::RefreshTransport()
 	const bool bHasCurrent = Channel && Channel->GetCurrentEntry(Current);
 
 	const bool bLive = bHasCurrent && Current.Track.IsLive();
-	// Radio: the song the station announces ("Artist - Title"), if any, and whether it's still connecting.
-	FString LiveSong;
-	bool bBuffering = false;
-	if (bLive)
-	{
-		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-		if (const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr)
-		{
-			Controller->GetLiveStatus(Channel, LiveSong, bBuffering);
-		}
-		LiveSong.TrimStartAndEndInline();
-		if (LiveSong == Current.Track.Title)
-		{
-			LiveSong.Reset();
-		}
-	}
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+	// Same title and "Artist, Source" subtitle as the vanilla page and the toast.
+	FBBPNowPlaying Described;
+	UBBPPlaybackController::DescribeNowPlaying(Channel, Controller, Described);
 	if (NowPlayingText)
 	{
-		const FString Title = !LiveSong.IsEmpty() ? LiveSong
-			: bLive || Current.Track.Artist.IsEmpty() ? Current.Track.Title
-			: FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title);
-		NowPlayingText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(Title) : LOCTEXT("NothingPlaying", "Nothing playing"));
+		NowPlayingText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(Described.Title) : LOCTEXT("NothingPlaying", "Nothing playing"));
 	}
 	if (SourceText)
 	{
-		SourceText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(TEXT("Source: ") + UBBPBlueprintLibrary::GetSourceName(Current.Track)) : FText::GetEmpty());
+		SourceText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(Described.Subtitle) : FText::GetEmpty());
 		BBPWidgetStyle::SetShown(SourceText, bHasCurrent);
+	}
+	FString LiveSong;
+	bool bBuffering = false;
+	if (bLive && Controller)
+	{
+		Controller->GetLiveStatus(Channel, LiveSong, bBuffering);
 	}
 	if (CopyLinkButton)
 	{

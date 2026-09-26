@@ -265,6 +265,6 @@ FString UBBPBlueprintLibrary::GetSourceName(const FBBPTrack& Track)
 			? Named(TEXT("YouTube live"), !Track.Uploader.IsEmpty() ? Track.Uploader : Track.Artist)
 			: Named(TEXT("Radio"), Track.Title);
 	default:
-		return TEXT("Your music folder");
+		return TEXT("Local file");
 	}
 }

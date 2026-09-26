@@ -13,6 +13,7 @@
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
 #include "Net/BBPNetSubsystem.h"
+#include "Net/BBPRadio.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Kismet/GameplayStatics.h"
@@ -149,8 +150,9 @@ void UBBPPlaybackController::UpdateVanillaPages()
 		FBBPQueueEntry Current;
 		const int32 EntryId = Channel->GetCurrentEntry(Current) ? Current.EntryId : INDEX_NONE;
 		const bool bPlaying = Channel->IsPlaying();
-		FBBPVanillaSong Song;
-		const FText Album = DescribeForVanillaPage(Channel, this, Song) ? FText::FromString(Song.Album) : UBBPCustomMusicTape::GetIdleDescription();
+		FBBPNowPlaying Song;
+		// The album line names the tape, as for the game's own tapes; the source is in the artist line.
+		const FText Album = DescribeNowPlaying(Channel, this, Song) ? GetDefault<UBBPCustomMusicTape>()->mTitle : UBBPCustomMusicTape::GetIdleDescription();
 		float Position = 0.f;
 		float Duration = 0.f;
 		GetVanillaPosition(Channel, Position, Duration);
@@ -166,7 +168,7 @@ void UBBPPlaybackController::UpdateVanillaPages()
 			FBBPVanillaPageState& Page = VanillaPages.FindOrAdd(Object);
 			const bool bNewEntry = Page.Channel.Get() != Channel || Page.EntryId != EntryId;
 			const bool bNewAlbum = bNewEntry || !Page.Album.Equals(Album.ToString(), ESearchCase::CaseSensitive);
-			const bool bNewSong = bNewEntry || !Page.Title.Equals(Song.Title, ESearchCase::CaseSensitive) || !Page.Artist.Equals(Song.Artist, ESearchCase::CaseSensitive);
+			const bool bNewSong = bNewEntry || !Page.Title.Equals(Song.Title, ESearchCase::CaseSensitive) || !Page.Subtitle.Equals(Song.Subtitle, ESearchCase::CaseSensitive);
 			if (bNewAlbum || bNewSong)
 			{
 				// The page shows the tape's description as the album line. It's a class default shared by every Custom
@@ -184,7 +186,7 @@ void UBBPPlaybackController::UpdateVanillaPages()
 				const int32 Index = Channel->GetQueue().IndexOfByPredicate([EntryId](const FBBPQueueEntry& E) { return E.EntryId == EntryId; });
 				IFGBoomboxListenerInterface::Execute_CurrentSongChanged(Object, BoomBox->GetCurrentSong(), FMath::Max(0, Index));
 				Page.Title = Song.Title;
-				Page.Artist = Song.Artist;
+				Page.Subtitle = Song.Subtitle;
 			}
 			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId || Page.bPlaying != bPlaying)
 			{
@@ -771,7 +773,7 @@ void UBBPPlaybackController::GetVanillaPosition(const ABBPMusicChannel* Channel,
 	OutPosition = FMath::Clamp(Channel->GetPlaybackPosition(), 0.f, OutDuration);
 }
 
-bool UBBPPlaybackController::DescribeForVanillaPage(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPVanillaSong& Out)
+bool UBBPPlaybackController::DescribeNowPlaying(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPNowPlaying& Out)
 {
 	FBBPQueueEntry Entry;
 	if (!Channel || !Channel->GetCurrentEntry(Entry))
@@ -779,32 +781,40 @@ bool UBBPPlaybackController::DescribeForVanillaPage(const ABBPMusicChannel* Chan
 		return false;
 	}
 	const FBBPTrack& Track = Entry.Track;
+	const bool bStation = Track.IsLive() && !BBPRadio::IsYouTubeUrl(Track.SourceRef);
 	Out.Duration = Track.Duration;
-	Out.Album = UBBPBlueprintLibrary::GetSourceName(Track);
-	if (!Track.IsLive())
+	Out.Title = Track.Title;
+	// A station's Artist is only its host name, so its artist comes from the song it announces.
+	FString Artist = bStation ? FString() : Track.Artist;
+	bool bAnnounced = false;
+	if (Track.IsLive())
 	{
-		Out.Title = Track.Title;
-		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : !Track.Uploader.IsEmpty() ? Track.Uploader : TEXT("Unknown artist");
-		return true;
-	}
-
-	FString LiveTitle;
-	bool bBuffering = false;
-	if (Controller && Controller->GetLiveStatus(Channel, LiveTitle, bBuffering))
-	{
+		FString LiveTitle;
+		bool bBuffering = false;
+		if (Controller)
+		{
+			Controller->GetLiveStatus(Channel, LiveTitle, bBuffering);
+		}
 		LiveTitle.TrimStartAndEndInline();
+		bAnnounced = !LiveTitle.IsEmpty() && LiveTitle != Track.Title;
+		if (bAnnounced)
+		{
+			FString LiveArtist, LiveSong;
+			const bool bSplit = LiveTitle.Split(TEXT(" - "), &LiveArtist, &LiveSong) && !LiveArtist.TrimStartAndEnd().IsEmpty() && !LiveSong.TrimStartAndEnd().IsEmpty();
+			Out.Title = bSplit ? LiveSong.TrimStartAndEnd() : LiveTitle;
+			Artist = bSplit ? LiveArtist.TrimStartAndEnd() : FString();
+		}
 	}
-	if (LiveTitle.IsEmpty() || LiveTitle == Track.Title)
+	if (bStation && !bAnnounced)
 	{
-		// Until the station announces a song: the station, and its host (or YouTube channel).
-		Out.Title = Track.Title;
-		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : TEXT("Live");
+		// The title is already the station's name, which is all the source would add.
+		Out.Subtitle = TEXT("Live radio");
 		return true;
 	}
-	FString Artist, Title;
-	const bool bSplit = LiveTitle.Split(TEXT(" - "), &Artist, &Title) && !Artist.TrimStartAndEnd().IsEmpty() && !Title.TrimStartAndEnd().IsEmpty();
-	Out.Title = bSplit ? Title.TrimStartAndEnd() : LiveTitle;
-	Out.Artist = bSplit ? Artist.TrimStartAndEnd() : Track.Title;
+	const FString Source = UBBPBlueprintLibrary::GetSourceName(Track);
+	// A video whose title had no "Artist - " part has the uploader as its artist, which the source already names.
+	const bool bArtistIsUploader = Artist.Equals(Track.Uploader, ESearchCase::IgnoreCase);
+	Out.Subtitle = Artist.IsEmpty() || bArtistIsUploader ? Source : FString::Printf(TEXT("%s, %s"), *Artist, *Source);
 	return true;
 }
 

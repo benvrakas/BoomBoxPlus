@@ -47,7 +47,7 @@ private:
 	int32 LastEntryId = INDEX_NONE;
 	TWeakObjectPtr<const ABBPMusicChannel> LastChannel;
 
-	// Song title last shown for the radio station being heard.
-	FString LastLiveTitle;
+	// Title last shown, so a radio station's newly announced song shows the card again.
+	FString LastTitle;
 	float NowPlayingTimeLeft = 0.f;
 };

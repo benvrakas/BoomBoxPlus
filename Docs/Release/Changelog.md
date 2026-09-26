@@ -2,12 +2,11 @@
 
 ## 1.2.6 — Now playing on the vanilla page
 
-- The Boom Box's own screen (not just the Custom Music page) now shows the **song title and artist** while
-  Custom Music plays, with where it's from underneath ("YouTube: Monstercat", "Radio: <station>"), instead of a
-  static "Your own music, YouTube and SoundCloud." For radio it shows the song and artist the station announces,
-  updating as the station moves on.
-- The Custom Music page shows the same thing under the song title ("Source: YouTube: Monstercat"), and lyrics
-  now have a line of their own. For radio, the announced song is the title line.
+- **What's playing reads the same everywhere**: the Custom Music page, the Boom Box's own screen and the
+  "now playing" notification all show the song title, and under it the artist and where it's from, e.g.
+  "Koven, YouTube: Monstercat Uncaged". The Boom Box's own screen used to show a static "Your own music, YouTube
+  and SoundCloud." For radio, the title is the song the station announces, updating as the station moves on.
+- Lyrics on the Custom Music page have a line of their own.
 - **Copy Link** next to the source copies the playing song's YouTube or SoundCloud page, or the radio
   station's stream address, to the clipboard.
 - Songs queued before this update show just "YouTube"/"SoundCloud" as their source; queue them again to see the

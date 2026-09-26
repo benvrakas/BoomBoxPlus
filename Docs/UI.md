@@ -127,18 +127,27 @@ always shows our value.
 
 **Text lines.** `BPW_BoomBox_Player`'s name table shows three: `mSongName`, `mArtistName` (from the `FSongData`
 given to `SetCurrentSong`) and `mAlbumName`, which shows the tape's `mDescription` and is only re-read when the
-page is told the tape changed. All three come from `UBBPPlaybackController::DescribeForVanillaPage`:
+page is told the tape changed.
 
-| | Song line | Artist line | Album line (`UBBPBlueprintLibrary::GetSourceName`) |
-|---|---|---|---|
-| YouTube / SoundCloud | title | artist (from an "Artist - Title" video title, else the uploader) | "YouTube: <channel>" / "SoundCloud: <account>" (`FBBPTrack::Uploader`) |
-| Local file | title | artist tag, or "Unknown artist" | "Your music folder" |
-| Radio, song announced | announced title | announced artist | "Radio: <station>" (or "YouTube live: <channel>") |
-| Radio, nothing announced yet | station name | host (or YouTube channel) | same |
-| Nothing queued | "Custom Music" | "BoomBoxPlus" | the idle blurb |
+**One title and subtitle everywhere.** The Custom Music page, the vanilla page and the now-playing toast all show
+`UBBPPlaybackController::DescribeNowPlaying` (`FBBPNowPlaying`): a title, and under it "Artist, Source", where
+Source is `UBBPBlueprintLibrary::GetSourceName` ("Kind: name"). The artist is left out when it's just the uploader
+again, i.e. a video whose title had no "Artist - " part.
 
-The Custom Music page uses the same source name, as "Source: YouTube: <channel>" under its title line. The
-"Kind: name" form leaves room for new sources without a new layout.
+| | Title | Subtitle |
+|---|---|---|
+| YouTube "Koven - Hell Is Where I Dwell" on Monstercat Uncaged | Hell Is Where I Dwell | Koven, YouTube: Monstercat Uncaged |
+| YouTube video with no artist in its title | title | YouTube: <channel> |
+| SoundCloud | title | SoundCloud: <account> |
+| Local file | title | <artist tag>, Local file |
+| Radio, song announced ("Artist - Song") | Song | Artist, Radio: <station> |
+| Radio, nothing announced yet | station name | Live radio |
+| YouTube live | video title | [artist, ] YouTube live: <channel> |
+
+The artist from an "Artist - Title" video title is the mod's own split (`ParseTrackJson`), and the channel is
+yt-dlp's `channel`/`uploader` (`FBBPTrack::Uploader`), which is why they can differ. On the vanilla page, the
+song line is the title, the artist line the subtitle, and the album line names the tape ("Custom Music"; the idle
+blurb when nothing is queued), as the game's own tapes do. Nothing queued: "Custom Music" / "BoomBoxPlus".
 
 Song and artist reach the page through a `GetCurrentSong` hook (the tape's `mPlaylist` is empty). `UpdateVanillaPages`
 re-sends `CurrentSongChanged` when either line's text changes (a new radio announcement, not only a new queue
@@ -212,9 +221,9 @@ pressing Play Now specifically. The label is hidden while there are no recent st
 `HandleRecentStationN` handler because `UBBPGameButton::OnClicked` carries no payload. The Link panel, freed
 from sharing a row with Radio, is back to a plain full-width panel.
 
-The Now Playing panel has three text lines: the title ("Artist - Title"; for radio, the song the station
-announces, or the station name until it announces one), the source ("Source: Radio: <station>", see
-`GetSourceName` below) with a **Copy Link** button, and a line of its own for synced lyrics. Copy Link puts the
+The Now Playing panel has three text lines: the title and the "Artist, Source" subtitle (the same as the vanilla
+page and the toast; see "One title and subtitle everywhere" above), the latter with a **Copy Link** button, and a
+line of its own for synced lyrics. Copy Link puts the
 track's `SourceRef` on the clipboard (`FPlatformApplicationMisc::ClipboardCopy`, module `ApplicationCore`): the
 YouTube/SoundCloud page or the station's stream address. It reads "Copied!" for 2 s and is hidden for local
 files. Since 1.2.6, `SourceRef` is yt-dlp's `webpage_url` when it gives one: SoundCloud's `url` is an

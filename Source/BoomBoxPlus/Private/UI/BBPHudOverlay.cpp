@@ -93,36 +93,22 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
 	}
 
-	// Entry ids are per channel, so a different channel counts as a different track.
+	// Shown for a new track, and again when a radio station announces a new song (its title changes). Entry ids are
+	// per channel, so a different channel counts as a different track.
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	FBBPNowPlaying Described;
+	UBBPPlaybackController::DescribeNowPlaying(Channel, Playlist ? Playlist->GetPlaybackController() : nullptr, Described);
 	const int32 EntryId = bPlaying ? Current.EntryId : INDEX_NONE;
-	if (EntryId != LastEntryId || Channel != LastChannel.Get())
+	if (EntryId != LastEntryId || Channel != LastChannel.Get() || !Described.Title.Equals(LastTitle, ESearchCase::CaseSensitive))
 	{
 		LastEntryId = EntryId;
 		LastChannel = Channel;
-		LastLiveTitle.Reset();
+		LastTitle = Described.Title;
 		if (bPlaying && bShowNowPlaying)
 		{
 			NowPlayingTimeLeft = NowPlayingSeconds;
-			if (NowPlayingTitleText) NowPlayingTitleText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Title));
-			if (NowPlayingArtistText) NowPlayingArtistText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Artist));
-		}
-	}
-	else if (bPlaying && Current.Track.IsLive())
-	{
-		// Radio: the station's own song announcements, shown as they change (with the station as the second line).
-		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-		const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
-		FString SongTitle;
-		bool bBuffering = false;
-		if (Controller && Controller->GetLiveStatus(Channel, SongTitle, bBuffering) && SongTitle != LastLiveTitle)
-		{
-			LastLiveTitle = SongTitle;
-			if (bShowNowPlaying && !SongTitle.IsEmpty() && SongTitle != Current.Track.Title)
-			{
-				NowPlayingTimeLeft = NowPlayingSeconds;
-				if (NowPlayingTitleText) NowPlayingTitleText->SetText(BBPWidgetStyle::ToDisplayText(SongTitle));
-				if (NowPlayingArtistText) NowPlayingArtistText->SetText(BBPWidgetStyle::ToDisplayText(Current.Track.Title));
-			}
+			if (NowPlayingTitleText) NowPlayingTitleText->SetText(BBPWidgetStyle::ToDisplayText(Described.Title));
+			if (NowPlayingArtistText) NowPlayingArtistText->SetText(BBPWidgetStyle::ToDisplayText(Described.Subtitle));
 		}
 	}
 

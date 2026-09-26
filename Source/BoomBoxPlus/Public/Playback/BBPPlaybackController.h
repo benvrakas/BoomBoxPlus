@@ -13,14 +13,15 @@ class UBBPStreamingSoundWave;
 class UBBPHudOverlay;
 struct FBBPQueueEntry;
 
-// The three text lines of the vanilla Boom Box page for a channel's current entry. Never empty strings: the page
-// shows the song and artist as FNames, and an empty FName reads "None".
-struct FBBPVanillaSong
+// How a channel's current entry is shown everywhere (the Custom Music page, the vanilla Boom Box page and the
+// now-playing toast): a title, and "Artist, Source" under it. Never empty strings: the vanilla page shows both as
+// FNames, and an empty FName reads "None".
+struct FBBPNowPlaying
 {
 	FString Title;
-	FString Artist;
-	// The album line, shown from the tape's description: UBBPBlueprintLibrary::GetSourceName, e.g. "YouTube: Monstercat".
-	FString Album;
+	// "Koven, YouTube: Monstercat Uncaged": the artist (left out when it's just the uploader again), then
+	// UBBPBlueprintLibrary::GetSourceName.
+	FString Subtitle;
 	float Duration = 0.f;
 };
 
@@ -89,9 +90,9 @@ public:
 	// station announces (may be empty) and whether it is still waiting for audio.
 	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
 
-	// Fills what the vanilla page shows for Channel's current entry; false when nothing is queued. A radio entry uses
-	// the song the station announces ("Artist - Title"), which needs Controller (null on a dedicated server).
-	static bool DescribeForVanillaPage(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPVanillaSong& Out);
+	// Fills how Channel's current entry is shown; false when nothing is queued. A radio entry uses the song the
+	// station announces ("Artist - Title"), which needs Controller (null on a dedicated server).
+	static bool DescribeNowPlaying(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPNowPlaying& Out);
 
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
@@ -162,7 +163,7 @@ private:
 		bool bPlaying = false;
 		// Text lines the page was last given, so a new radio announcement or album line is re-sent.
 		FString Title;
-		FString Artist;
+		FString Subtitle;
 		FString Album;
 	};
 	TMap<TWeakObjectPtr<UObject>, FBBPVanillaPageState> VanillaPages;
