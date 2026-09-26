@@ -19,7 +19,7 @@ struct FBBPVanillaSong
 {
 	FString Title;
 	FString Artist;
-	// The album line, shown from the tape's description: the radio station, YouTube channel or SoundCloud account.
+	// The album line, shown from the tape's description: UBBPBlueprintLibrary::GetSourceName, e.g. "YouTube: Monstercat".
 	FString Album;
 	float Duration = 0.f;
 };

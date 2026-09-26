@@ -82,6 +82,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> NowPlayingText;
 
+	// "Source: YouTube: <channel>" and the like, under the title.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> SourceText;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> PositionText;
 

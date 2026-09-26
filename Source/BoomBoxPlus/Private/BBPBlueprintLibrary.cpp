@@ -5,6 +5,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
+#include "Net/BBPRadio.h"
 #include "Network/BBPRemoteCallObject.h"
 #include "FGBoomBoxPlayer.h"
 #include "Playlist/BBPMusicChannel.h"
@@ -245,4 +246,25 @@ FString UBBPBlueprintLibrary::FormatDuration(float Seconds)
 {
 	const int32 Total = FMath::Max(0, FMath::FloorToInt(Seconds));
 	return FString::Printf(TEXT("%d:%02d"), Total / 60, Total % 60);
+}
+
+FString UBBPBlueprintLibrary::GetSourceName(const FBBPTrack& Track)
+{
+	auto Named = [](const TCHAR* Kind, const FString& Name)
+	{
+		return Name.IsEmpty() ? FString(Kind) : FString::Printf(TEXT("%s: %s"), Kind, *Name);
+	};
+	switch (Track.Source)
+	{
+	case EBBPTrackSource::YouTube:
+		return Named(TEXT("YouTube"), Track.Uploader);
+	case EBBPTrackSource::SoundCloud:
+		return Named(TEXT("SoundCloud"), Track.Uploader);
+	case EBBPTrackSource::Radio:
+		return BBPRadio::IsYouTubeUrl(Track.SourceRef)
+			? Named(TEXT("YouTube live"), !Track.Uploader.IsEmpty() ? Track.Uploader : Track.Artist)
+			: Named(TEXT("Radio"), Track.Title);
+	default:
+		return TEXT("Your music folder");
+	}
 }

@@ -100,6 +100,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
 	static FString FormatDuration(float Seconds);
 
+	// Where Track comes from, as "Kind: name" ("YouTube: Monstercat", "Radio: <station>"), or just the kind when
+	// the name isn't known.
+	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus")
+	static FString GetSourceName(const FBBPTrack& Track);
+
 private:
 	// Returns the local player's RCO, logging why if it isn't available.
 	static UBBPRemoteCallObject* GetLocalRCO(const UObject* WorldContext, const TCHAR* RequestName);

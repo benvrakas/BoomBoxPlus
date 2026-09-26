@@ -129,13 +129,16 @@ always shows our value.
 given to `SetCurrentSong`) and `mAlbumName`, which shows the tape's `mDescription` and is only re-read when the
 page is told the tape changed. All three come from `UBBPPlaybackController::DescribeForVanillaPage`:
 
-| | Song line | Artist line | Album line |
+| | Song line | Artist line | Album line (`UBBPBlueprintLibrary::GetSourceName`) |
 |---|---|---|---|
-| YouTube / SoundCloud | title | artist (from an "Artist - Title" video title, else the uploader) | YouTube channel / SoundCloud account (`FBBPTrack::Uploader`) |
+| YouTube / SoundCloud | title | artist (from an "Artist - Title" video title, else the uploader) | "YouTube: <channel>" / "SoundCloud: <account>" (`FBBPTrack::Uploader`) |
 | Local file | title | artist tag, or "Unknown artist" | "Your music folder" |
-| Radio, song announced | announced title | announced artist | station name |
-| Radio, nothing announced yet | station name | host (or YouTube channel) | "Live stream" |
+| Radio, song announced | announced title | announced artist | "Radio: <station>" (or "YouTube live: <channel>") |
+| Radio, nothing announced yet | station name | host (or YouTube channel) | same |
 | Nothing queued | "Custom Music" | "BoomBoxPlus" | the idle blurb |
+
+The Custom Music page uses the same source name, as "Source: YouTube: <channel>" under its title line. The
+"Kind: name" form leaves room for new sources without a new layout.
 
 Song and artist reach the page through a `GetCurrentSong` hook (the tape's `mPlaylist` is empty). `UpdateVanillaPages`
 re-sends `CurrentSongChanged` when either line's text changes (a new radio announcement, not only a new queue
@@ -209,9 +212,11 @@ pressing Play Now specifically. The label is hidden while there are no recent st
 `HandleRecentStationN` handler because `UBBPGameButton::OnClicked` carries no payload. The Link panel, freed
 from sharing a row with Radio, is back to a plain full-width panel.
 
-While a live entry plays, the position text shows **LIVE**, the seek bar is disabled (duration 0) and the
-lyric line shows the song the station announces, "Connecting to the station..." while the prebuffer fills,
-or a note that resuming reconnects. See Radio.md.
+The Now Playing panel has three text lines: the title ("Artist - Title"; for radio, the song the station
+announces, or the station name until it announces one), the source ("Source: Radio: <station>", see
+`GetSourceName` below), and a line of its own for synced lyrics. While a live entry plays, the position text shows
+**LIVE**, the seek bar is disabled (duration 0), and the lyric line shows "Connecting to the station..." while the
+prebuffer fills, or a note that resuming reconnects. See Radio.md.
 
 ## Controls in v1
 

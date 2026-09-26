@@ -217,8 +217,11 @@ void UBBPMusicPage::BuildDefaultLayout()
 	NowPlayingText = MakeText(WidgetTree, 18, TextColor, FText::GetEmpty(), EFontWeight::Bold);
 	Truncate(NowPlayingText);
 	NowPlaying->AddChildToVerticalBox(NowPlayingText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	SourceText = MakeText(WidgetTree, 12, DimTextColor);
+	Truncate(SourceText);
+	NowPlaying->AddChildToVerticalBox(SourceText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
 	LyricText = MakeText(WidgetTree, 12, AccentColor);
-	NowPlaying->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 2.f, 0.f, 0.f));
+	NowPlaying->AddChildToVerticalBox(LyricText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
 	UHorizontalBox* SeekRow = AddRow(NowPlaying, 8.f);
 	SeekSlider = WidgetTree->ConstructWidget<USlider>();
@@ -814,11 +817,33 @@ void UBBPMusicPage::RefreshTransport()
 	const bool bHasCurrent = Channel && Channel->GetCurrentEntry(Current);
 
 	const bool bLive = bHasCurrent && Current.Track.IsLive();
+	// Radio: the song the station announces ("Artist - Title"), if any, and whether it's still connecting.
+	FString LiveSong;
+	bool bBuffering = false;
+	if (bLive)
+	{
+		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+		if (const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr)
+		{
+			Controller->GetLiveStatus(Channel, LiveSong, bBuffering);
+		}
+		LiveSong.TrimStartAndEndInline();
+		if (LiveSong == Current.Track.Title)
+		{
+			LiveSong.Reset();
+		}
+	}
 	if (NowPlayingText)
 	{
-		NowPlayingText->SetText(!bHasCurrent ? LOCTEXT("NothingPlaying", "Nothing playing")
-			: bLive || Current.Track.Artist.IsEmpty() ? BBPWidgetStyle::ToDisplayText(Current.Track.Title)
-			: BBPWidgetStyle::ToDisplayText(FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title)));
+		const FString Title = !LiveSong.IsEmpty() ? LiveSong
+			: bLive || Current.Track.Artist.IsEmpty() ? Current.Track.Title
+			: FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title);
+		NowPlayingText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(Title) : LOCTEXT("NothingPlaying", "Nothing playing"));
+	}
+	if (SourceText)
+	{
+		SourceText->SetText(bHasCurrent ? BBPWidgetStyle::ToDisplayText(TEXT("Source: ") + UBBPBlueprintLibrary::GetSourceName(Current.Track)) : FText::GetEmpty());
+		BBPWidgetStyle::SetShown(SourceText, bHasCurrent);
 	}
 	if (PositionText)
 	{
@@ -837,27 +862,11 @@ void UBBPMusicPage::RefreshTransport()
 	}
 	if (LyricText)
 	{
-		FString Line;
-		if (bLive)
-		{
-			// Radio: the song the station announces, or connection progress.
-			const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
-			const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
-			FString SongTitle;
-			bool bBuffering = false;
-			if (!Channel->IsPlaying())
-			{
-				Line = TEXT("Paused. Resuming reconnects to the live broadcast.");
-			}
-			else if (Controller && Controller->GetLiveStatus(Channel, SongTitle, bBuffering))
-			{
-				Line = bBuffering ? FString(TEXT("Connecting to the station...")) : SongTitle != Current.Track.Title ? SongTitle : FString();
-			}
-		}
-		else
-		{
-			Line = UBBPBlueprintLibrary::GetCurrentLyricLine(Channel);
-		}
+		// Its own line: the synced lyric, or for radio the connection status (the song is in the title).
+		const FString Line = !bLive ? UBBPBlueprintLibrary::GetCurrentLyricLine(Channel)
+			: !Channel->IsPlaying() ? FString(TEXT("Paused. Resuming reconnects to the live broadcast."))
+			: bBuffering ? FString(TEXT("Connecting to the station..."))
+			: FString();
 		LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
 	}
 	if (Channel)

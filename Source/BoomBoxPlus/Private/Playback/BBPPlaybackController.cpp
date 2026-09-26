@@ -780,13 +780,11 @@ bool UBBPPlaybackController::DescribeForVanillaPage(const ABBPMusicChannel* Chan
 	}
 	const FBBPTrack& Track = Entry.Track;
 	Out.Duration = Track.Duration;
+	Out.Album = UBBPBlueprintLibrary::GetSourceName(Track);
 	if (!Track.IsLive())
 	{
 		Out.Title = Track.Title;
 		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : !Track.Uploader.IsEmpty() ? Track.Uploader : TEXT("Unknown artist");
-		Out.Album = !Track.Uploader.IsEmpty() ? Track.Uploader
-			: Track.Source == EBBPTrackSource::Local ? TEXT("Your music folder")
-			: Out.Artist;
 		return true;
 	}
 
@@ -801,14 +799,12 @@ bool UBBPPlaybackController::DescribeForVanillaPage(const ABBPMusicChannel* Chan
 		// Until the station announces a song: the station, and its host (or YouTube channel).
 		Out.Title = Track.Title;
 		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : TEXT("Live");
-		Out.Album = TEXT("Live stream");
 		return true;
 	}
 	FString Artist, Title;
 	const bool bSplit = LiveTitle.Split(TEXT(" - "), &Artist, &Title) && !Artist.TrimStartAndEnd().IsEmpty() && !Title.TrimStartAndEnd().IsEmpty();
 	Out.Title = bSplit ? Title.TrimStartAndEnd() : LiveTitle;
 	Out.Artist = bSplit ? Artist.TrimStartAndEnd() : Track.Title;
-	Out.Album = Track.Title;
 	return true;
 }
 
