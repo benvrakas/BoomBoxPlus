@@ -1,6 +1,6 @@
 <!--
 Text for the BoomBoxPlus page on ficsit.app (Satisfactory Mod Repository).
-- "Short description" field: the line under SHORT DESCRIPTION.
+- "Short description" field: the line under SHORT DESCRIPTION (at most 128 characters).
 - "Full description" field: everything under FULL DESCRIPTION.
 - The two transparency fields: the text under NETWORK ACTIVITY TRANSPARENCY and AI USAGE TRANSPARENCY.
 Replace the [bracketed] placeholders before publishing.
@@ -8,7 +8,7 @@ Replace the [bracketed] placeholders before publishing.
 
 # SHORT DESCRIPTION
 
-Turn the Boom Box into a real speaker: your own music, YouTube, SoundCloud, Spotify playlists and live internet radio, synced for everyone nearby, with lyrics.
+The Boom Box plays your music: local files, YouTube, SoundCloud, Spotify playlists and internet radio, synced in multiplayer.
 
 # FULL DESCRIPTION
 
