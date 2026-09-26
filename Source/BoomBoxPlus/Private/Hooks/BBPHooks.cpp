@@ -4,6 +4,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "FGUnlockSubsystem.h"
 #include "Patching/NativeHookManager.h"
+#include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
@@ -205,6 +206,44 @@ void InstallBBPHooks()
 		Scope.Override(Song);
 	});
 
+	// The vanilla page's description line is a class default shared by every Boom Box, since it comes straight
+	// off the tape asset rather than the specific instance being viewed - but only one player's own Custom Music
+	// page reads it at a time (this is a local interact widget, not something other players see), so it's safe
+	// to overwrite it with what *this* Self is playing right before the widget reads it, and restore the blurb
+	// when idle. Songs show their artist; radio keeps repeating its own title rather than a made-up "artist".
+	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::GetCurrentTape, [](const TSubclassOf<UFGTapeData>& Tape, const AFGBoomBoxPlayer* Self)
+	{
+		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Tape))
+		{
+			return;
+		}
+		UFGTapeData* TapeCDO = Tape->GetDefaultObject<UFGTapeData>();
+		if (!TapeCDO)
+		{
+			return;
+		}
+		FBBPQueueEntry Entry;
+		const ABBPMusicChannel* Channel = ABBPPlaylistSubsystem::FindChannelFor(Self);
+		if (!Channel || !Channel->GetCurrentEntry(Entry))
+		{
+			TapeCDO->mDescription = UBBPCustomMusicTape::GetIdleDescription();
+			return;
+		}
+		if (Entry.Track.IsLive())
+		{
+			FString SongTitle;
+			bool bBuffering = false;
+			const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(Self);
+			const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+			const bool bHaveSong = Controller && Controller->GetLiveStatus(Channel, SongTitle, bBuffering) && !SongTitle.IsEmpty();
+			TapeCDO->mDescription = FText::FromString(bHaveSong ? SongTitle : Entry.Track.Title);
+		}
+		else
+		{
+			TapeCDO->mDescription = Entry.Track.Artist.IsEmpty() ? UBBPCustomMusicTape::GetIdleDescription() : FText::FromString(Entry.Track.Artist);
+		}
+	});
+
 	// Observes tape changes so the in-game flow can be followed in the log.
 	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::LoadTapeNow, [](AFGBoomBoxPlayer* Self, AFGCharacterPlayer* Character)
 	{
@@ -212,5 +251,5 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, LoadTapeNow"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, GetCurrentTape, LoadTapeNow"));
 }

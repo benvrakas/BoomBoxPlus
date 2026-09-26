@@ -50,15 +50,25 @@ void UBBPHudOverlay::BuildDefaultLayout()
 	NowPlayingBox = Box;
 	UVerticalBox* Texts = WidgetTree->ConstructWidget<UVerticalBox>();
 	Box->SetContent(Texts);
-	Texts->AddChildToVerticalBox(BBPWidgetStyle::MakeText(WidgetTree, 10, BBPWidgetStyle::AccentColor, NSLOCTEXT("BoomBoxPlus", "NowPlaying", "NOW PLAYING")));
+	UTextBlock* Label = BBPWidgetStyle::MakeText(WidgetTree, 10, BBPWidgetStyle::AccentColor, NSLOCTEXT("BoomBoxPlus", "NowPlaying", "NOW PLAYING"));
+	Label->SetJustification(ETextJustify::Center);
+	Texts->AddChildToVerticalBox(Label);
 	NowPlayingTitleText = BBPWidgetStyle::MakeText(WidgetTree, 15, BBPWidgetStyle::TextColor);
+	NowPlayingTitleText->SetJustification(ETextJustify::Center);
 	Texts->AddChildToVerticalBox(NowPlayingTitleText);
 	NowPlayingArtistText = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor);
+	NowPlayingArtistText->SetJustification(ETextJustify::Center);
 	Texts->AddChildToVerticalBox(NowPlayingArtistText);
+	// Bottom-center, stacked just above the lyric line (anchored at 0.82): the game's own HUD (objective panel,
+	// compass, hotbar) never draws there, so this is visible regardless of AddToViewport z-order - a fixed-size
+	// panel added behind the default HUD layer (see UBBPPlaybackController::EnsureHudOverlay) can still end up
+	// hidden by it at any of the four screen corners, since Coffee Stain's own HUD elements can grow (e.g. more
+	// active milestones) and there's no version-safe way to know their z-order from here. Both BoomBoxPlus
+	// notifications share this spot and this look, rather than one being a top-right card and the other a
+	// bottom-center line.
 	UCanvasPanelSlot* BoxSlot = Canvas->AddChildToCanvas(Box);
-	BoxSlot->SetAnchors(FAnchors(1.f, 0.f));
-	BoxSlot->SetAlignment(FVector2D(1.f, 0.f));
-	BoxSlot->SetPosition(FVector2D(-24.f, 120.f));
+	BoxSlot->SetAnchors(FAnchors(0.5f, 0.74f));
+	BoxSlot->SetAlignment(FVector2D(0.5f, 1.f));
 	BoxSlot->SetAutoSize(true);
 }
 

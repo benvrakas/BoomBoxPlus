@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6 — Now playing on the vanilla page
+
+- The Boom Box's own screen (not just the Custom Music page) now shows the **song title and artist** while
+  Custom Music plays, instead of a static "Your own music, YouTube and SoundCloud." Radio shows the
+  station's own live song announcement when it sends one, or the station name otherwise.
+- The "now playing" toast moved from a top-right corner card, where it could end up hidden behind the
+  vanilla objective/milestone panel, to bottom-center, stacked right above the lyric line.
+
 ## 1.2.5 — Radio joins the search box
 
 - **No more separate Radio box.** Paste a live stream address into the same search box as everything else

@@ -115,6 +115,20 @@ the Boom Box's `mStateListeners` (access-transformer accessor):
   play state changes for that listener;
 - `PlaybackPositionUpdate(position, duration)` every 0.25 s.
 
+**The song name/artist line** comes from a hook on `GetCurrentSong` (`BBPHooks.cpp`): since the tape's
+`mPlaylist` is empty, this returns a placeholder `FSongData` unless a channel exists, in which case it's
+the current entry's title and artist.
+
+**The tape description line**, unlike the song name, isn't per-call — `UFGTapeData::mDescription` is a
+plain `UPROPERTY`, so it lives on the tape *class*'s CDO and is shared by every Boom Box using Custom
+Music. A `GetCurrentTape` hook overwrites it with the entry the Boom Box being looked at (`Self`) is
+actually playing, right before the vanilla page reads it, then restores `UBBPCustomMusicTape::
+GetIdleDescription()` ("Your own music, YouTube and SoundCloud.") when nothing is queued. This is safe
+because only one player's own Custom Music page reads it at a time — it's a local interact widget, not
+something other players see, so there's no cross-player bleed even though the backing property is
+shared. Songs show their artist; a radio entry has no artist, so it shows the station's own live song
+announcement when the station sends one, or repeats the station name otherwise.
+
 ## Seeking
 
 The mod page's seek slider sends `RequestSeekTo` when released (mouse or gamepad capture end); playback
@@ -194,13 +208,21 @@ native `UFGInteractWidget::SetDefaultFocusWidget` with the play/pause button and
 `UBBPHudOverlay` is added to the viewport (Z-order -10, hit-test invisible) by the playback controller on
 every non-dedicated machine. It shows:
 
-- the current lyric line, bottom-centre, and
-- a "NOW PLAYING" card, top-right, for 4 s when the track changes (fading out over the last 0.5 s),
+- the current lyric line, bottom-centre (anchor 0.5, 0.82), and
+- a "NOW PLAYING" card, bottom-centre too (anchor 0.5, 0.74, bottom-aligned so it sits just above the
+  lyric line), for 4 s when the track changes (fading out over the last 0.5 s),
 
 **only while the local pawn is within hearing range** of a Boom Box playing Custom Music
 (`UBBPPlaybackController::GetAudibleRange()`, the attenuation's inner radius + falloff = 250 m). Both are
 toggled by the mod config. Same `BindWidgetOptional` pattern as the page: `LyricText`, `NowPlayingBox`,
 `NowPlayingTitleText`, `NowPlayingArtistText`.
+
+**The card used to sit top-right, and got hidden behind the vanilla objective/milestone panel.** The
+overlay is added at Z-order -10 (`UBBPPlaybackController::EnsureHudOverlay`), behind the game's own default
+HUD layer, and there's no version-safe way from a mod to know how tall that panel will be (more active
+milestones make it taller) or what Z-order it uses. Bottom-centre is a screen region the vanilla HUD never
+draws into regardless of Z stacking, so both notifications live there now, in the same style, rather than
+one being a corner card and the other a bottom line.
 
 It stays visible in the pause menu for now.
 
