@@ -10,6 +10,17 @@
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 
+namespace
+{
+	// Shortens text the server would otherwise reject (music file tags can be arbitrarily long).
+	FBBPTrack ForSending(FBBPTrack Track)
+	{
+		Track.Title.LeftInline(UBBPRemoteCallObject::MaxTextLength);
+		Track.Artist.LeftInline(UBBPRemoteCallObject::MaxTextLength);
+		return Track;
+	}
+}
+
 UBBPRemoteCallObject* UBBPBlueprintLibrary::GetLocalRCO(const UObject* WorldContext, const TCHAR* RequestName)
 {
 	if (!WorldContext)
@@ -37,7 +48,7 @@ void UBBPBlueprintLibrary::RequestAddTrack(AFGBoomBoxPlayer* BoomBox, const FBBP
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("AddTrack")))
 	{
-		RCO->Server_AddTrack(BoomBox, Track, bFront);
+		RCO->Server_AddTrack(BoomBox, ForSending(Track), bFront);
 	}
 }
 
@@ -53,7 +64,7 @@ void UBBPBlueprintLibrary::RequestPlayTrackNow(AFGBoomBoxPlayer* BoomBox, const 
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("PlayTrackNow")))
 	{
-		RCO->Server_PlayTrackNow(BoomBox, Track);
+		RCO->Server_PlayTrackNow(BoomBox, ForSending(Track));
 	}
 }
 
@@ -71,7 +82,13 @@ void UBBPBlueprintLibrary::RequestAddTracks(AFGBoomBoxPlayer* BoomBox, const TAr
 	for (int32 Start = 0; Start < Tracks.Num(); Start += UBBPRemoteCallObject::MaxTracksPerBatch)
 	{
 		const int32 Count = FMath::Min(UBBPRemoteCallObject::MaxTracksPerBatch, Tracks.Num() - Start);
-		RCO->Server_AddTracks(BoomBox, TArray<FBBPTrack>(Tracks.GetData() + Start, Count));
+		TArray<FBBPTrack> Batch;
+		Batch.Reserve(Count);
+		for (int32 i = Start; i < Start + Count; ++i)
+		{
+			Batch.Add(ForSending(Tracks[i]));
+		}
+		RCO->Server_AddTracks(BoomBox, Batch);
 	}
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Sent %d tracks for %s in %d batch(es)"), Tracks.Num(), *GetNameSafe(BoomBox),
 		FMath::DivideAndRoundUp(Tracks.Num(), UBBPRemoteCallObject::MaxTracksPerBatch));

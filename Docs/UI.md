@@ -113,16 +113,17 @@ the Boom Box's `mStateListeners` (access-transformer accessor):
 
 - `CurrentSongChanged` and `PlaybackStateChanged` (`MayActuallyPlay` / 0) when the track, channel or
   play state changes for that listener;
-- `PlaybackPositionUpdate(position, duration)` every 0.25 s.
+- `PlaybackPositionUpdate(position, duration)` **every frame**: the channel position and track length
+  (`UBBPPlaybackController::GetVanillaPosition`, matching the Custom Music seek bar), or 0 / 0 for live streams.
 
-**Progress bar.** The Boom Box also reports a position itself, from its own tick, through the private
-`GetCurrentPlaybackPosition`, which asks Wwise and so always gets 0 for Custom Music. That tick only runs while
-the vanilla `PlaybackEnabled` flag is set, which the Turbo Bass fix (Multiplayer.md) does locally, so from 1.2.4
-the bar flickered between 0:00 and our value. `FBBPBoomBoxAccess` (a `Friend=` access transformer, so it can name
-the private function) hooks it and returns `UBBPPlaybackController::GetVanillaPosition`, the same values the 0.25 s
-updates send: the channel position and track length, matching the Custom Music seek bar, or 0 / 0 for live
-streams. The log line `Hook: GetCurrentPlaybackPosition fired for the first time` confirms the hook is reached
-(it would not be if the shipping build inlined the function).
+**Progress bar.** The Boom Box also reports a position itself, from its own tick, which asks Wwise and so always
+gets 0 for Custom Music. That tick only runs while the vanilla `PlaybackEnabled` flag is set, which the Turbo
+Bass fix (Multiplayer.md) does locally, so from 1.2.4 the bar sat at 0:00 and flashed our value every 0.25 s.
+Hooking the private `GetCurrentPlaybackPosition` (via a `Friend=` access transformer) was tried: the hook
+installed but never fired, since the shipping build inlines it into the tick. What works instead is being the
+last writer each frame: `ABBPPlaylistSubsystem` ticks in `TG_PostUpdateWork`, after every actor tick and timer,
+and the controller sends the position every frame from there. The page is drawn after the world tick, so it
+always shows our value.
 
 **Song name and artist** come from a hook on `GetCurrentSong`: the tape's `mPlaylist` is empty, so it returns
 the current entry's title and artist (`GetNowPlaying` in `BBPHooks.cpp`), or a placeholder when nothing is

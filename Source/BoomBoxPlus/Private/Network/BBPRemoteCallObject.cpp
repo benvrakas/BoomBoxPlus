@@ -11,11 +11,6 @@
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "UI/BBPMusicPage.h"
 
-namespace
-{
-	constexpr int32 MaxTextLength = 512;
-}
-
 void UBBPRemoteCallObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -74,11 +69,13 @@ void UBBPRemoteCallObject::Server_AddTrack_Implementation(AFGBoomBoxPlayer* Boom
 
 namespace
 {
+	// Failing this disconnects the sender, so it only rejects what our own client never sends (long videos are fine).
 	bool IsTrackValid(const FBBPTrack& Track)
 	{
+		constexpr int32 MaxTextLength = UBBPRemoteCallObject::MaxTextLength;
 		return Track.Id.Len() <= MaxTextLength && Track.Title.Len() <= MaxTextLength
 			&& Track.Artist.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
-			&& Track.Duration >= 0.f && Track.Duration < 24.f * 3600.f
+			&& FMath::IsFinite(Track.Duration) && Track.Duration >= 0.f
 			// Every player's game opens a radio entry's URL, so only plain web stream URLs are accepted.
 			&& (!Track.IsLive() || BBPRadio::IsStreamUrl(Track.SourceRef));
 	}

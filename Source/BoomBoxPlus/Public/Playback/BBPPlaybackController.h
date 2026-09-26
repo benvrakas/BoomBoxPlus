@@ -78,10 +78,6 @@ public:
 	// station announces (may be empty) and whether it is still waiting for audio.
 	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
 
-	// Position and duration the vanilla Boom Box page shows for Channel, matching the Custom Music page's seek bar
-	// (0 / 0 for live streams and when nothing is queued).
-	static void GetVanillaPosition(const ABBPMusicChannel* Channel, float& OutPosition, float& OutDuration);
-
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
 	void SyncEmitters();
@@ -133,7 +129,11 @@ private:
 	void UpdateGameVolumeScale();
 
 	// Sends the current song, play state and position to open vanilla Boom Box pages, which otherwise only follow Wwise playback.
-	void UpdateVanillaPages(float DeltaSeconds);
+	void UpdateVanillaPages();
+
+	// Position and duration the vanilla Boom Box page shows for Channel, matching the Custom Music page's seek bar
+	// (0 / 0 for live streams and when nothing is queued).
+	static void GetVanillaPosition(const ABBPMusicChannel* Channel, float& OutPosition, float& OutDuration);
 
 	// Game volume sliders (Master x Boom Box), 0..1.
 	float GameVolumeScale = 1.f;
@@ -149,7 +149,6 @@ private:
 		FString LiveTitle;
 	};
 	TMap<TWeakObjectPtr<UObject>, FBBPVanillaPageState> VanillaPages;
-	float VanillaPositionTimer = 0.f;
 
 	FBBPGameMusicFader GameMusicFader;
 

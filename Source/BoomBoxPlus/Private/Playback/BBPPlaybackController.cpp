@@ -28,7 +28,6 @@ namespace
 	constexpr float FalloffDistance = 21000.f;
 
 	constexpr float GameVolumeInterval = 1.f;
-	constexpr float VanillaPositionInterval = 0.25f;
 
 	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100. An option that can't be read counts as 1.
 	float ReadVolumeOption(const UFGGameUserSettings& Settings, const TCHAR* Option)
@@ -113,7 +112,7 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	}
 	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);
-	UpdateVanillaPages(DeltaSeconds);
+	UpdateVanillaPages();
 }
 
 void UBBPPlaybackController::UpdateGameVolumeScale()
@@ -134,15 +133,8 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	}
 }
 
-void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
+void UBBPPlaybackController::UpdateVanillaPages()
 {
-	VanillaPositionTimer -= DeltaSeconds;
-	const bool bSendPosition = VanillaPositionTimer <= 0.f;
-	if (bSendPosition)
-	{
-		VanillaPositionTimer = VanillaPositionInterval;
-	}
-
 	TSet<UObject*> Seen;
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
@@ -162,6 +154,9 @@ void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
 		{
 			GetLiveStatus(Channel, LiveTitle, bBuffering);
 		}
+		float Position = 0.f;
+		float Duration = 0.f;
+		GetVanillaPosition(Channel, Position, Duration);
 
 		for (const TScriptInterface<IFGBoomboxListenerInterface>& Listener : BoomBox->GetmStateListeners())
 		{
@@ -187,13 +182,9 @@ void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
 			Page.EntryId = EntryId;
 			Page.bPlaying = bPlaying;
 			Page.LiveTitle = LiveTitle;
-			if (bSendPosition && bHasCurrent)
-			{
-				float Position = 0.f;
-				float Duration = 0.f;
-				GetVanillaPosition(Channel, Position, Duration);
-				IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Position, Duration);
-			}
+			// Every frame, and after the Boom Box's own tick has reported its Wwise position (always 0 here), so ours
+			// is what gets drawn (the subsystem ticks in TG_PostUpdateWork).
+			IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Position, Duration);
 		}
 	}
 	for (auto It = VanillaPages.CreateIterator(); It; ++It)
@@ -333,7 +324,7 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 	TSet<const ABBPMusicChannel*> Heard;
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
-		if (const ABBPMusicChannel* Channel = Playlist->FindChannel(Emitter.BoomBox.Get()))
+		if (const ABBPMusicChannel* Channel = Emitter.Channel.Get())
 		{
 			Heard.Add(Channel);
 		}
@@ -388,31 +379,28 @@ void UBBPPlaybackController::SyncEmitters()
 	for (const FBBPActiveBoomBox& ActiveBoomBox : Active)
 	{
 		AFGBoomBoxPlayer* BoomBox = ActiveBoomBox.BoomBox;
-		if (FBBPEmitter* Existing = Emitters.FindByPredicate([BoomBox](const FBBPEmitter& E) { return E.BoomBox == BoomBox; }))
+		FBBPEmitter* Emitter = Emitters.FindByPredicate([BoomBox](const FBBPEmitter& E) { return E.BoomBox == BoomBox; });
+		if (!Emitter)
 		{
-			const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
-			if (Existing->Component && !FMath::IsNearlyEqual(Existing->AppliedVolume, Volume, 0.001f))
+			UAudioComponent* Component = IsValid(BoomBox) ? CreateAudioComponent(BoomBox) : nullptr;
+			if (!Component)
 			{
-				Existing->AppliedVolume = Volume;
-				Existing->Component->SetVolumeMultiplier(Volume);
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x music volume setting x game sliders %.3f)"),
-					Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
+				continue;
 			}
-			continue;
+			Emitter = &Emitters.AddDefaulted_GetRef();
+			Emitter->BoomBox = BoomBox;
+			Emitter->Component = Component;
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: attached audio to Boom Box %s"), *GetNameSafe(BoomBox));
 		}
-		if (!IsValid(BoomBox))
+		// Set before the first track starts on a new emitter, so it never plays a moment at the default volume.
+		const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
+		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedVolume, Volume, 0.001f))
 		{
-			continue;
+			Emitter->AppliedVolume = Volume;
+			Emitter->Component->SetVolumeMultiplier(Volume);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x music volume setting x game sliders %.3f)"),
+				Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
 		}
-		UAudioComponent* Component = CreateAudioComponent(BoomBox);
-		if (!Component)
-		{
-			continue;
-		}
-		FBBPEmitter& Emitter = Emitters.AddDefaulted_GetRef();
-		Emitter.BoomBox = BoomBox;
-		Emitter.Component = Component;
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: attached audio to Boom Box %s"), *GetNameSafe(BoomBox));
 	}
 }
 
@@ -503,6 +491,11 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 			if (Channel->GetCurrentEntry(Entry))
 			{
 				StartLiveStream(Emitter, Entry);
+				if (Emitter.Wave)
+				{
+					// Disconnecting on pause cleared the vanilla "playing" flag that Turbo Bass checks.
+					ApplyPaused(Emitter, false);
+				}
 			}
 		}
 		else if (Emitter.Wave && Emitter.Wave->HasFailed() && !Emitter.bReportedProblem)
@@ -641,6 +634,14 @@ void UBBPPlaybackController::StartTrack(FBBPEmitter& Emitter, const ABBPMusicCha
 				*Entry.Track.Artist, *Entry.Track.Title, *Entry.Track.Id);
 		}
 		return;
+	}
+
+	if (Entry.Track.Source != EBBPTrackSource::Local)
+	{
+		if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+		{
+			Net->MarkPlayed(Entry.Track.Id);
+		}
 	}
 
 	UBBPStreamingSoundWave* Wave = NewObject<UBBPStreamingSoundWave>(this);

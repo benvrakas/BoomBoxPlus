@@ -17,6 +17,17 @@
 namespace
 {
 	constexpr float MoveColumnWidth = 26.f;
+
+	// "Artist   3:42"; just the artist for a live stream, and no leading gap when there's no artist.
+	FString MakeDetail(const FBBPTrack& Track)
+	{
+		if (Track.IsLive())
+		{
+			return Track.Artist;
+		}
+		const FString Length = UBBPBlueprintLibrary::FormatDuration(Track.Duration);
+		return Track.Artist.IsEmpty() ? Length : FString::Printf(TEXT("%s   %s"), *Track.Artist, *Length);
+	}
 }
 
 void UBBPTrackRow::NativeOnInitialized()
@@ -102,8 +113,7 @@ void UBBPTrackRow::SetupAsResult(const FBBPTrack& InTrack)
 
 	if (TitleText) TitleText->SetText(BBPWidgetStyle::ToDisplayText(Track.Title));
 	ShowSourceTag();
-	if (DetailText) DetailText->SetText(BBPWidgetStyle::ToDisplayText(Track.IsLive() ? Track.Artist
-		: FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration))));
+	if (DetailText) DetailText->SetText(BBPWidgetStyle::ToDisplayText(MakeDetail(Track)));
 	if (RowBackground) RowBackground->SetBrushColor(BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, false);
 
@@ -129,7 +139,7 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 	ShowSourceTag();
 	if (RowBackground) RowBackground->SetBrushColor(bPlaying ? BBPWidgetStyle::PlayingRowColor : BBPWidgetStyle::RowColor);
 	BBPWidgetStyle::SetShown(PlayingMarker, bPlaying);
-	FString Detail = Track.IsLive() ? Track.Artist : FString::Printf(TEXT("%s   %s"), *Track.Artist, *UBBPBlueprintLibrary::FormatDuration(Track.Duration));
+	FString Detail = MakeDetail(Track);
 	if (bMissing)
 	{
 		Detail += TEXT("   (not in your library)");

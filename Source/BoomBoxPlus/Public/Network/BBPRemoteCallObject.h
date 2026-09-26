@@ -37,6 +37,10 @@ public:
 	// Largest batch Server_AddTracks accepts; bigger lists are split by the sender.
 	static constexpr int32 MaxTracksPerBatch = 25;
 
+	// Longest track text field the server accepts. A track failing validation disconnects the sender, so
+	// UBBPBlueprintLibrary shortens titles and artists to this before sending.
+	static constexpr int32 MaxTextLength = 512;
+
 	UFUNCTION(Server, Reliable, WithValidation = Server_RemoveEntry_Validate)
 	void Server_RemoveEntry(AFGBoomBoxPlayer* BoomBox, int32 EntryId);
 	bool Server_RemoveEntry_Validate(AFGBoomBoxPlayer* BoomBox, int32 EntryId);

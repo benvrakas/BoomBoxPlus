@@ -215,5 +215,6 @@ bool UBBPLyricsSubsystem::HasLyrics(const FString& TrackId) const
 
 FString UBBPLyricsSubsystem::GetCachePath(const FString& TrackId) const
 {
-	return FPaths::ProjectSavedDir() / TEXT("BoomBoxPlus") / TEXT("Lyrics") / (TrackId + TEXT(".lrc"));
+	// Online ids are "yt:..."/"sc:..."; a colon in a Windows file name would write an alternate data stream instead.
+	return FPaths::ProjectSavedDir() / TEXT("BoomBoxPlus") / TEXT("Lyrics") / (TrackId.Replace(TEXT(":"), TEXT("_")) + TEXT(".lrc"));
 }

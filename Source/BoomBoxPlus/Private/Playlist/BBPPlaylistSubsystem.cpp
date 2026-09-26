@@ -35,6 +35,9 @@ ABBPPlaylistSubsystem::ABBPPlaylistSubsystem()
 	ReplicationPolicy = ESubsystemReplicationPolicy::SpawnOnServer_Replicate;
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
+	// After every actor tick and timer, so the vanilla Boom Box page's position is ours by the time it is drawn
+	// (the Boom Box's own tick reports its Wwise position, always 0 for Custom Music; see UBBPPlaybackController).
+	PrimaryActorTick.TickGroup = TG_PostUpdateWork;
 }
 
 ABBPPlaylistSubsystem* ABBPPlaylistSubsystem::Get(const UObject* WorldContext)

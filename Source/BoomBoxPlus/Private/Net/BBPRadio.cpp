@@ -10,6 +10,19 @@ namespace
 		return Url.StartsWith(TEXT("http://"), ESearchCase::IgnoreCase) || Url.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase);
 	}
 
+	// Returns false if Url contains whitespace, control characters, quotes, backslashes or backticks.
+	bool HasOnlySafeChars(const FString& Url)
+	{
+		for (const TCHAR Char : Url)
+		{
+			if (Char <= 32 || Char == 127 || Char == TEXT('"') || Char == TEXT('\'') || Char == TEXT('\\') || Char == TEXT('`'))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// Returns Url's path without query or fragment, lower-case.
 	FString GetLowerPath(const FString& Url)
 	{
@@ -45,18 +58,7 @@ bool BBPRadio::IsStreamUrl(const FString& Url)
 		return false;
 	}
 	const int32 HostStart = Url.Find(TEXT("://")) + 3;
-	if (HostStart >= Url.Len() || Url[HostStart] == TEXT('/'))
-	{
-		return false;
-	}
-	for (const TCHAR Char : Url)
-	{
-		if (Char <= 32 || Char == 127 || Char == TEXT('"') || Char == TEXT('\'') || Char == TEXT('\\') || Char == TEXT('`'))
-		{
-			return false;
-		}
-	}
-	return true;
+	return HostStart < Url.Len() && Url[HostStart] != TEXT('/') && HasOnlySafeChars(Url);
 }
 
 bool BBPRadio::IsPlaylistUrl(const FString& Url)
@@ -105,18 +107,7 @@ bool BBPRadio::IsYouTubeUrl(const FString& Url)
 
 bool BBPRadio::IsResolvedStreamUrl(const FString& Url)
 {
-	if (!HasWebScheme(Url) || Url.Len() > 8192)
-	{
-		return false;
-	}
-	for (const TCHAR Char : Url)
-	{
-		if (Char <= 32 || Char == 127 || Char == TEXT('"') || Char == TEXT('\'') || Char == TEXT('\\') || Char == TEXT('`'))
-		{
-			return false;
-		}
-	}
-	return true;
+	return HasWebScheme(Url) && Url.Len() <= 8192 && HasOnlySafeChars(Url);
 }
 
 FString BBPRadio::MakeTrackId(const FString& Url)

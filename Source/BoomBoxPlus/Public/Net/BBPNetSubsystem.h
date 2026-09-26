@@ -147,6 +147,9 @@ public:
 	// the other waiting downloads (for a track that is playing now).
 	void EnsureDownloaded(const FBBPTrack& Track, bool bFirst = false);
 
+	// Records that a downloaded track just started playing, so the cache deletes ones played longer ago first.
+	void MarkPlayed(const FString& TrackId);
+
 	// Drops queued downloads (not the one in progress) whose track id isn't in WantedIds.
 	void SetWantedDownloads(const TSet<FString>& WantedIds);
 
@@ -197,6 +200,9 @@ private:
 	FBBPNetCache Cache;
 	TArray<FBBPTrack> DownloadQueue;
 	FString DownloadingId;
+
+	// Tracks whose last download failed. Prefetching skips them; only starting to play one tries again.
+	TSet<FString> FailedDownloads;
 
 	TMap<int32, TSharedPtr<FBBPMatchJob>> MatchJobs;
 	int32 NextJobId = 1;

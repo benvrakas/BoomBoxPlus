@@ -1111,14 +1111,21 @@ void UBBPNetSubsystem::EnsureDownloaded(const FBBPTrack& Track, bool bFirst)
 	{
 		return;
 	}
-	if (FBBPNetCacheEntry* Cached = Cache.Entries.FindByPredicate([&Track](const FBBPNetCacheEntry& E) { return E.Track.Id == Track.Id; }))
+	if (const FBBPNetCacheEntry* Cached = Cache.Entries.FindByPredicate([&Track](const FBBPNetCacheEntry& E) { return E.Track.Id == Track.Id; }))
 	{
-		Cached->LastUsedTicks = FDateTime::UtcNow().GetTicks();
 		if (!GetLibrary()->HasTrack(Track.Id))
 		{
 			GetLibrary()->RegisterExternalFile(Cached->Track, Cached->FilePath);
 		}
 		return;
+	}
+	if (FailedDownloads.Contains(Track.Id))
+	{
+		if (!bFirst)
+		{
+			return;
+		}
+		FailedDownloads.Remove(Track.Id);
 	}
 	const int32 QueuedIndex = DownloadQueue.IndexOfByPredicate([&Track](const FBBPTrack& T) { return T.Id == Track.Id; });
 	if (bFirst && QueuedIndex > 0)
@@ -1205,8 +1212,18 @@ void UBBPNetSubsystem::FinishDownload(const FBBPTrack& Track, const FString& Fil
 	else
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not download '%s' (%s): %s"), *Track.Title, *Track.SourceRef, *Error);
+		FailedDownloads.Add(Track.Id);
 	}
 	StartNextDownload();
+}
+
+void UBBPNetSubsystem::MarkPlayed(const FString& TrackId)
+{
+	if (FBBPNetCacheEntry* Cached = Cache.Entries.FindByPredicate([&TrackId](const FBBPNetCacheEntry& E) { return E.Track.Id == TrackId; }))
+	{
+		Cached->LastUsedTicks = FDateTime::UtcNow().GetTicks();
+		SaveCache();
+	}
 }
 
 void UBBPNetSubsystem::EvictOldDownloads()

@@ -122,28 +122,6 @@ namespace
 	}
 }
 
-void FBBPBoomBoxAccess::InstallPrivateHooks()
-{
-	// The Boom Box's own tick reads the position from Wwise, which never plays Custom Music, and reports 0 to the
-	// vanilla page between UBBPPlaybackController's updates (the bar flickered once playback was flagged as enabled
-	// for Turbo Bass). Report the same position and duration the controller sends instead.
-	SUBSCRIBE_METHOD(AFGBoomBoxPlayer::GetCurrentPlaybackPosition, [](auto& Scope, AFGBoomBoxPlayer* Self, float& OutPosition, float& OutDuration)
-	{
-		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Self->GetCurrentTape()))
-		{
-			return;
-		}
-		static bool bLoggedFirstCall = false;
-		if (!bLoggedFirstCall)
-		{
-			bLoggedFirstCall = true;
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Hook: GetCurrentPlaybackPosition fired for the first time on %s; serving the Custom Music position"), *GetNameSafe(Self));
-		}
-		UBBPPlaybackController::GetVanillaPosition(ABBPPlaylistSubsystem::FindChannelFor(Self), OutPosition, OutDuration);
-		Scope.Cancel();
-	});
-}
-
 void RegisterBBPHooks()
 {
 #if WITH_EDITOR
@@ -316,7 +294,5 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	FBBPBoomBoxAccess::InstallPrivateHooks();
-
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, GetCurrentTape, GetCurrentPlaybackPosition, LoadTapeNow"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, GetCurrentTape, LoadTapeNow"));
 }

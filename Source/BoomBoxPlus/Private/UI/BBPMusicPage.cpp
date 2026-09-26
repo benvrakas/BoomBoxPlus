@@ -817,7 +817,7 @@ void UBBPMusicPage::RefreshTransport()
 	if (NowPlayingText)
 	{
 		NowPlayingText->SetText(!bHasCurrent ? LOCTEXT("NothingPlaying", "Nothing playing")
-			: bLive ? BBPWidgetStyle::ToDisplayText(Current.Track.Title)
+			: bLive || Current.Track.Artist.IsEmpty() ? BBPWidgetStyle::ToDisplayText(Current.Track.Title)
 			: BBPWidgetStyle::ToDisplayText(FString::Printf(TEXT("%s - %s"), *Current.Track.Artist, *Current.Track.Title)));
 	}
 	if (PositionText)

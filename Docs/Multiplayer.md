@@ -184,8 +184,8 @@ plays a given Boom Box's audio, not just the server - matching how Turbo Bass is
 check on whichever Boom Box a player is currently holding.
 
 Side effect: with the bit set, the Boom Box's own tick reports its (Wwise, always 0) position to the vanilla
-page, which made the progress bar flicker until `GetCurrentPlaybackPosition` was hooked too (UI.md, "Driving
-the vanilla Player page").
+page, which made the progress bar flicker until the mod started sending its own position every frame, after the
+Boom Box's tick (UI.md, "Driving the vanilla Player page").
 
 ## Volume
 

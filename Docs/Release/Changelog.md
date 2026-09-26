@@ -13,6 +13,17 @@
 - Fixed pasting a radio stream address into the search box: 1.2.5 always answered "That's a song or
   playlist link, not a live stream." (The recent station buttons still worked.)
 - The recent station buttons now have a "Recent stations:" label in front of them.
+- Fixed a player being disconnected from a multiplayer game when queuing a song 24 hours or longer, or a
+  local file with an extremely long title or artist tag.
+- Fixed Turbo Bass saying the music is paused after pausing and resuming a radio station.
+- A song no longer plays for a split second at the wrong volume when a Boom Box first starts Custom Music.
+- A YouTube/SoundCloud song that can't be downloaded is no longer retried every second while it's coming up
+  in the queue; it's tried again when it's actually played.
+- Downloaded songs you play often are now kept over ones you haven't played in a while, as the "Downloaded
+  songs to keep" setting says (before, the oldest download was deleted first, however recently it was played).
+- Songs without an artist no longer show as "- Title".
+- Lyrics for YouTube/SoundCloud songs are cached in normal files again (they were written somewhere Windows
+  hides); they'll be fetched once more after updating.
 
 ## 1.2.5 — Radio joins the search box
 
