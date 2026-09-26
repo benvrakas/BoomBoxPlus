@@ -13,20 +13,18 @@ PEAK mod sPEAKer.
 
 ## Screenshots
 
-The Custom Music page: now playing with a seek bar, search results, the queue, internet radio and the link
-code for sharing a queue.
+The Custom Music page: now playing with its source ("YouTube: Luis Fonsi"), Copy Link, the current lyric,
+the seek bar, recent radio stations, the queue and the link code for sharing a queue.
 
 ![The Custom Music page](Docs/Images/music-page.png)
 
-Search results from your own music, YouTube and SoundCloud, each with Play Now, Play Next and Add.
+Search results from YouTube and SoundCloud, each with Play Now, Play Next and Add.
 
 ![Search results](Docs/Images/search-results.png)
 
-An internet radio station and a YouTube live stream playing, with recent stations one click away under the search box.
+The now-playing notification for a radio station: the song it announces, the artist and the station.
 
-![A radio station playing](Docs/Images/radio.png)
-
-![A YouTube live stream playing](Docs/Images/youtube-live.png)
+![A radio station's announced song in the now-playing notification](Docs/Images/radio.png)
 
 Pasting a Spotify playlist: songs are matched on YouTube as you watch, and **Add all** queues them as they're
 found while the rest are still being matched.
@@ -35,15 +33,21 @@ found while the rest are still being matched.
 
 ![Matches queueing while matching continues](Docs/Images/spotify-queueing.png)
 
-The current lyric line while a Boom Box plays nearby.
+The current lyric line while a Boom Box plays nearby, placed or carried.
 
-![Lyrics on screen near a Boom Box](Docs/Images/lyrics-in-world.png)
+![Lyrics on screen near a placed Boom Box](Docs/Images/lyrics-in-world.png)
 
-The Boom Box's own screen with the added **Custom Music** button, and the Custom Music tape in the tape list.
+![Lyrics on screen while carrying a Boom Box](Docs/Images/lyrics-carrying.png)
 
-![The vanilla Boom Box screen with the Custom Music button](Docs/Images/vanilla-boombox-page.png)
+The Boom Box's own screen following Custom Music, and the Custom Music tape in the tape list.
+
+![The vanilla Boom Box screen playing Custom Music](Docs/Images/vanilla-boombox-page.png)
 
 ![The Custom Music tape in the tape list](Docs/Images/tape-list.png)
+
+The settings in **Mods → BoomBoxPlus**.
+
+![The mod's settings](Docs/Images/settings.png)
 
 ## Building
 
