@@ -6,6 +6,7 @@
 #include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertySection.h"
 #include "Configuration/Properties/ConfigPropertyString.h"
+#include "Configuration/Properties/WidgetExtension/CP_Section.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -30,33 +31,6 @@ namespace
 		return Id;
 	}
 
-	// Depth-first search for Key: each setting lives one level down, wrapped in its own single-property section (see
-	// AddSetting), so a plain top-level Find would miss everything. Falls back to a top-level Find too, in case a
-	// property is ever added directly to a section instead of through the wrapper.
-	UConfigProperty* FindPropertyIn(const UConfigPropertySection* Section, const FString& Key)
-	{
-		if (const TObjectPtr<UConfigProperty>* Found = Section->SectionProperties.Find(Key))
-		{
-			// A section found under Key is that setting's wrapper; the value itself is inside it under the same key.
-			if (const UConfigPropertySection* Wrapper = Cast<UConfigPropertySection>(Found->Get()))
-			{
-				return FindPropertyIn(Wrapper, Key);
-			}
-			return Found->Get();
-		}
-		for (const TPair<FString, TObjectPtr<UConfigProperty>>& Pair : Section->SectionProperties)
-		{
-			if (const UConfigPropertySection* Child = Cast<UConfigPropertySection>(Pair.Value.Get()))
-			{
-				if (UConfigProperty* Found = FindPropertyIn(Child, Key))
-				{
-					return Found;
-				}
-			}
-		}
-		return nullptr;
-	}
-
 	// Returns the live value of a setting, or null if the configuration isn't registered yet.
 	UConfigProperty* FindProperty(const UObject* WorldContext, const FString& Key)
 	{
@@ -64,7 +38,8 @@ namespace
 		const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
 		const UConfigManager* Manager = GameInstance ? GameInstance->GetSubsystem<UConfigManager>() : nullptr;
 		const UConfigPropertySection* Root = Manager ? Manager->GetConfigurationRootSection(MakeConfigId()) : nullptr;
-		return Root ? FindPropertyIn(Root, Key) : nullptr;
+		const TObjectPtr<UConfigProperty>* Found = Root ? Root->SectionProperties.Find(Key) : nullptr;
+		return Found ? Found->Get() : nullptr;
 	}
 }
 
@@ -76,17 +51,10 @@ UBBPConfig::UBBPConfig()
 
 	RootSection = CreateDefaultSubobject<UConfigPropertySection>(TEXT("RootSection"));
 
-	// SML's Mods menu lays out a section's direct properties in an unwrapped, unbounded horizontal row - fine for a
-	// section with one property, but a flat list of several ran off the edge of the screen. Each setting below gets
-	// its own single-property section so it always lands on its own line; AddSetting does the wrapping. The section
-	// itself carries no label (the property's own DisplayName is what's shown).
-	auto AddSetting = [this](const FString& Key, UConfigProperty* Property) -> UConfigPropertySection*
+	// Settings are listed in the order they're added; UseSMLEditorClasses makes the root section a vertical list.
+	auto AddSetting = [this](const FString& Key, UConfigProperty* Property)
 	{
-		UConfigPropertySection* Wrapper = CreateDefaultSubobject<UConfigPropertySection>(FName(*(Key + TEXT("Section"))));
-		Wrapper->SectionProperties.Add(Key, Property);
-		Wrapper->bHidden = Property->bHidden;
-		RootSection->SectionProperties.Add(Key, Wrapper);
-		return Wrapper;
+		RootSection->SectionProperties.Add(Key, Property);
 	};
 
 	// Still a real setting (read/written by UBBPConfig::GetFloat/SetFloat, saved to disk) but hidden from the Mods
@@ -182,13 +150,18 @@ namespace
 		return Clone;
 	}
 
-	// Converts OldSection and everything nested under it (each setting's own wrapper section, and the setting
-	// itself) to SML's Blueprint editor classes; each property was invisible in the Mods menu without this. Recurses
-	// because AddSetting nests every real setting one level below the root.
+	// Converts OldSection and everything under it to SML's Blueprint editor classes; each property was invisible in
+	// the Mods menu without this.
 	UConfigPropertySection* ConvertSectionRecursive(const UConfigPropertySection* OldSection, UClass* SectionEditorClass, UObject* Outer, int32& OutConverted, int32& OutTotal)
 	{
 		UConfigPropertySection* NewSection = Cast<UConfigPropertySection>(CloneAs(OldSection, SectionEditorClass, Outer));
 		NewSection->SectionProperties.Reset();
+		// The plain section it's cloned from has no WidgetType, and SML's Blueprint default is a horizontal row that
+		// runs off the edge of the screen with more than a couple of settings.
+		if (UCP_Section* EditorSection = Cast<UCP_Section>(NewSection))
+		{
+			EditorSection->WidgetType = ECP_SectionWidgetType::CPS_Vertical;
+		}
 		for (const TPair<FString, TObjectPtr<UConfigProperty>>& Pair : OldSection->SectionProperties)
 		{
 			UConfigProperty* Old = Pair.Value;

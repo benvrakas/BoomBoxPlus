@@ -21,6 +21,7 @@
 
 **Fixes**
 
+- **Mods → BoomBoxPlus** is a normal list of settings again, instead of one long row you had to scroll sideways.
 - Pasting a radio stream address into the search box works again. 1.2.5 always answered "That's a song or
   playlist link, not a live stream." (The recent station buttons still worked.)
 - Queuing a song 24 hours or longer, or a local file with an extremely long title or artist tag, no longer
@@ -36,6 +37,8 @@
 
 **Good to know**
 
+- Updating resets the mod's settings to their defaults once, including the Spotify Client ID and Secret; enter
+  them again.
 - Songs queued before this update show just "YouTube" or "SoundCloud" as their source. Queue them again to see
   the channel. Songs downloaded before it pick up their channel after being played once from a search.
 

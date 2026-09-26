@@ -99,24 +99,22 @@ the config's default object is constructed, so `UBBPGameInstanceModule::Dispatch
 the Blueprint classes, copying every property value, and logs `Config: N of M settings/sections use SML's
 editor widgets`. A missing Blueprint class leaves that one setting on its C++ class (still saved, not shown).
 
-**A section's direct properties render as one unbounded horizontal row, not a vertical list.** Fine for a
-section holding a single property; the first version put all of RootSection's properties directly on it,
-and the Mods menu showed them as one strip that ran off the edge of the screen instead of stacking. Each
-setting now gets its own single-property `UConfigPropertySection` (`UBBPConfig::UBBPConfig`'s `AddSetting`
-lambda), one level below the root, which is what makes them stack vertically like every other mod's
-settings. `UseSMLEditorClasses` had to become recursive (`ConvertSectionRecursive`) to reach properties
-nested this way — it previously only converted RootSection's direct children, which was fine when they
-were all leaf properties but would leave the new per-setting wrapper sections' children on their
-invisible C++ classes. `FindProperty` (`GetBool`/`GetFloat`/`GetInt`/`GetString`/`SetFloat`) has to look inside the wrapper:
-the root key names the wrapper section, and the value sits inside it under the same key. 1.2.0 and 1.2.1
-returned the wrapper itself, so every `Get*` fell back to its default and every `SetFloat` failed ("could
-not set 'MusicVolume'; configuration not available"): My Volume was stuck at 50% and no Mods-menu setting
-had any effect.
+**Sections must be told to be vertical.** SML's `BP_ConfigPropertySection` derives from `UCP_Section`, whose
+`WidgetType` picks `Widget_CP_Section_Horizontal` or `_Vertical`; the first enum value, and so the default, is
+horizontal. `CloneAs` copies fields from the plain `UConfigPropertySection`, which has no `WidgetType`, so every
+converted section came out as a horizontal row that ran off the edge of the screen. `ConvertSectionRecursive`
+now sets `CPS_Vertical` on each section it converts, and the settings sit directly in the root section.
 
-The nesting also changed the config file from `"MusicVolume": 0.5` to `"MusicVolume": { "MusicVolume": 0.5 }`.
-SML can't read the old layout into the new one, so the first start after updating from 1.1.0 rewrites the
-file with defaults (including an empty Spotify app key). This is deliberate: the author chose not to carry
-migration code for old config layouts.
+History: 1.2.0 to 1.2.5 worked around the row by wrapping each setting in its own single-property section,
+which still rendered as a (short) horizontal strip per setting and made the whole list scroll sideways. It also
+needed `FindProperty` to look inside the wrappers; 1.2.0 and 1.2.1 didn't, so every `Get*` fell back to its
+default and My Volume was stuck at 50%. The wrappers are gone in 1.2.6, so `FindProperty` is a plain top-level
+lookup again.
+
+Each layout change changes the config file's shape (`"MusicVolume": { "MusicVolume": 1 }` in 1.2.0 to 1.2.5,
+`"MusicVolume": 1` again in 1.2.6). SML can't read one into the other, so the first start after such an update
+rewrites the file with defaults (including an empty Spotify app key). This is deliberate: the author chose not to
+carry migration code for old config layouts.
 
 | Key | Default | Used by |
 |---|---|---|
