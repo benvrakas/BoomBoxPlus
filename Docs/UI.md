@@ -115,19 +115,29 @@ the Boom Box's `mStateListeners` (access-transformer accessor):
   play state changes for that listener;
 - `PlaybackPositionUpdate(position, duration)` every 0.25 s.
 
-**The song name/artist line** comes from a hook on `GetCurrentSong` (`BBPHooks.cpp`): since the tape's
-`mPlaylist` is empty, this returns a placeholder `FSongData` unless a channel exists, in which case it's
-the current entry's title and artist.
+**Progress bar.** The Boom Box also reports a position itself, from its own tick, through the private
+`GetCurrentPlaybackPosition`, which asks Wwise and so always gets 0 for Custom Music. That tick only runs while
+the vanilla `PlaybackEnabled` flag is set, which the Turbo Bass fix (Multiplayer.md) does locally, so from 1.2.4
+the bar flickered between 0:00 and our value. `FBBPBoomBoxAccess` (a `Friend=` access transformer, so it can name
+the private function) hooks it and returns `UBBPPlaybackController::GetVanillaPosition`, the same values the 0.25 s
+updates send: the channel position and track length, matching the Custom Music seek bar, or 0 / 0 for live
+streams. The log line `Hook: GetCurrentPlaybackPosition fired for the first time` confirms the hook is reached
+(it would not be if the shipping build inlined the function).
 
-**The tape description line**, unlike the song name, isn't per-call — `UFGTapeData::mDescription` is a
-plain `UPROPERTY`, so it lives on the tape *class*'s CDO and is shared by every Boom Box using Custom
-Music. A `GetCurrentTape` hook overwrites it with the entry the Boom Box being looked at (`Self`) is
-actually playing, right before the vanilla page reads it, then restores `UBBPCustomMusicTape::
-GetIdleDescription()` ("Your own music, YouTube and SoundCloud.") when nothing is queued. This is safe
-because only one player's own Custom Music page reads it at a time — it's a local interact widget, not
-something other players see, so there's no cross-player bleed even though the backing property is
-shared. Songs show their artist; a radio entry has no artist, so it shows the station's own live song
-announcement when the station sends one, or repeats the station name otherwise.
+**Song name and artist** come from a hook on `GetCurrentSong`: the tape's `mPlaylist` is empty, so it returns
+the current entry's title and artist (`GetNowPlaying` in `BBPHooks.cpp`), or a placeholder when nothing is
+queued. For radio, it splits the station's own announcement ("Artist - Title") into the two fields; until the
+station announces a song, it's the station name and host. The controller re-sends `CurrentSongChanged` when
+the announced song changes (`FBBPVanillaPageState::LiveTitle`), not only when the queue entry does.
+
+**The tape description line** is `UFGTapeData::mDescription`, a plain property on the tape class's default
+object, so it is shared by every Custom Music Boom Box on this machine. A `GetCurrentTape` hook sets it to the
+artist of the Boom Box being asked about (or the station name for radio with no announced song), or back to
+`UBBPCustomMusicTape::GetIdleDescription()` when nothing is queued. `GetCurrentTape` is also called on every Boom
+Box by `ABBPPlaylistSubsystem::RefreshActiveBoomBoxes`, so the hook only acts for Boom Boxes with listeners
+(`mStateListeners`, i.e. an open vanilla page). Otherwise another Custom Music Boom Box's artist could end up
+on the page. The class default is local to each machine, so other players are never affected. The tape list page
+may still show the last artist instead of the idle text; that's cosmetic.
 
 ## Seeking
 

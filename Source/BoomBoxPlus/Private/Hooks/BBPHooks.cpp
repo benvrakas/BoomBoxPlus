@@ -2,6 +2,7 @@
 #include "BBPBlueprintLibrary.h"
 #include "BoomBoxPlus.h"
 #include "FGBoomBoxPlayer.h"
+#include "FGBoomboxListenerInterface.h"
 #include "FGUnlockSubsystem.h"
 #include "Patching/NativeHookManager.h"
 #include "Playback/BBPPlaybackController.h"
@@ -77,6 +78,70 @@ namespace
 			BoomBox->HasAuthority() ? TEXT("server") : TEXT("client"));
 		return true;
 	}
+
+	// Title and artist the vanilla page shows for BoomBox's current entry; false when nothing is queued. A radio entry
+	// uses the song the station announces ("Artist - Title"); until it announces one, the station name and host.
+	bool GetNowPlaying(const AFGBoomBoxPlayer* BoomBox, FBBPQueueEntry& OutEntry, FString& OutTitle, FString& OutArtist)
+	{
+		const ABBPMusicChannel* Channel = ABBPPlaylistSubsystem::FindChannelFor(BoomBox);
+		if (!Channel || !Channel->GetCurrentEntry(OutEntry))
+		{
+			return false;
+		}
+		OutTitle = OutEntry.Track.Title;
+		OutArtist = OutEntry.Track.Artist;
+		if (!OutEntry.Track.IsLive())
+		{
+			return true;
+		}
+		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(BoomBox);
+		const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+		FString LiveTitle;
+		bool bBuffering = false;
+		if (!Controller || !Controller->GetLiveStatus(Channel, LiveTitle, bBuffering))
+		{
+			return true;
+		}
+		LiveTitle.TrimStartAndEndInline();
+		if (LiveTitle.IsEmpty() || LiveTitle == OutEntry.Track.Title)
+		{
+			return true;
+		}
+		FString Artist, Title;
+		if (LiveTitle.Split(TEXT(" - "), &Artist, &Title) && !Artist.TrimStartAndEnd().IsEmpty() && !Title.TrimStartAndEnd().IsEmpty())
+		{
+			OutArtist = Artist.TrimStartAndEnd();
+			OutTitle = Title.TrimStartAndEnd();
+		}
+		else
+		{
+			OutArtist = OutEntry.Track.Title;
+			OutTitle = LiveTitle;
+		}
+		return true;
+	}
+}
+
+void FBBPBoomBoxAccess::InstallPrivateHooks()
+{
+	// The Boom Box's own tick reads the position from Wwise, which never plays Custom Music, and reports 0 to the
+	// vanilla page between UBBPPlaybackController's updates (the bar flickered once playback was flagged as enabled
+	// for Turbo Bass). Report the same position and duration the controller sends instead.
+	SUBSCRIBE_METHOD(AFGBoomBoxPlayer::GetCurrentPlaybackPosition, [](auto& Scope, AFGBoomBoxPlayer* Self, float& OutPosition, float& OutDuration)
+	{
+		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Self->GetCurrentTape()))
+		{
+			return;
+		}
+		static bool bLoggedFirstCall = false;
+		if (!bLoggedFirstCall)
+		{
+			bLoggedFirstCall = true;
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Hook: GetCurrentPlaybackPosition fired for the first time on %s; serving the Custom Music position"), *GetNameSafe(Self));
+		}
+		UBBPPlaybackController::GetVanillaPosition(ABBPPlaylistSubsystem::FindChannelFor(Self), OutPosition, OutDuration);
+		Scope.Cancel();
+	});
 }
 
 void RegisterBBPHooks()
@@ -191,11 +256,12 @@ void InstallBBPHooks()
 		}
 		FSongData Song;
 		FBBPQueueEntry Entry;
-		const ABBPMusicChannel* Channel = ABBPPlaylistSubsystem::FindChannelFor(Self);
-		if (Channel && Channel->GetCurrentEntry(Entry))
+		FString Title;
+		FString Artist;
+		if (GetNowPlaying(Self, Entry, Title, Artist))
 		{
-			Song.SongName = FName(*Entry.Track.Title.Left(NAME_SIZE - 1));
-			Song.ArtistName = FName(*Entry.Track.Artist.Left(NAME_SIZE - 1));
+			Song.SongName = FName(*Title.Left(NAME_SIZE - 1));
+			Song.ArtistName = FName(*Artist.Left(NAME_SIZE - 1));
 			Song.CachedMaximumSongDuration = Entry.Track.Duration;
 		}
 		else
@@ -206,14 +272,13 @@ void InstallBBPHooks()
 		Scope.Override(Song);
 	});
 
-	// The vanilla page's description line is a class default shared by every Boom Box, since it comes straight
-	// off the tape asset rather than the specific instance being viewed - but only one player's own Custom Music
-	// page reads it at a time (this is a local interact widget, not something other players see), so it's safe
-	// to overwrite it with what *this* Self is playing right before the widget reads it, and restore the blurb
-	// when idle. Songs show their artist; radio keeps repeating its own title rather than a made-up "artist".
+	// The tape description the vanilla page shows is a class default shared by every Boom Box. It is set to the artist
+	// of whichever Boom Box's page asked for its tape last. Only Boom Boxes with listeners (an open vanilla page) count:
+	// this function is also called on every Boom Box by ABBPPlaylistSubsystem::RefreshActiveBoomBoxes. The class
+	// default is local to this machine, so other players are unaffected.
 	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::GetCurrentTape, [](const TSubclassOf<UFGTapeData>& Tape, const AFGBoomBoxPlayer* Self)
 	{
-		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Tape))
+		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Tape) || Self->GetmStateListeners().Num() == 0)
 		{
 			return;
 		}
@@ -223,24 +288,24 @@ void InstallBBPHooks()
 			return;
 		}
 		FBBPQueueEntry Entry;
-		const ABBPMusicChannel* Channel = ABBPPlaylistSubsystem::FindChannelFor(Self);
-		if (!Channel || !Channel->GetCurrentEntry(Entry))
+		FString Title;
+		FString Artist;
+		FText Description = UBBPCustomMusicTape::GetIdleDescription();
+		if (GetNowPlaying(Self, Entry, Title, Artist))
 		{
-			TapeCDO->mDescription = UBBPCustomMusicTape::GetIdleDescription();
-			return;
+			const bool bLiveWithoutSong = Entry.Track.IsLive() && Title == Entry.Track.Title;
+			if (bLiveWithoutSong)
+			{
+				Description = FText::FromString(Entry.Track.Title);
+			}
+			else if (!Artist.IsEmpty())
+			{
+				Description = FText::FromString(Artist);
+			}
 		}
-		if (Entry.Track.IsLive())
+		if (!TapeCDO->mDescription.ToString().Equals(Description.ToString(), ESearchCase::CaseSensitive))
 		{
-			FString SongTitle;
-			bool bBuffering = false;
-			const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(Self);
-			const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
-			const bool bHaveSong = Controller && Controller->GetLiveStatus(Channel, SongTitle, bBuffering) && !SongTitle.IsEmpty();
-			TapeCDO->mDescription = FText::FromString(bHaveSong ? SongTitle : Entry.Track.Title);
-		}
-		else
-		{
-			TapeCDO->mDescription = Entry.Track.Artist.IsEmpty() ? UBBPCustomMusicTape::GetIdleDescription() : FText::FromString(Entry.Track.Artist);
+			TapeCDO->mDescription = Description;
 		}
 	});
 
@@ -251,5 +316,7 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, GetCurrentTape, LoadTapeNow"));
+	FBBPBoomBoxAccess::InstallPrivateHooks();
+
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, GetCurrentTape, GetCurrentPlaybackPosition, LoadTapeNow"));
 }

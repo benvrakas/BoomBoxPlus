@@ -156,6 +156,12 @@ void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
 		const bool bHasCurrent = Channel->GetCurrentEntry(Current);
 		const int32 EntryId = bHasCurrent ? Current.EntryId : INDEX_NONE;
 		const bool bPlaying = Channel->IsPlaying();
+		FString LiveTitle;
+		bool bBuffering = false;
+		if (bHasCurrent && Current.Track.IsLive())
+		{
+			GetLiveStatus(Channel, LiveTitle, bBuffering);
+		}
 
 		for (const TScriptInterface<IFGBoomboxListenerInterface>& Listener : BoomBox->GetmStateListeners())
 		{
@@ -166,7 +172,7 @@ void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
 			}
 			Seen.Add(Object);
 			FBBPVanillaPageState& Page = VanillaPages.FindOrAdd(Object);
-			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId)
+			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId || Page.LiveTitle != LiveTitle)
 			{
 				const int32 Index = Channel->GetQueue().IndexOfByPredicate([EntryId](const FBBPQueueEntry& E) { return E.EntryId == EntryId; });
 				IFGBoomboxListenerInterface::Execute_CurrentSongChanged(Object, BoomBox->GetCurrentSong(), FMath::Max(0, Index));
@@ -180,9 +186,13 @@ void UBBPPlaybackController::UpdateVanillaPages(float DeltaSeconds)
 			Page.Channel = Channel;
 			Page.EntryId = EntryId;
 			Page.bPlaying = bPlaying;
+			Page.LiveTitle = LiveTitle;
 			if (bSendPosition && bHasCurrent)
 			{
-				IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Channel->GetPlaybackPosition(), Current.Track.Duration);
+				float Position = 0.f;
+				float Duration = 0.f;
+				GetVanillaPosition(Channel, Position, Duration);
+				IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Position, Duration);
 			}
 		}
 	}
@@ -732,6 +742,19 @@ void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
 {
 	ReleaseWave(Emitter);
 	Emitter.EntryId = INDEX_NONE;
+}
+
+void UBBPPlaybackController::GetVanillaPosition(const ABBPMusicChannel* Channel, float& OutPosition, float& OutDuration)
+{
+	FBBPQueueEntry Current;
+	if (!Channel || !Channel->GetCurrentEntry(Current) || Current.Track.Duration <= 0.f)
+	{
+		OutPosition = 0.f;
+		OutDuration = 0.f;
+		return;
+	}
+	OutDuration = Current.Track.Duration;
+	OutPosition = FMath::Clamp(Channel->GetPlaybackPosition(), 0.f, OutDuration);
 }
 
 bool UBBPPlaybackController::GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const

@@ -78,6 +78,10 @@ public:
 	// station announces (may be empty) and whether it is still waiting for audio.
 	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
 
+	// Position and duration the vanilla Boom Box page shows for Channel, matching the Custom Music page's seek bar
+	// (0 / 0 for live streams and when nothing is queued).
+	static void GetVanillaPosition(const ABBPMusicChannel* Channel, float& OutPosition, float& OutDuration);
+
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
 	void SyncEmitters();
@@ -141,6 +145,8 @@ private:
 		TWeakObjectPtr<const ABBPMusicChannel> Channel;
 		int32 EntryId = INDEX_NONE - 1;
 		bool bPlaying = false;
+		// Song the station announced when the page was last told, so radio song changes re-send CurrentSongChanged.
+		FString LiveTitle;
 	};
 	TMap<TWeakObjectPtr<UObject>, FBBPVanillaPageState> VanillaPages;
 	float VanillaPositionTimer = 0.f;
