@@ -74,7 +74,7 @@ namespace
 	{
 		constexpr int32 MaxTextLength = UBBPRemoteCallObject::MaxTextLength;
 		return Track.Id.Len() <= MaxTextLength && Track.Title.Len() <= MaxTextLength
-			&& Track.Artist.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
+			&& Track.Artist.Len() <= MaxTextLength && Track.Uploader.Len() <= MaxTextLength && Track.SourceRef.Len() <= MaxTextLength
 			&& FMath::IsFinite(Track.Duration) && Track.Duration >= 0.f
 			// Every player's game opens a radio entry's URL, so only plain web stream URLs are accepted.
 			&& (!Track.IsLive() || BBPRadio::IsStreamUrl(Track.SourceRef));

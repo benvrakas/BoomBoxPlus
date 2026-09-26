@@ -13,6 +13,17 @@ class UBBPStreamingSoundWave;
 class UBBPHudOverlay;
 struct FBBPQueueEntry;
 
+// The three text lines of the vanilla Boom Box page for a channel's current entry. Never empty strings: the page
+// shows the song and artist as FNames, and an empty FName reads "None".
+struct FBBPVanillaSong
+{
+	FString Title;
+	FString Artist;
+	// The album line, shown from the tape's description: the radio station, YouTube channel or SoundCloud account.
+	FString Album;
+	float Duration = 0.f;
+};
+
 // Audio playing from one Boom Box on this machine.
 USTRUCT()
 struct FBBPEmitter
@@ -77,6 +88,10 @@ public:
 	// Returns true if this machine is playing Channel's current track as a live radio stream, with the song title the
 	// station announces (may be empty) and whether it is still waiting for audio.
 	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
+
+	// Fills what the vanilla page shows for Channel's current entry; false when nothing is queued. A radio entry uses
+	// the song the station announces ("Artist - Title"), which needs Controller (null on a dedicated server).
+	static bool DescribeForVanillaPage(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPVanillaSong& Out);
 
 private:
 	// Adds emitters for newly active Boom Boxes and removes emitters for ones that are gone.
@@ -145,8 +160,10 @@ private:
 		TWeakObjectPtr<const ABBPMusicChannel> Channel;
 		int32 EntryId = INDEX_NONE - 1;
 		bool bPlaying = false;
-		// Song the station announced when the page was last told, so radio song changes re-send CurrentSongChanged.
-		FString LiveTitle;
+		// Text lines the page was last given, so a new radio announcement or album line is re-sent.
+		FString Title;
+		FString Artist;
+		FString Album;
 	};
 	TMap<TWeakObjectPtr<UObject>, FBBPVanillaPageState> VanillaPages;
 

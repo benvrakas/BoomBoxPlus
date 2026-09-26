@@ -132,6 +132,7 @@ namespace
 		OutTrack.Duration = (float)Duration;
 		OutTrack.Title = Title.IsEmpty() ? Id : Title;
 		OutTrack.Artist = Artist;
+		OutTrack.Uploader = Artist;
 
 		// "Artist - Title" video titles give a better artist than the channel name.
 		FString TitleArtist, TitleName;

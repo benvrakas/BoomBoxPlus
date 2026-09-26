@@ -16,6 +16,7 @@
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPHudOverlay.h"
 
 namespace
@@ -140,20 +141,16 @@ void UBBPPlaybackController::UpdateVanillaPages()
 	{
 		AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
 		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
-		if (!BoomBox || !Channel)
+		const TSubclassOf<UFGTapeData> Tape = BoomBox ? BoomBox->GetCurrentTape() : nullptr;
+		if (!Channel || !UBBPCustomMusicTape::IsCustomMusicTape(Tape))
 		{
 			continue;
 		}
 		FBBPQueueEntry Current;
-		const bool bHasCurrent = Channel->GetCurrentEntry(Current);
-		const int32 EntryId = bHasCurrent ? Current.EntryId : INDEX_NONE;
+		const int32 EntryId = Channel->GetCurrentEntry(Current) ? Current.EntryId : INDEX_NONE;
 		const bool bPlaying = Channel->IsPlaying();
-		FString LiveTitle;
-		bool bBuffering = false;
-		if (bHasCurrent && Current.Track.IsLive())
-		{
-			GetLiveStatus(Channel, LiveTitle, bBuffering);
-		}
+		FBBPVanillaSong Song;
+		const FText Album = DescribeForVanillaPage(Channel, this, Song) ? FText::FromString(Song.Album) : UBBPCustomMusicTape::GetIdleDescription();
 		float Position = 0.f;
 		float Duration = 0.f;
 		GetVanillaPosition(Channel, Position, Duration);
@@ -167,10 +164,27 @@ void UBBPPlaybackController::UpdateVanillaPages()
 			}
 			Seen.Add(Object);
 			FBBPVanillaPageState& Page = VanillaPages.FindOrAdd(Object);
-			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId || Page.LiveTitle != LiveTitle)
+			const bool bNewEntry = Page.Channel.Get() != Channel || Page.EntryId != EntryId;
+			const bool bNewAlbum = bNewEntry || !Page.Album.Equals(Album.ToString(), ESearchCase::CaseSensitive);
+			const bool bNewSong = bNewEntry || !Page.Title.Equals(Song.Title, ESearchCase::CaseSensitive) || !Page.Artist.Equals(Song.Artist, ESearchCase::CaseSensitive);
+			if (bNewAlbum || bNewSong)
+			{
+				// The page shows the tape's description as the album line. It's a class default shared by every Custom
+				// Music Boom Box, so it's set to this Boom Box's right before its page is told to read it.
+				GetMutableDefault<UBBPCustomMusicTape>()->mDescription = Album;
+			}
+			if (bNewAlbum)
+			{
+				// The page only re-reads the album line when told the tape changed.
+				IFGBoomboxListenerInterface::Execute_CurrentTapeChanged(Object, Tape);
+				Page.Album = Album.ToString();
+			}
+			if (bNewSong)
 			{
 				const int32 Index = Channel->GetQueue().IndexOfByPredicate([EntryId](const FBBPQueueEntry& E) { return E.EntryId == EntryId; });
 				IFGBoomboxListenerInterface::Execute_CurrentSongChanged(Object, BoomBox->GetCurrentSong(), FMath::Max(0, Index));
+				Page.Title = Song.Title;
+				Page.Artist = Song.Artist;
 			}
 			if (Page.Channel.Get() != Channel || Page.EntryId != EntryId || Page.bPlaying != bPlaying)
 			{
@@ -181,7 +195,6 @@ void UBBPPlaybackController::UpdateVanillaPages()
 			Page.Channel = Channel;
 			Page.EntryId = EntryId;
 			Page.bPlaying = bPlaying;
-			Page.LiveTitle = LiveTitle;
 			// Every frame, and after the Boom Box's own tick has reported its Wwise position (always 0 here), so ours
 			// is what gets drawn (the subsystem ticks in TG_PostUpdateWork).
 			IFGBoomboxListenerInterface::Execute_PlaybackPositionUpdate(Object, Position, Duration);
@@ -756,6 +769,47 @@ void UBBPPlaybackController::GetVanillaPosition(const ABBPMusicChannel* Channel,
 	}
 	OutDuration = Current.Track.Duration;
 	OutPosition = FMath::Clamp(Channel->GetPlaybackPosition(), 0.f, OutDuration);
+}
+
+bool UBBPPlaybackController::DescribeForVanillaPage(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPVanillaSong& Out)
+{
+	FBBPQueueEntry Entry;
+	if (!Channel || !Channel->GetCurrentEntry(Entry))
+	{
+		return false;
+	}
+	const FBBPTrack& Track = Entry.Track;
+	Out.Duration = Track.Duration;
+	if (!Track.IsLive())
+	{
+		Out.Title = Track.Title;
+		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : !Track.Uploader.IsEmpty() ? Track.Uploader : TEXT("Unknown artist");
+		Out.Album = !Track.Uploader.IsEmpty() ? Track.Uploader
+			: Track.Source == EBBPTrackSource::Local ? TEXT("Your music folder")
+			: Out.Artist;
+		return true;
+	}
+
+	FString LiveTitle;
+	bool bBuffering = false;
+	if (Controller && Controller->GetLiveStatus(Channel, LiveTitle, bBuffering))
+	{
+		LiveTitle.TrimStartAndEndInline();
+	}
+	if (LiveTitle.IsEmpty() || LiveTitle == Track.Title)
+	{
+		// Until the station announces a song: the station, and its host (or YouTube channel).
+		Out.Title = Track.Title;
+		Out.Artist = !Track.Artist.IsEmpty() ? Track.Artist : TEXT("Live");
+		Out.Album = TEXT("Live stream");
+		return true;
+	}
+	FString Artist, Title;
+	const bool bSplit = LiveTitle.Split(TEXT(" - "), &Artist, &Title) && !Artist.TrimStartAndEnd().IsEmpty() && !Title.TrimStartAndEnd().IsEmpty();
+	Out.Title = bSplit ? Title.TrimStartAndEnd() : LiveTitle;
+	Out.Artist = bSplit ? Artist.TrimStartAndEnd() : Track.Title;
+	Out.Album = Track.Title;
+	return true;
 }
 
 bool UBBPPlaybackController::GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const

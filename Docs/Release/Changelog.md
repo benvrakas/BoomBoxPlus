@@ -3,9 +3,9 @@
 ## 1.2.6 — Now playing on the vanilla page
 
 - The Boom Box's own screen (not just the Custom Music page) now shows the **song title and artist** while
-  Custom Music plays, instead of a static "Your own music, YouTube and SoundCloud." For radio it shows the
-  song and artist the station announces, updating as the station moves on, or the station name until it
-  announces one.
+  Custom Music plays, with the YouTube channel or SoundCloud account underneath, instead of a static "Your own
+  music, YouTube and SoundCloud." For radio it shows the song and artist the station announces, updating as the
+  station moves on, with the station name underneath.
 - Fixed the progress bar on the Boom Box's own screen flickering between 0:00 and the real time. It now
   matches the Custom Music page's seek bar (and stays empty for radio, which has no length).
 - The "now playing" toast moved from a top-right corner card, where it could end up hidden behind the

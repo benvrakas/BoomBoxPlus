@@ -30,6 +30,11 @@ struct BOOMBOXPLUS_API FBBPTrack
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	FString Artist;
 
+	// YouTube channel or SoundCloud account that posted a network track (Artist may come from its title instead);
+	// empty for local files and radio stations.
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	FString Uploader;
+
 	// Length in seconds; 0 for radio.
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	float Duration = 0.f;

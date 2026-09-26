@@ -16,7 +16,7 @@ public:
 	// Returns true if Tape is the Custom Music tape.
 	static bool IsCustomMusicTape(TSubclassOf<UFGTapeData> Tape);
 
-	// The description shown when nothing is playing (also the tape's built-in default); BBPHooks overwrites
-	// mDescription with the current track's artist while something plays, and restores this when it stops.
+	// The description shown when nothing is playing (also the tape's built-in default). While something plays,
+	// UBBPPlaybackController::UpdateVanillaPages sets mDescription to the vanilla page's album line.
 	static FText GetIdleDescription();
 };

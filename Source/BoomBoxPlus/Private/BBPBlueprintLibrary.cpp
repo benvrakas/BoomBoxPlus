@@ -17,6 +17,7 @@ namespace
 	{
 		Track.Title.LeftInline(UBBPRemoteCallObject::MaxTextLength);
 		Track.Artist.LeftInline(UBBPRemoteCallObject::MaxTextLength);
+		Track.Uploader.LeftInline(UBBPRemoteCallObject::MaxTextLength);
 		return Track;
 	}
 }

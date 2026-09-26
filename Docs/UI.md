@@ -125,20 +125,27 @@ last writer each frame: `ABBPPlaylistSubsystem` ticks in `TG_PostUpdateWork`, af
 and the controller sends the position every frame from there. The page is drawn after the world tick, so it
 always shows our value.
 
-**Song name and artist** come from a hook on `GetCurrentSong`: the tape's `mPlaylist` is empty, so it returns
-the current entry's title and artist (`GetNowPlaying` in `BBPHooks.cpp`), or a placeholder when nothing is
-queued. For radio, it splits the station's own announcement ("Artist - Title") into the two fields; until the
-station announces a song, it's the station name and host. The controller re-sends `CurrentSongChanged` when
-the announced song changes (`FBBPVanillaPageState::LiveTitle`), not only when the queue entry does.
+**Text lines.** `BPW_BoomBox_Player`'s name table shows three: `mSongName`, `mArtistName` (from the `FSongData`
+given to `SetCurrentSong`) and `mAlbumName`, which shows the tape's `mDescription` and is only re-read when the
+page is told the tape changed. All three come from `UBBPPlaybackController::DescribeForVanillaPage`:
 
-**The tape description line** is `UFGTapeData::mDescription`, a plain property on the tape class's default
-object, so it is shared by every Custom Music Boom Box on this machine. A `GetCurrentTape` hook sets it to the
-artist of the Boom Box being asked about (or the station name for radio with no announced song), or back to
-`UBBPCustomMusicTape::GetIdleDescription()` when nothing is queued. `GetCurrentTape` is also called on every Boom
-Box by `ABBPPlaylistSubsystem::RefreshActiveBoomBoxes`, so the hook only acts for Boom Boxes with listeners
-(`mStateListeners`, i.e. an open vanilla page). Otherwise another Custom Music Boom Box's artist could end up
-on the page. The class default is local to each machine, so other players are never affected. The tape list page
-may still show the last artist instead of the idle text; that's cosmetic.
+| | Song line | Artist line | Album line |
+|---|---|---|---|
+| YouTube / SoundCloud | title | artist (from an "Artist - Title" video title, else the uploader) | YouTube channel / SoundCloud account (`FBBPTrack::Uploader`) |
+| Local file | title | artist tag, or "Unknown artist" | "Your music folder" |
+| Radio, song announced | announced title | announced artist | station name |
+| Radio, nothing announced yet | station name | host (or YouTube channel) | "Live stream" |
+| Nothing queued | "Custom Music" | "BoomBoxPlus" | the idle blurb |
+
+Song and artist reach the page through a `GetCurrentSong` hook (the tape's `mPlaylist` is empty). `UpdateVanillaPages`
+re-sends `CurrentSongChanged` when either line's text changes (a new radio announcement, not only a new queue
+entry), and `CurrentTapeChanged` when the album line changes. Before 1.2.6 the album line was never refreshed, so
+after the radio it kept showing station data during YouTube songs.
+
+`mDescription` is a class default shared by every Custom Music Boom Box on this machine, so it's set right before
+each page is told to read it (never from a `GetCurrentTape` hook, which `ABBPPlaylistSubsystem::RefreshActiveBoomBoxes`
+also calls on every Boom Box). It's local to each machine, so other players are never affected. The tape list page
+may show the last album line instead of the idle text; that's cosmetic.
 
 ## Seeking
 
