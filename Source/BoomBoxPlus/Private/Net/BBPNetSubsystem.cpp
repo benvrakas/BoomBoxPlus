@@ -489,28 +489,7 @@ void UBBPNetSubsystem::ResolveLink(const FString& Url, FBBPOnNetTracks OnDone)
 void UBBPNetSubsystem::TuneRadio(const FString& Text, FBBPOnRadioTuned OnDone)
 {
 	const FString Url = BBPRadio::NormalizeUrl(Text);
-	const EBBPLinkKind Kind = ClassifyLink(Url);
-	if (Kind == EBBPLinkKind::YouTubeVideo)
-	{
-		// A YouTube link counts as a station only while it is broadcasting live.
-		ResolveLink(Url, FBBPOnNetTracks::CreateLambda([OnDone](const TArray<FBBPTrack>& Tracks, const FString& Error)
-		{
-			if (Tracks.Num() == 1 && Tracks[0].IsLive())
-			{
-				OnDone.ExecuteIfBound(Tracks[0], FString());
-				return;
-			}
-			OnDone.ExecuteIfBound(FBBPTrack(), !Error.IsEmpty() ? FString::Printf(TEXT("Couldn't read that YouTube link (%s)."), *Error)
-				: FString(TEXT("That YouTube video isn't live right now. Use the search box for regular videos.")));
-		}));
-		return;
-	}
-	if (Kind != EBBPLinkKind::None)
-	{
-		OnDone.ExecuteIfBound(FBBPTrack(), TEXT("That's a song or playlist link, not a live stream. Paste it into the search box instead."));
-		return;
-	}
-	if (!BBPRadio::IsStreamUrl(Url))
+	if (ClassifyLink(Url) != EBBPLinkKind::Stream)
 	{
 		OnDone.ExecuteIfBound(FBBPTrack(), TEXT("That isn't a stream address. Paste a link starting with http:// or https://."));
 		return;

@@ -9,7 +9,10 @@
 - Fixed the progress bar on the Boom Box's own screen flickering between 0:00 and the real time. It now
   matches the Custom Music page's seek bar (and stays empty for radio, which has no length).
 - The "now playing" toast moved from a top-right corner card, where it could end up hidden behind the
-  vanilla objective/milestone panel, to bottom-center, stacked right above the lyric line.
+  vanilla objective/milestone panel, to bottom-center, just above the lyric line.
+- Fixed pasting a radio stream address into the search box: 1.2.5 always answered "That's a song or
+  playlist link, not a live stream." (The recent station buttons still worked.)
+- The recent station buttons now have a "Recent stations:" label in front of them.
 
 ## 1.2.5 — Radio joins the search box
 

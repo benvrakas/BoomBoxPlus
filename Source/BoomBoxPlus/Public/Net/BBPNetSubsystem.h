@@ -20,7 +20,7 @@ enum class EBBPLinkKind : uint8
 	SoundCloudSet,
 	SpotifyTrack,
 	SpotifyCollection,
-	// A live stream address (radio station or YouTube-live watch link), typed straight into the search box.
+	// Any other http(s) address, treated as an internet radio stream (YouTube live links are YouTubeVideo).
 	Stream
 };
 
@@ -105,9 +105,9 @@ public:
 	// Returns the bundled yt-dlp, which finds YouTube live streams, or empty if the tools are missing.
 	FString GetYtDlpPath() const { return bToolsAvailable ? YtDlpPath : FString(); }
 
-	// Checks that Text is a playable radio stream (following .pls/.m3u station playlists, or a YouTube video that is live
-	// right now) and reads the station's name.
-	// Calls back on the game thread with a queueable track, or an error for the player.
+	// Checks that Text is a playable radio stream (following .pls/.m3u station playlists) and reads the station's name.
+	// YouTube live links aren't handled here: they go through ResolveLink like any YouTube link.
+	// Calls back on the game thread with a queueable track, or a full-sentence error for the player.
 	void TuneRadio(const FString& Text, FBBPOnRadioTuned OnDone);
 
 	// Stations tuned in to recently, newest first.

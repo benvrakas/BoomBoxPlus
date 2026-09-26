@@ -7,6 +7,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "FGBoomBoxPlayer.h"
 #include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
@@ -35,18 +36,17 @@ void UBBPHudOverlay::BuildDefaultLayout()
 	UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 	WidgetTree->RootWidget = Canvas;
 
-	LyricText = BBPWidgetStyle::MakeText(WidgetTree, 20, BBPWidgetStyle::TextColor);
-	LyricText->SetJustification(ETextJustify::Center);
-	LyricText->SetShadowOffset(FVector2D(1.f, 1.f));
-	LyricText->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
-	UCanvasPanelSlot* LyricSlot = Canvas->AddChildToCanvas(LyricText);
-	LyricSlot->SetAnchors(FAnchors(0.5f, 0.82f));
-	LyricSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-	LyricSlot->SetAutoSize(true);
+	// Bottom-centre stack: the "now playing" card directly above the lyric line. The game's own HUD never draws
+	// here, so both stay visible whatever the overlay's Z-order (see UBBPPlaybackController::EnsureHudOverlay).
+	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>();
+	UCanvasPanelSlot* StackSlot = Canvas->AddChildToCanvas(Stack);
+	StackSlot->SetAnchors(FAnchors(0.5f, 0.84f));
+	StackSlot->SetAlignment(FVector2D(0.5f, 1.f));
+	StackSlot->SetAutoSize(true);
 
 	UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
 	Box->SetBrushColor(BBPWidgetStyle::PanelColor);
-	Box->SetPadding(FMargin(14.f, 8.f));
+	Box->SetPadding(FMargin(12.f, 6.f));
 	NowPlayingBox = Box;
 	UVerticalBox* Texts = WidgetTree->ConstructWidget<UVerticalBox>();
 	Box->SetContent(Texts);
@@ -59,17 +59,15 @@ void UBBPHudOverlay::BuildDefaultLayout()
 	NowPlayingArtistText = BBPWidgetStyle::MakeText(WidgetTree, 11, BBPWidgetStyle::DimTextColor);
 	NowPlayingArtistText->SetJustification(ETextJustify::Center);
 	Texts->AddChildToVerticalBox(NowPlayingArtistText);
-	// Bottom-center, stacked just above the lyric line (anchored at 0.82): the game's own HUD (objective panel,
-	// compass, hotbar) never draws there, so this is visible regardless of AddToViewport z-order - a fixed-size
-	// panel added behind the default HUD layer (see UBBPPlaybackController::EnsureHudOverlay) can still end up
-	// hidden by it at any of the four screen corners, since Coffee Stain's own HUD elements can grow (e.g. more
-	// active milestones) and there's no version-safe way to know their z-order from here. Both BoomBoxPlus
-	// notifications share this spot and this look, rather than one being a top-right card and the other a
-	// bottom-center line.
-	UCanvasPanelSlot* BoxSlot = Canvas->AddChildToCanvas(Box);
-	BoxSlot->SetAnchors(FAnchors(0.5f, 0.74f));
-	BoxSlot->SetAlignment(FVector2D(0.5f, 1.f));
-	BoxSlot->SetAutoSize(true);
+	UVerticalBoxSlot* BoxSlot = Stack->AddChildToVerticalBox(Box);
+	BoxSlot->SetHorizontalAlignment(HAlign_Center);
+	BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+	LyricText = BBPWidgetStyle::MakeText(WidgetTree, 20, BBPWidgetStyle::TextColor);
+	LyricText->SetJustification(ETextJustify::Center);
+	LyricText->SetShadowOffset(FVector2D(1.f, 1.f));
+	LyricText->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
+	Stack->AddChildToVerticalBox(LyricText)->SetHorizontalAlignment(HAlign_Center);
 }
 
 const ABBPMusicChannel* UBBPHudOverlay::GetHeardChannel() const

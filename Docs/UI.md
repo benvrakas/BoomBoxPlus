@@ -185,16 +185,21 @@ extra panel for what's really the same "paste a link, press Enter, get a result"
 Pressing Enter on a stream address calls `UBBPNetSubsystem::TuneRadio` and shows the tuned-in station as a
 single search result, with the same **Play Now / Play Next / Add** buttons as any other result
 (`BBPTrackRow::SetupAsResult` already handles `Track.IsLive()` — the LIVE tag, no duration — regardless of
-where the result came from). Nothing about queuing changes because a station is playing: it's one more
-track in the same queue, so songs queue normally alongside it.
+where the result came from). Tuning errors are full sentences and show as the results message as they are.
+Nothing about queuing changes because a station is playing: it's one more track in the same queue, so songs
+queue normally alongside it. YouTube live links don't go through `TuneRadio`: they classify as
+`YouTubeVideo`, and the yt-dlp listing marks them live.
 
-What's left of the old Radio panel is a row of up to four compact buttons under the search box for **recent
-stations** (newest first, from `UBBPNetSubsystem::GetRecentStations`), which play that station again without
-retyping the address — tuning in successfully (via the search box) is what earns a station a spot here, not
-pressing Play Now specifically. Each button has its own `HandleRecentStationN` handler because
-`UBBPGameButton::OnClicked` carries no payload. The status text next to them only reports recent-station
-clicks now; the tuning status itself shows in the results message like any other search. The Link panel,
-freed from sharing a row with Radio, is back to a plain full-width panel.
+(1.2.5 shipped with `TuneRadio` still rejecting every link `ClassifyLink` didn't call `None`. That now
+included the new `Stream` kind, so pasting a station address always failed with "That's a song or playlist
+link". Only the recent-station buttons, which skip `TuneRadio`, worked. Fixed in 1.2.6.)
+
+What's left of the old Radio panel is a row under the search box: a "Recent stations:" label and up to four
+compact buttons (newest first, from `UBBPNetSubsystem::GetRecentStations`), which play that station again without
+retyping the address. Tuning in successfully (via the search box) is what earns a station a spot here, not
+pressing Play Now specifically. The label is hidden while there are no recent stations. Each button has its own
+`HandleRecentStationN` handler because `UBBPGameButton::OnClicked` carries no payload. The Link panel, freed
+from sharing a row with Radio, is back to a plain full-width panel.
 
 While a live entry plays, the position text shows **LIVE**, the seek bar is disabled (duration 0) and the
 lyric line shows the song the station announces, "Connecting to the station..." while the prebuffer fills,
@@ -218,9 +223,11 @@ native `UFGInteractWidget::SetDefaultFocusWidget` with the play/pause button and
 `UBBPHudOverlay` is added to the viewport (Z-order -10, hit-test invisible) by the playback controller on
 every non-dedicated machine. It shows:
 
-- the current lyric line, bottom-centre (anchor 0.5, 0.82), and
-- a "NOW PLAYING" card, bottom-centre too (anchor 0.5, 0.74, bottom-aligned so it sits just above the
-  lyric line), for 4 s when the track changes (fading out over the last 0.5 s),
+- the current lyric line, and
+- a "NOW PLAYING" card 4 px above it, for 4 s when the track changes (fading out over the last 0.5 s),
+
+stacked in one vertical box whose bottom edge is anchored at (0.5, 0.84), so the gap between them is the same
+at every resolution,
 
 **only while the local pawn is within hearing range** of a Boom Box playing Custom Music
 (`UBBPPlaybackController::GetAudibleRange()`, the attenuation's inner radius + falloff = 250 m). Both are

@@ -272,10 +272,11 @@ void UBBPMusicPage::BuildDefaultLayout()
 	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link or live stream address."));
 	AddToRow(SearchRow, SearchBox, true, 0.f);
 
-	// Recent radio/live stations: pasting a stream address into the search box above tunes it in as a normal
-	// result (Play Now/Play Next/Add, same as any other search hit); these buttons are just a shortcut back to
-	// ones already tuned in to, so the address doesn't need retyping.
+	// One-click buttons for stations tuned in to before, so their address doesn't need pasting again.
 	UHorizontalBox* StationsRow = AddRow(SearchColumn, 6.f);
+	RecentStationsLabel = MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("RecentStations", "Recent stations:"));
+	RecentStationsLabel->SetVisibility(ESlateVisibility::Collapsed);
+	AddToRow(StationsRow, RecentStationsLabel, false);
 	for (int32 i = 0; i < UBBPNetSubsystem::MaxRecentStations; ++i)
 	{
 		UBBPGameButton* StationButton = MakeButton(WidgetTree, FText::GetEmpty(), true);
@@ -283,9 +284,6 @@ void UBBPMusicPage::BuildDefaultLayout()
 		AddToRow(StationsRow, StationButton, false);
 		RadioStationButtons.Add(StationButton);
 	}
-	RadioStatusText = MakeText(WidgetTree, 11, DimTextColor);
-	Truncate(RadioStatusText);
-	AddToRow(StationsRow, RadioStatusText, true, 0.f);
 
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
@@ -1068,7 +1066,6 @@ void UBBPMusicPage::PlayRecentStation(int32 Index)
 	Net->RememberStation(Station);
 	EnsureCustomMusicLoaded();
 	UBBPBlueprintLibrary::RequestPlayTrackNow(GetBoomBox(), Station);
-	SetRadioStatus(FString::Printf(TEXT("Playing %s."), *Station.Title), false);
 	RefreshRadioStations();
 }
 
@@ -1093,19 +1090,7 @@ void UBBPMusicPage::RefreshRadioStations()
 			Button->SetToolTipText(FText::FromString(Stations[i].SourceRef));
 		}
 	}
-	if (RadioStatusText && RadioStatusText->GetText().IsEmpty() && Stations.Num() > 0)
-	{
-		RadioStatusText->SetText(LOCTEXT("RecentStations", "Recent stations"));
-	}
-}
-
-void UBBPMusicPage::SetRadioStatus(const FString& Status, bool bError)
-{
-	if (RadioStatusText)
-	{
-		RadioStatusText->SetText(BBPWidgetStyle::ToDisplayText(Status));
-		RadioStatusText->SetColorAndOpacity(bError ? BBPWidgetStyle::AccentColor : BBPWidgetStyle::DimTextColor);
-	}
+	BBPWidgetStyle::SetShown(RecentStationsLabel, Stations.Num() > 0);
 }
 
 void UBBPMusicPage::RunOnlineSearch(const FString& Text)
@@ -1177,21 +1162,18 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 			{
 				return;
 			}
-			if (!Error.IsEmpty())
+			if (Error.IsEmpty())
 			{
-				This->ShowOnlineResults(Generation, {}, Error, false);
-				return;
-			}
-			const UGameInstance* StationGameInstance = This->GetGameInstance();
-			if (UBBPNetSubsystem* StationNet = StationGameInstance ? StationGameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
-			{
-				// Tuning in successfully is as good as intent to use it again later; earns its spot in Recent.
-				StationNet->RememberStation(Station);
+				// A station that tunes in is added to the recent stations right away, whether or not it gets played.
+				const UGameInstance* StationGameInstance = This->GetGameInstance();
+				if (UBBPNetSubsystem* StationNet = StationGameInstance ? StationGameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+				{
+					StationNet->RememberStation(Station);
+				}
 				This->RefreshRadioStations();
+				This->OnlineResults = { Station };
 			}
-			This->OnlineResults = { Station };
-			This->bOnlineIsCollection = false;
-			This->OnlineStatus = FString::Printf(TEXT("Tuned in to %s:"), *Station.Title);
+			This->OnlineStatus = Error.IsEmpty() ? FString::Printf(TEXT("Tuned in to %s:"), *Station.Title) : Error;
 			This->RefreshResults();
 		}));
 		break;

@@ -161,9 +161,9 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkMessageText;
 
-	// Tuning progress, or feedback from pressing a recent station.
+	// "Recent stations:" in front of the recent station buttons; hidden while there are none.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> RadioStatusText;
+	TObjectPtr<UTextBlock> RecentStationsLabel;
 
 	// One button per recent station (newest first); pressing one plays it now.
 	UPROPERTY(Transient)
@@ -378,9 +378,6 @@ private:
 
 	// Relabels the recent station buttons from the saved list.
 	void RefreshRadioStations();
-
-	// Sets the line next to the recent-station buttons.
-	void SetRadioStatus(const FString& Status, bool bError);
 
 	UFUNCTION()
 	void HandleRecentStation0();
