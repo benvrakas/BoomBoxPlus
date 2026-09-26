@@ -151,8 +151,8 @@ void UBBPPlaybackController::UpdateVanillaPages()
 		const int32 EntryId = Channel->GetCurrentEntry(Current) ? Current.EntryId : INDEX_NONE;
 		const bool bPlaying = Channel->IsPlaying();
 		FBBPNowPlaying Song;
-		// The album line names the tape, as for the game's own tapes; the source is in the artist line.
-		const FText Album = DescribeNowPlaying(Channel, this, Song) ? GetDefault<UBBPCustomMusicTape>()->mTitle : UBBPCustomMusicTape::GetIdleDescription();
+		// The page's line under the song is the album line (the tape's description); it doesn't show the artist field.
+		const FText Album = DescribeNowPlaying(Channel, this, Song) ? FText::FromString(Song.Subtitle) : UBBPCustomMusicTape::GetIdleDescription();
 		float Position = 0.f;
 		float Duration = 0.f;
 		GetVanillaPosition(Channel, Position, Duration);

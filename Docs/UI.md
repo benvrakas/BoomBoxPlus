@@ -145,9 +145,13 @@ again, i.e. a video whose title had no "Artist - " part.
 | YouTube live | video title | [artist, ] YouTube live: <channel> |
 
 The artist from an "Artist - Title" video title is the mod's own split (`ParseTrackJson`), and the channel is
-yt-dlp's `channel`/`uploader` (`FBBPTrack::Uploader`), which is why they can differ. On the vanilla page, the
-song line is the title, the artist line the subtitle, and the album line names the tape ("Custom Music"; the idle
-blurb when nothing is queued), as the game's own tapes do. Nothing queued: "Custom Music" / "BoomBoxPlus".
+yt-dlp's `channel`/`uploader` (`FBBPTrack::Uploader`), which is why they can differ.
+
+On the vanilla page the lines are, top to bottom: the tape's title ("Custom Music"), the song line ("4. <title>",
+with the queue position), and the album line, which gets the subtitle through the tape's description (the idle
+blurb when nothing is queued). The page doesn't show `FSongData::ArtistName` at all (checked in game: setting the
+album line to "Custom Music" left no artist anywhere), so the subtitle also goes to ArtistName only for
+completeness.
 
 Song and artist reach the page through a `GetCurrentSong` hook (the tape's `mPlaylist` is empty). `UpdateVanillaPages`
 re-sends `CurrentSongChanged` when either line's text changes (a new radio announcement, not only a new queue
