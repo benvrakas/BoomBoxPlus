@@ -9,6 +9,9 @@
   **YouTube live streams** are saved there too when you queue one.
 - **Mute when the game is in the background** (new setting, on by default): Custom Music goes quiet while you're
   in another window and picks up at the right spot when you come back.
+- **My Volume is per Boom Box.** Each Boom Box has its own My Volume, just for you, so two players with Boom Boxes
+  side by side can each turn the other's down and listen to their own music. It's remembered between sessions.
+  Everyone's volumes start back at 100% with this update.
 - **Type your volume.** Click the percentage next to the My Volume slider, type a number from 0 to 200 and press
   Enter.
 - **Fairer start in multiplayer.** A new song still starts the moment everyone has it loaded. If some players are

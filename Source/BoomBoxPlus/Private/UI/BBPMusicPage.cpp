@@ -1013,10 +1013,30 @@ void UBBPMusicPage::HandleSeekEnd()
 	UBBPBlueprintLibrary::RequestSeekTo(GetBoomBox(), Target);
 }
 
+UBBPPlaybackController* UBBPMusicPage::GetPlaybackController() const
+{
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	return Playlist ? Playlist->GetPlaybackController() : nullptr;
+}
+
+float UBBPMusicPage::GetMyVolume() const
+{
+	const UBBPPlaybackController* Controller = GetPlaybackController();
+	return Controller ? Controller->GetMyVolume(GetBoomBox()) : 1.f;
+}
+
+void UBBPMusicPage::SetMyVolume(float Value)
+{
+	// This player's volume for this Boom Box only: nothing is sent to the server.
+	if (UBBPPlaybackController* Controller = GetPlaybackController())
+	{
+		Controller->SetMyVolume(GetBoomBox(), Value);
+	}
+}
+
 void UBBPMusicPage::HandleMyVolumeChanged(float Value)
 {
-	// Local-only setting: nothing is sent to the server, it just changes what this player hears.
-	UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, FMath::Clamp(Value, 0.f, 2.f));
+	SetMyVolume(Value);
 	RefreshMyVolume();
 }
 
@@ -1032,7 +1052,7 @@ void UBBPMusicPage::HandleMyVolumeCaptureEnd()
 
 void UBBPMusicPage::RefreshMyVolume()
 {
-	const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f);
+	const float Value = GetMyVolume();
 	if (MyVolumeSlider && !bChangingMyVolume)
 	{
 		MyVolumeSlider->SetValue(Value);
@@ -1050,14 +1070,13 @@ void UBBPMusicPage::HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type
 	if (CommitMethod != ETextCommit::OnCleared && !Typed.IsEmpty() && Typed.IsNumeric())
 	{
 		const float Percent = FMath::Clamp(FCString::Atof(*Typed), 0.f, 200.f);
-		UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, Percent / 100.f);
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: My Volume typed as %.0f%%"), Percent);
+		SetMyVolume(Percent / 100.f);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: My Volume for %s typed as %.0f%%"), *GetNameSafe(GetBoomBox()), Percent);
 	}
 	// Anything that isn't a number just puts the current value back.
 	if (MyVolumeBox)
 	{
-		const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f);
-		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetMyVolume() * 100.f))));
 	}
 	RefreshMyVolume();
 }

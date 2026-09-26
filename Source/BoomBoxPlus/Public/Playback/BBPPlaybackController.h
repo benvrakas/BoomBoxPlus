@@ -71,6 +71,17 @@ struct FBBPEmitter
 	bool bAppliedVanillaPlaying = false;
 };
 
+// This player's own volume per Boom Box ("My Volume"), kept between sessions in Saved/BoomBoxPlus/MyVolumes.json.
+USTRUCT()
+struct FBBPMyVolumes
+{
+	GENERATED_BODY()
+
+	// 0-2 by ABBPPlaylistSubsystem::GetBoomBoxKey; a Boom Box that isn't listed plays at 1.
+	UPROPERTY()
+	TMap<FString, float> Volumes;
+};
+
 // Plays each Custom Music Boom Box's channel through that Boom Box, kept in sync with the server clock.
 UCLASS()
 class BOOMBOXPLUS_API UBBPPlaybackController : public UObject
@@ -84,6 +95,11 @@ public:
 
 	// Returns the distance in centimetres at which Boom Box music becomes inaudible.
 	static float GetAudibleRange();
+
+	// This player's own volume for BoomBox, 0-2 (1 = as loud as the Boom Box's own volume sets it). Local only:
+	// it changes nothing for other players.
+	float GetMyVolume(const AFGBoomBoxPlayer* BoomBox) const;
+	void SetMyVolume(const AFGBoomBoxPlayer* BoomBox, float Volume);
 
 	// Returns the channel playing on the nearest Custom Music Boom Box the local player can hear, or null.
 	// With bRequireSound, only counts Boom Boxes actually producing sound on this machine.
@@ -178,6 +194,17 @@ private:
 
 	// True while Custom Music is muted because the game window isn't in front (the MuteInBackground setting).
 	bool bMutedInBackground = false;
+
+	FBBPMyVolumes MyVolumes;
+
+	// True when MyVolumes changed since it was last written; written at most once a second so a slider drag doesn't
+	// write the file every frame.
+	bool bMyVolumesDirty = false;
+	float MyVolumesSaveTimer = 0.f;
+
+	void LoadMyVolumes();
+	void SaveMyVolumes();
+	static FString GetMyVolumesPath();
 
 	float PrefetchTimer = 0.f;
 

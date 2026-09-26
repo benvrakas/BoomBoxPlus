@@ -174,20 +174,22 @@ later, but the mod page slider covers the need.
 
 "My Volume" sits on the transport row (`MyVolumeSlider` + `MyVolumeBox`, both `BindWidgetOptional`), next
 to Repeat. Since 1.3.0 the percentage is an `UEditableTextBox`: click it, type 0-200 (a `%` is ignored) and press
-Enter (`HandleMyVolumeCommitted`); anything that isn't a number, or Esc, puts the current value back. It's a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0
-(unboosted) sits at its midpoint and the top half boosts Custom Music above the game's own mix. It reads
-and writes the `MusicVolume` mod-config value directly — `UBBPConfig::GetFloat` /
-the new `UBBPConfig::SetFloat` — which is a local, unreplicated setting already (see Multiplayer.md), so
-this is genuinely a "my volume" control: it never touches anyone else's playback.
+Enter (`HandleMyVolumeCommitted`); anything that isn't a number, or Esc, puts the current value back. The slider
+is a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0 (unboosted) sits at
+its midpoint and the top half boosts Custom Music above the game's own mix.
 
-`UBBPConfig::SetFloat` finds the live `UConfigPropertyFloat`, writes `Value` directly and calls
-`UConfigManager::MarkConfigurationDirty`, which the manager saves to disk on a short debounce timer (it
-doesn't write to `BoomBoxPlus.cfg` on every drag frame). `UBBPPlaybackController::UpdateGameVolumeScale`
-already reads `MusicVolume` fresh every tick, so a drag audibly changes the volume immediately, before the
-disk write happens.
+**Per Boom Box, per player** (1.3.0). The value is this player's volume for the Boom Box whose page is open, so two
+players with Boom Boxes side by side can each turn the other's down. It lives in `UBBPPlaybackController`
+(`GetMyVolume`/`SetMyVolume`), keyed by `ABBPPlaylistSubsystem::GetBoomBoxKey` (the same save-stable key queue
+saving uses), and is never sent to the server. It's kept between sessions in `Saved/BoomBoxPlus/MyVolumes.json`,
+written at most once a second while a slider is dragged and on shutdown; only values other than 100% are stored.
+A Boom Box picked up and placed again is a new actor with a new key, so it starts back at 100%, the same way it
+gets a new queue. `SyncEmitters` reads it fresh every tick, so a drag is heard immediately. Until 1.2.6 this was one
+global value, the hidden `MusicVolume` mod setting; that setting is gone, and SML ignores its leftover entry in old
+`BoomBoxPlus.cfg` files.
 
 `RefreshTransport()` (called from `NativeTick`, so at least once per frame the page is visible) calls
-`RefreshMyVolume()`, which snaps the slider to the live config value and updates the `NN%` box (not while the box
+`RefreshMyVolume()`, which snaps the slider to the live value and updates the `NN%` box (not while the box
 has focus, so typing isn't overwritten) — except
 while `bChangingMyVolume` is set (between `OnMouseCaptureBegin`/`OnControllerCaptureBegin` and their `End`
 counterparts), so a drag isn't fought by the same per-tick refresh that reads it back. Same pattern as

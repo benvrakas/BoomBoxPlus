@@ -17,7 +17,10 @@
 #include "Net/BBPRadio.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
+#include "JsonObjectConverter.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPHudOverlay.h"
 
@@ -67,6 +70,7 @@ void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
 	Playlist = InPlaylist;
 	const bool bHasAudio = BBPAudioDevice::EnsureAvailable();
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback controller ready (Unreal audio device %s)"), bHasAudio ? TEXT("available") : TEXT("MISSING"));
+	LoadMyVolumes();
 }
 
 void UBBPPlaybackController::Shutdown()
@@ -81,6 +85,10 @@ void UBBPPlaybackController::Shutdown()
 	}
 	Emitters.Empty();
 	GameMusicFader.Restore();
+	if (bMyVolumesDirty)
+	{
+		SaveMyVolumes();
+	}
 	if (HudOverlay)
 	{
 		HudOverlay->RemoveFromParent();
@@ -116,6 +124,69 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);
 	UpdateVanillaPages();
+	MyVolumesSaveTimer -= DeltaSeconds;
+	if (bMyVolumesDirty && MyVolumesSaveTimer <= 0.f)
+	{
+		SaveMyVolumes();
+	}
+}
+
+float UBBPPlaybackController::GetMyVolume(const AFGBoomBoxPlayer* BoomBox) const
+{
+	const float* Found = BoomBox ? MyVolumes.Volumes.Find(ABBPPlaylistSubsystem::GetBoomBoxKey(BoomBox)) : nullptr;
+	return Found ? FMath::Clamp(*Found, 0.f, 2.f) : 1.f;
+}
+
+void UBBPPlaybackController::SetMyVolume(const AFGBoomBoxPlayer* BoomBox, float Volume)
+{
+	if (!BoomBox)
+	{
+		return;
+	}
+	Volume = FMath::Clamp(Volume, 0.f, 2.f);
+	const FString Key = ABBPPlaylistSubsystem::GetBoomBoxKey(BoomBox);
+	// 1 is the default, so it isn't stored: the file only lists Boom Boxes someone actually turned up or down.
+	if (FMath::IsNearlyEqual(Volume, 1.f, 0.005f))
+	{
+		MyVolumes.Volumes.Remove(Key);
+	}
+	else
+	{
+		MyVolumes.Volumes.Add(Key, Volume);
+	}
+	bMyVolumesDirty = true;
+}
+
+void UBBPPlaybackController::LoadMyVolumes()
+{
+	FString Json;
+	if (!FFileHelper::LoadFileToString(Json, *GetMyVolumesPath()))
+	{
+		return;
+	}
+	if (!FJsonObjectConverter::JsonObjectStringToUStruct(Json, &MyVolumes))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: could not read '%s'; every Boom Box starts at 100%%"), *GetMyVolumesPath());
+		MyVolumes = FBBPMyVolumes();
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %d Boom Box volume(s) of your own"), MyVolumes.Volumes.Num());
+}
+
+void UBBPPlaybackController::SaveMyVolumes()
+{
+	bMyVolumesDirty = false;
+	MyVolumesSaveTimer = 1.f;
+	FString Json;
+	if (!FJsonObjectConverter::UStructToJsonObjectString(MyVolumes, Json) || !FFileHelper::SaveStringToFile(Json, *GetMyVolumesPath()))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: could not write '%s'"), *GetMyVolumesPath());
+	}
+}
+
+FString UBBPPlaybackController::GetMyVolumesPath()
+{
+	return FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("BoomBoxPlus") / TEXT("MyVolumes.json"));
 }
 
 void UBBPPlaybackController::UpdateGameVolumeScale()
@@ -373,7 +444,6 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f) * GameVolumeScale;
 	// Unreal's own unfocused-volume setting doesn't apply here: the game mixes its audio in Wwise, not Unreal.
 	const bool bMute = UBBPConfig::GetBool(Playlist, UBBPConfig::MuteInBackgroundKey, true) && !FPlatformApplicationMisc::IsThisApplicationForeground();
 	if (bMute != bMutedInBackground)
@@ -416,12 +486,13 @@ void UBBPPlaybackController::SyncEmitters()
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: attached audio to Boom Box %s"), *GetNameSafe(BoomBox));
 		}
 		// Set before the first track starts on a new emitter, so it never plays a moment at the default volume.
-		const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
+		const float MyVolume = GetMyVolume(BoomBox);
+		const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MyVolume * GameVolumeScale;
 		if (!FMath::IsNearlyEqual(Emitter->AppliedVolume, Volume, 0.001f))
 		{
 			Emitter->AppliedVolume = Volume;
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x music volume setting x game sliders %.3f)"),
-				Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x my volume %.2f x game sliders %.3f)"),
+				Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MyVolume, GameVolumeScale);
 		}
 		// Muting only zeroes the component: the stream keeps playing in time (the wave plays when silent), and
 		// AppliedVolume still says the music is audible, so the game's own music doesn't fade back in meanwhile.

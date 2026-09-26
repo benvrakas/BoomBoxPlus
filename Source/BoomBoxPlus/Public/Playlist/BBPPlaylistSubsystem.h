@@ -119,8 +119,11 @@ private:
 	// (or RestoreGraceSeconds after start, with whichever have). Needed forces the channel of that Boom Box now.
 	void RestoreSavedChannels(const AFGBoomBoxPlayer* Needed = nullptr);
 
+public:
 	// Stable identifier for BoomBox that survives a save/reload, or empty if BoomBox is null.
 	static FString GetBoomBoxKey(const AFGBoomBoxPlayer* BoomBox);
+
+private:
 
 	UPROPERTY(Replicated)
 	TArray<FBBPActiveBoomBox> ActiveBoomBoxes;

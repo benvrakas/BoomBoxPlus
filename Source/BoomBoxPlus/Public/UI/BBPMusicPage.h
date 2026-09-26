@@ -153,7 +153,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USlider> SeekSlider;
 
-	// This player's own Custom Music volume (the mod's MusicVolume setting), editable right here instead of only in Mods menu.
+	// This player's own volume for this Boom Box ("My Volume"): other players and other Boom Boxes are unaffected.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USlider> MyVolumeSlider;
 
@@ -306,7 +306,7 @@ private:
 	UFUNCTION()
 	void HandleSeekEnd();
 
-	// Writes the dragged value to the mod's MusicVolume setting immediately, and updates the % label.
+	// Sets this player's volume for this Boom Box as the slider moves, and updates the % box.
 	UFUNCTION()
 	void HandleMyVolumeChanged(float Value);
 
@@ -318,6 +318,12 @@ private:
 
 	// Refreshes MyVolumeText and, unless the slider is being dragged, MyVolumeSlider's value from the live setting.
 	void RefreshMyVolume();
+
+	// This player's own volume for this page's Boom Box (UBBPPlaybackController::GetMyVolume/SetMyVolume); 1 when
+	// there's no playback controller.
+	float GetMyVolume() const;
+	void SetMyVolume(float Value);
+	class UBBPPlaybackController* GetPlaybackController() const;
 
 	// True while the player is dragging the personal volume slider.
 	bool bChangingMyVolume = false;

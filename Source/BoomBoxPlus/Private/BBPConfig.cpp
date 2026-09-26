@@ -12,7 +12,6 @@
 
 #define LOCTEXT_NAMESPACE "BoomBoxPlus"
 
-const FString UBBPConfig::MusicVolumeKey = TEXT("MusicVolume");
 const FString UBBPConfig::ShowLyricsKey = TEXT("ShowLyrics");
 const FString UBBPConfig::ShowNowPlayingKey = TEXT("ShowNowPlaying");
 const FString UBBPConfig::HostOnlyControlKey = TEXT("HostOnlyControl");
@@ -57,17 +56,6 @@ UBBPConfig::UBBPConfig()
 	{
 		RootSection->SectionProperties.Add(Key, Property);
 	};
-
-	// Still a real setting (read/written by UBBPConfig::GetFloat/SetFloat, saved to disk) but hidden from the Mods
-	// menu: it's the same value as the "My Volume" slider on the Custom Music page, which is the easier place to
-	// reach it from and shows its effect immediately.
-	UConfigPropertyFloat* MusicVolume = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("MusicVolume"));
-	MusicVolume->DisplayName = LOCTEXT("MusicVolume", "Music volume");
-	MusicVolume->Tooltip = LOCTEXT("MusicVolumeTip", "Volume of Custom Music, from 0 (silent) to 2 (double, to boost it above the game's own mix). 1 is unboosted. Also on the Custom Music page as \"My Volume\".");
-	MusicVolume->DefaultValue = 1.f;
-	MusicVolume->Value = 1.f;
-	MusicVolume->bHidden = true;
-	AddSetting(MusicVolumeKey, MusicVolume);
 
 	UConfigPropertyBool* ShowLyrics = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("ShowLyrics"));
 	ShowLyrics->DisplayName = LOCTEXT("ShowLyrics", "Show lyrics");
@@ -216,22 +204,6 @@ void UBBPConfig::UseSMLEditorClasses()
 	int32 Converted = 0, Total = 0;
 	Defaults->RootSection = ConvertSectionRecursive(OldRoot, SectionClass, Defaults, Converted, Total);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Config: %d of %d settings/sections use SML's editor widgets"), Converted, Total);
-}
-
-void UBBPConfig::SetFloat(const UObject* WorldContext, const FString& Key, float Value)
-{
-	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
-	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
-	UConfigManager* Manager = GameInstance ? GameInstance->GetSubsystem<UConfigManager>() : nullptr;
-	UConfigPropertyFloat* Property = Manager ? Cast<UConfigPropertyFloat>(FindProperty(WorldContext, Key)) : nullptr;
-	if (!Property)
-	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: could not set '%s'; configuration not available"), *Key);
-		return;
-	}
-	Property->Value = Value;
-	// Playback reads the value live every frame, so it takes effect immediately; this just persists it to disk.
-	Manager->MarkConfigurationDirty(MakeConfigId());
 }
 
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
