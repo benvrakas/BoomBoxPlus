@@ -161,17 +161,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkMessageText;
 
-	// Where the player pastes an internet radio stream address.
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UEditableTextBox> RadioUrlBox;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBBPGameButton> RadioPlayButton;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBBPGameButton> RadioAddButton;
-
-	// Tuning progress or the reason a stream couldn't be played.
+	// Tuning progress, or feedback from pressing a recent station.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> RadioStatusText;
 
@@ -383,26 +373,14 @@ private:
 	// Resizes PageSizeBox to the current screen size; cheap when nothing changed.
 	void UpdatePageSize();
 
-	// Checks the radio field's stream and then plays it now (bPlayNow) or adds it to the end of the queue.
-	void TuneRadio(bool bPlayNow);
-
 	// Plays recent station Index now.
 	void PlayRecentStation(int32 Index);
 
 	// Relabels the recent station buttons from the saved list.
 	void RefreshRadioStations();
 
-	// Sets the line under the radio field.
+	// Sets the line next to the recent-station buttons.
 	void SetRadioStatus(const FString& Status, bool bError);
-
-	UFUNCTION()
-	void HandleRadioPlayNow();
-
-	UFUNCTION()
-	void HandleRadioAdd();
-
-	UFUNCTION()
-	void HandleRadioUrlCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 
 	UFUNCTION()
 	void HandleRecentStation0();
@@ -415,9 +393,6 @@ private:
 
 	UFUNCTION()
 	void HandleRecentStation3();
-
-	// Increments on every tune-in so a slow reply to an older one is ignored.
-	int32 RadioGeneration = 0;
 
 	// Shows a link message under the link field for a few seconds.
 	void SetLinkMessage(const FText& Message);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5 — Radio joins the search box
+
+- **No more separate Radio box.** Paste a live stream address into the same search box as everything else
+  and press Enter; the station shows up as a normal search result with Play Now, Play Next and Add, exactly
+  like a YouTube link. Recent stations are still one click away, now just underneath the search box.
+- Songs queue normally whether or not a station is currently playing — nothing about that changed, it's just
+  one field to use now instead of two.
+
 ## 1.2.4 — Turbo Bass fix
 
 - Fixed **Turbo Bass** refusing to fire ("the music is paused") while Custom Music was actually playing.

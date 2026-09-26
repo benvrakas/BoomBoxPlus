@@ -24,7 +24,7 @@ song titles show for it).
 | Piece | Does |
 |---|---|
 | `BBPRadio` (`Private/Net/BBPRadio.*`) | URL checks, `.pls`/`.m3u` parsing, ffmpeg input arguments, ffmpeg log parsing |
-| `UBBPNetSubsystem::TuneRadio` | Radio box: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name; YouTube links go through the yt-dlp listing and must be live |
+| `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name; YouTube links go through the yt-dlp listing and must be live |
 | `UBBPNetSubsystem` recent stations | Last 4 stations tuned in, `Saved/BoomBoxPlus/RadioStations.json` |
 | `FBBPLiveStreamWorker` | Thread per playing station: runs ffmpeg, pumps stdout into the ring buffer, reads stderr for titles, restarts on drops |
 | `FBBPStreamState` (`Private/Audio/BBPStreamState.h`) | Ring buffer shared with file playback; live streams get a 6 s ring and a 2 s prebuffer |
@@ -54,8 +54,13 @@ on every ffmpeg restart. The lookup takes about 3 s and runs as a child process 
 skip or pause kills it instead of blocking the game thread in `StopStream` (`Kill(true)` waits for the
 worker).
 
-A YouTube video that isn't live is refused by the Radio box ("use the search box"); live videos found by
-the normal search show with a LIVE tag and queue like any other result.
+A YouTube link that isn't currently live is refused ("that YouTube video isn't live right now"); live
+videos found by the normal search, or tuned in to directly, show a LIVE tag and queue like any other result.
+
+**No separate Radio panel since 1.2.5.** A stream address is just another link the search box classifies
+(`EBBPLinkKind::Stream`); tuning in shows the station as a single search result with the normal Play Now/
+Play Next/Add buttons. Only a row of up to four "recent station" quick-access buttons remains, under the
+search box. See UI.md.
 
 ## Security
 

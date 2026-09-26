@@ -432,6 +432,10 @@ EBBPLinkKind UBBPNetSubsystem::ClassifyLink(const FString& Text)
 			return EBBPLinkKind::SpotifyCollection;
 		}
 	}
+	if (BBPRadio::IsStreamUrl(Url))
+	{
+		return EBBPLinkKind::Stream;
+	}
 	return EBBPLinkKind::None;
 }
 

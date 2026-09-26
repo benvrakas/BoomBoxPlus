@@ -152,15 +152,25 @@ shown, not only once something plays or is queued, so there's always a real code
 a placeholder. The line under it shows a pending link request with its countdown, or the server's last
 reply for 8 s. See Multiplayer.md.
 
-## Radio panel
+## Radio: one search box, no separate panel
 
-The bottom row is split: the **Radio** panel on the left, the Link panel on the right. Radio has a stream
-address field (Enter = Play Now), **Play Now** (`RequestPlayTrackNow`) and **Add to Queue**, and a row of up
-to four compact buttons for recent stations (newest first, from `UBBPNetSubsystem::GetRecentStations`),
-which play that station now. Each button has its own `HandleRecentStationN` handler because
-`UBBPGameButton::OnClicked` carries no payload. The status text next to them shows tuning progress or the
-reason a stream failed. A stream address pasted into the search box is moved into the Radio field instead
-of being searched on YouTube.
+A live stream address is just another kind of link the search box understands: `ClassifyLink` returns
+`EBBPLinkKind::Stream` for anything `BBPRadio::IsStreamUrl` accepts (v1.2.5; before that, a pasted stream
+address bounced out of the search box into a dedicated Radio panel with its own field and buttons — a whole
+extra panel for what's really the same "paste a link, press Enter, get a result" flow as everything else).
+Pressing Enter on a stream address calls `UBBPNetSubsystem::TuneRadio` and shows the tuned-in station as a
+single search result, with the same **Play Now / Play Next / Add** buttons as any other result
+(`BBPTrackRow::SetupAsResult` already handles `Track.IsLive()` — the LIVE tag, no duration — regardless of
+where the result came from). Nothing about queuing changes because a station is playing: it's one more
+track in the same queue, so songs queue normally alongside it.
+
+What's left of the old Radio panel is a row of up to four compact buttons under the search box for **recent
+stations** (newest first, from `UBBPNetSubsystem::GetRecentStations`), which play that station again without
+retyping the address — tuning in successfully (via the search box) is what earns a station a spot here, not
+pressing Play Now specifically. Each button has its own `HandleRecentStationN` handler because
+`UBBPGameButton::OnClicked` carries no payload. The status text next to them only reports recent-station
+clicks now; the tuning status itself shows in the results message like any other search. The Link panel,
+freed from sharing a row with Radio, is back to a plain full-width panel.
 
 While a live entry plays, the position text shows **LIVE**, the seek bar is disabled (duration 0) and the
 lyric line shows the song the station announces, "Connecting to the station..." while the prebuffer fills,

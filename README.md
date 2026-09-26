@@ -22,7 +22,7 @@ Search results from your own music, YouTube and SoundCloud, each with Play Now, 
 
 ![Search results](Docs/Images/search-results.png)
 
-An internet radio station and a YouTube live stream playing, with recent stations under the Radio box.
+An internet radio station and a YouTube live stream playing, with recent stations one click away under the search box.
 
 ![A radio station playing](Docs/Images/radio.png)
 

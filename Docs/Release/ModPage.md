@@ -37,10 +37,10 @@ Inspired by the PEAK mod sPEAKer.
 - **Spotify links.** Paste a Spotify song and it searches for it. Paste a playlist or album and every song
   is matched on YouTube. Songs start playing as soon as the first ones are found; you don't wait for the
   whole list.
-- **Internet radio.** Paste a station's stream address into the **Radio** box and press **Play Now**. MP3,
-  AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live streams**. The
-  station's name is filled in automatically, the song the station announces shows under Now Playing, and
-  your last 4 stations are one click away.
+- **Internet radio.** Paste a station's stream address into the search box and press Enter, same as any
+  other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
+  streams**. The station's name is filled in automatically, the song the station announces shows under Now
+  Playing, and your last 4 stations are one click away underneath the search box.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
@@ -66,9 +66,9 @@ Inspired by the PEAK mod sPEAKer.
 
 1. Install with Satisfactory Mod Manager. Everyone in a multiplayer session needs the mod.
 2. Pick up or open any Boom Box and press **Custom Music**.
-3. Search, then press **Play Now**, **Play Next** or **Add**.
-4. For radio, paste a stream address (for example `http://stream.sunshine-live.de/dnb/mp3-192`) into the
-   **Radio** box at the bottom and press **Play Now**.
+3. Search, then press **Play Now**, **Play Next** or **Add**. This also works for a stream address (for
+   example `http://stream.sunshine-live.de/dnb/mp3-192`) — press Enter to tune in, then treat the station
+   like any other result. Songs queue normally whether or not a station is currently playing.
 
 **Finding stream addresses.** Many stations list a "stream URL", "direct link" or a `.pls`/`.m3u` file on
 their website. Directories like [radio-browser.info](https://www.radio-browser.info) list thousands. A
@@ -191,8 +191,7 @@ BoomBoxPlus connects to these services. Multiplayer sync between players uses th
   `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\SpotifyLogin.json`.
 - **Internet radio stations**: when a radio station is playing on a Boom Box you can hear, your game
   connects to that station's stream address, including stations other players added. When you press
-  Play Now or Add to Queue in the Radio box, your game briefly connects to check the stream and read its
-  name. Your recent stations are stored locally in
+  pressing Enter on a stream address, your game briefly connects to check the stream and read its name. Your recent stations are stored locally in
   `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
 - **YouTube live streams** (through the bundled yt-dlp): looks up the live stream's address when one plays
   near you, then streams it from YouTube like a radio station.

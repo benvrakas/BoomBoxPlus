@@ -126,9 +126,6 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
 	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 	if (SpotifyButton) SpotifyButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleConnectSpotify);
-	if (RadioPlayButton) RadioPlayButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadioPlayNow);
-	if (RadioAddButton) RadioAddButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadioAdd);
-	if (RadioUrlBox) RadioUrlBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleRadioUrlCommitted);
 	if (RadioStationButtons.IsValidIndex(0) && RadioStationButtons[0]) RadioStationButtons[0]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation0);
 	if (RadioStationButtons.IsValidIndex(1) && RadioStationButtons[1]) RadioStationButtons[1]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation1);
 	if (RadioStationButtons.IsValidIndex(2) && RadioStationButtons[2]) RadioStationButtons[2]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation2);
@@ -272,8 +269,23 @@ void UBBPMusicPage::BuildDefaultLayout()
 	}
 	SearchBox = WidgetTree->ConstructWidget<UEditableTextBox>();
 	StyleTextBox(SearchBox, 12);
-	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link."));
+	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link or live stream address."));
 	AddToRow(SearchRow, SearchBox, true, 0.f);
+
+	// Recent radio/live stations: pasting a stream address into the search box above tunes it in as a normal
+	// result (Play Now/Play Next/Add, same as any other search hit); these buttons are just a shortcut back to
+	// ones already tuned in to, so the address doesn't need retyping.
+	UHorizontalBox* StationsRow = AddRow(SearchColumn, 6.f);
+	for (int32 i = 0; i < UBBPNetSubsystem::MaxRecentStations; ++i)
+	{
+		UBBPGameButton* StationButton = MakeButton(WidgetTree, FText::GetEmpty(), true);
+		StationButton->SetVisibility(ESlateVisibility::Collapsed);
+		AddToRow(StationsRow, StationButton, false);
+		RadioStationButtons.Add(StationButton);
+	}
+	RadioStatusText = MakeText(WidgetTree, 11, DimTextColor);
+	Truncate(RadioStatusText);
+	AddToRow(StationsRow, RadioStatusText, true, 0.f);
 
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
@@ -318,42 +330,9 @@ void UBBPMusicPage::BuildDefaultLayout()
 	StyleScrollBox(QueueList);
 	QueuePanel->SetContent(QueueList);
 
-	// Bottom row: internet radio on the left, linking on the right.
-	UHorizontalBox* BottomRow = AddRow(Column, 12.f);
-
-	UBorder* RadioPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 8.f));
-	UHorizontalBoxSlot* RadioSlot = BottomRow->AddChildToHorizontalBox(RadioPanel);
-	RadioSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	RadioSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
-	UVerticalBox* RadioColumn = WidgetTree->ConstructWidget<UVerticalBox>();
-	RadioPanel->SetContent(RadioColumn);
-	UHorizontalBox* RadioRow = AddRow(RadioColumn, 0.f);
-	AddToRow(RadioRow, MakeText(WidgetTree, 13, AccentColor, LOCTEXT("RadioLabel", "RADIO"), EFontWeight::Bold), false, 10.f);
-	RadioUrlBox = WidgetTree->ConstructWidget<UEditableTextBox>();
-	StyleTextBox(RadioUrlBox, 12);
-	RadioUrlBox->SetHintText(LOCTEXT("RadioHint", "Paste a live stream address (http://...)"));
-	AddToRow(RadioRow, RadioUrlBox, true);
-	RadioPlayButton = MakeButton(WidgetTree, LOCTEXT("RadioPlay", "Play Now"));
-	AddToRow(RadioRow, RadioPlayButton, false);
-	RadioAddButton = MakeButton(WidgetTree, LOCTEXT("RadioAdd", "Add to Queue"));
-	AddToRow(RadioRow, RadioAddButton, false, 0.f);
-	UHorizontalBox* StationsRow = AddRow(RadioColumn, 4.f);
-	for (int32 i = 0; i < UBBPNetSubsystem::MaxRecentStations; ++i)
-	{
-		UBBPGameButton* StationButton = MakeButton(WidgetTree, FText::GetEmpty(), true);
-		StationButton->SetVisibility(ESlateVisibility::Collapsed);
-		AddToRow(StationsRow, StationButton, false);
-		RadioStationButtons.Add(StationButton);
-	}
-	RadioStatusText = MakeText(WidgetTree, 11, DimTextColor);
-	Truncate(RadioStatusText);
-	AddToRow(StationsRow, RadioStatusText, true, 0.f);
-
 	// Linking: this Boom Box's code, and a field for another Boom Box's code.
 	UBorder* LinkPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 8.f));
-	UHorizontalBoxSlot* LinkSlot = BottomRow->AddChildToHorizontalBox(LinkPanel);
-	LinkSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	LinkSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+	Column->AddChildToVerticalBox(LinkPanel)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
 	UVerticalBox* LinkColumn = WidgetTree->ConstructWidget<UVerticalBox>();
 	LinkPanel->SetContent(LinkColumn);
 	UHorizontalBox* LinkRow = AddRow(LinkColumn, 0.f);
@@ -1071,82 +1050,10 @@ void UBBPMusicPage::HandleSearchCommitted(const FText& Text, ETextCommit::Type C
 	}
 }
 
-void UBBPMusicPage::HandleRadioPlayNow()
-{
-	TuneRadio(true);
-}
-
-void UBBPMusicPage::HandleRadioAdd()
-{
-	TuneRadio(false);
-}
-
-void UBBPMusicPage::HandleRadioUrlCommitted(const FText& Text, ETextCommit::Type CommitMethod)
-{
-	if (CommitMethod == ETextCommit::OnEnter)
-	{
-		TuneRadio(true);
-	}
-}
-
 void UBBPMusicPage::HandleRecentStation0() { PlayRecentStation(0); }
 void UBBPMusicPage::HandleRecentStation1() { PlayRecentStation(1); }
 void UBBPMusicPage::HandleRecentStation2() { PlayRecentStation(2); }
 void UBBPMusicPage::HandleRecentStation3() { PlayRecentStation(3); }
-
-void UBBPMusicPage::TuneRadio(bool bPlayNow)
-{
-	const UGameInstance* GameInstance = GetGameInstance();
-	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
-	const FString Text = RadioUrlBox ? RadioUrlBox->GetText().ToString().TrimStartAndEnd() : FString();
-	if (!Net)
-	{
-		return;
-	}
-	if (Text.IsEmpty())
-	{
-		SetRadioStatus(TEXT("Paste a stream address first, e.g. http://stream.example.com/live.mp3"), true);
-		return;
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: tuning in to '%s' (%s)"), *Text, bPlayNow ? TEXT("play now") : TEXT("add to queue"));
-	const int32 Generation = ++RadioGeneration;
-	SetRadioStatus(TEXT("Tuning in..."), false);
-	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
-	Net->TuneRadio(Text, FBBPOnRadioTuned::CreateLambda([WeakThis, Generation, bPlayNow](const FBBPTrack& Station, const FString& Error)
-	{
-		UBBPMusicPage* This = WeakThis.Get();
-		if (!This || Generation != This->RadioGeneration)
-		{
-			return;
-		}
-		if (!Error.IsEmpty())
-		{
-			This->SetRadioStatus(Error, true);
-			return;
-		}
-		const UGameInstance* GameInstance = This->GetGameInstance();
-		if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
-		{
-			Net->RememberStation(Station);
-		}
-		This->EnsureCustomMusicLoaded();
-		if (bPlayNow)
-		{
-			UBBPBlueprintLibrary::RequestPlayTrackNow(This->GetBoomBox(), Station);
-		}
-		else
-		{
-			UBBPBlueprintLibrary::RequestAddTrack(This->GetBoomBox(), Station, false);
-		}
-		if (This->RadioUrlBox)
-		{
-			This->RadioUrlBox->SetText(FText::GetEmpty());
-		}
-		This->SetRadioStatus(bPlayNow ? FString::Printf(TEXT("Playing %s."), *Station.Title)
-			: FString::Printf(TEXT("Added %s to the queue."), *Station.Title), false);
-		This->RefreshRadioStations();
-	}));
-}
 
 void UBBPMusicPage::PlayRecentStation(int32 Index)
 {
@@ -1158,7 +1065,6 @@ void UBBPMusicPage::PlayRecentStation(int32 Index)
 	}
 	const FBBPTrack Station = Net->GetRecentStations()[Index];
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: playing recent station '%s' (%s)"), *Station.Title, *Station.SourceRef);
-	++RadioGeneration;
 	Net->RememberStation(Station);
 	EnsureCustomMusicLoaded();
 	UBBPBlueprintLibrary::RequestPlayTrackNow(GetBoomBox(), Station);
@@ -1261,6 +1167,35 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 		}
 		break;
 	}
+	case EBBPLinkKind::Stream:
+	{
+		OnlineStatus = TEXT("Tuning in...");
+		Net->TuneRadio(Text, FBBPOnRadioTuned::CreateLambda([WeakThis, Generation](const FBBPTrack& Station, const FString& Error)
+		{
+			UBBPMusicPage* This = WeakThis.Get();
+			if (!This || Generation != This->SearchGeneration)
+			{
+				return;
+			}
+			if (!Error.IsEmpty())
+			{
+				This->ShowOnlineResults(Generation, {}, Error, false);
+				return;
+			}
+			const UGameInstance* StationGameInstance = This->GetGameInstance();
+			if (UBBPNetSubsystem* StationNet = StationGameInstance ? StationGameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+			{
+				// Tuning in successfully is as good as intent to use it again later; earns its spot in Recent.
+				StationNet->RememberStation(Station);
+				This->RefreshRadioStations();
+			}
+			This->OnlineResults = { Station };
+			This->bOnlineIsCollection = false;
+			This->OnlineStatus = FString::Printf(TEXT("Tuned in to %s:"), *Station.Title);
+			This->RefreshResults();
+		}));
+		break;
+	}
 	case EBBPLinkKind::YouTubeVideo:
 	case EBBPLinkKind::YouTubePlaylist:
 	case EBBPLinkKind::SoundCloudTrack:
@@ -1278,17 +1213,6 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 		break;
 	}
 	default:
-		if (BBPRadio::IsStreamUrl(Text))
-		{
-			// Stream addresses belong in the Radio box, not a YouTube search.
-			if (RadioUrlBox)
-			{
-				RadioUrlBox->SetText(FText::FromString(Text));
-			}
-			SetRadioStatus(TEXT("That looks like a radio stream. Press Play Now to tune in."), false);
-			OnlineStatus = TEXT("Stream address moved to the Radio box below.");
-			break;
-		}
 		OnlineStatus = Net->AreToolsAvailable() ? TEXT("Searching YouTube and SoundCloud...") : TEXT("YouTube/SoundCloud unavailable: the mod's download tools are missing.");
 		if (Net->AreToolsAvailable())
 		{

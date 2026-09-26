@@ -19,7 +19,9 @@ enum class EBBPLinkKind : uint8
 	SoundCloudTrack,
 	SoundCloudSet,
 	SpotifyTrack,
-	SpotifyCollection
+	SpotifyCollection,
+	// A live stream address (radio station or YouTube-live watch link), typed straight into the search box.
+	Stream
 };
 
 DECLARE_DELEGATE_TwoParams(FBBPOnNetTracks, const TArray<FBBPTrack>& /*Tracks*/, const FString& /*Error*/);
