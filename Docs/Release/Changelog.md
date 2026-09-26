@@ -1,34 +1,43 @@
 # Changelog
 
-## 1.2.6 — Now playing on the vanilla page
+## 1.2.6 — Now playing, everywhere
 
-- **What's playing reads the same everywhere**: the Custom Music page, the Boom Box's own screen and the
+**New**
+
+- **What's playing reads the same everywhere.** The Custom Music page, the Boom Box's own screen and the
   "now playing" notification all show the song title, and under it the artist and where it's from, e.g.
   "Koven, YouTube: Monstercat Uncaged". The Boom Box's own screen used to show a static "Your own music, YouTube
-  and SoundCloud." For radio, the title is the song the station announces, updating as the station moves on.
+  and SoundCloud."
+- **Radio shows the current song.** The title is the song the station announces, updating as it moves on, and
+  the notification pops up for each new song.
+- **Copy Link** on the Custom Music page copies the playing song's YouTube or SoundCloud page, or the radio
+  station's stream address.
+- The progress bar on the Boom Box's own screen now follows Custom Music, matching the Custom Music page's
+  seek bar (it stays empty for radio, which has no length).
 - Lyrics on the Custom Music page have a line of their own.
-- **Copy Link** next to the source copies the playing song's YouTube or SoundCloud page, or the radio
-  station's stream address, to the clipboard.
-- Songs queued before this update show just "YouTube"/"SoundCloud" as their source; queue them again to see the
-  channel. Songs downloaded before it pick up their channel after they've been played once from a search.
-- Fixed the progress bar on the Boom Box's own screen flickering between 0:00 and the real time. It now
-  matches the Custom Music page's seek bar (and stays empty for radio, which has no length).
-- The "now playing" toast moved from a top-right corner card, where it could end up hidden behind the
-  vanilla objective/milestone panel, to bottom-center, just above the lyric line.
-- Fixed pasting a radio stream address into the search box: 1.2.5 always answered "That's a song or
+- The "now playing" notification moved to bottom-centre, just above the lyrics. In the top-right corner it
+  could end up hidden behind the milestone panel.
+- The recent station buttons have a "Recent stations:" label.
+
+**Fixes**
+
+- Pasting a radio stream address into the search box works again. 1.2.5 always answered "That's a song or
   playlist link, not a live stream." (The recent station buttons still worked.)
-- The recent station buttons now have a "Recent stations:" label in front of them.
-- Fixed a player being disconnected from a multiplayer game when queuing a song 24 hours or longer, or a
-  local file with an extremely long title or artist tag.
-- Fixed Turbo Bass saying the music is paused after pausing and resuming a radio station.
-- A song no longer plays for a split second at the wrong volume when a Boom Box first starts Custom Music.
-- A YouTube/SoundCloud song that can't be downloaded is no longer retried every second while it's coming up
-  in the queue; it's tried again when it's actually played.
-- Downloaded songs you play often are now kept over ones you haven't played in a while, as the "Downloaded
-  songs to keep" setting says (before, the oldest download was deleted first, however recently it was played).
-- Songs without an artist no longer show as "- Title".
-- Lyrics for YouTube/SoundCloud songs are cached in normal files again (they were written somewhere Windows
-  hides); they'll be fetched once more after updating.
+- Queuing a song 24 hours or longer, or a local file with an extremely long title or artist tag, no longer
+  disconnects the player from a multiplayer game.
+- Turbo Bass no longer says the music is paused after pausing and resuming a radio station.
+- A Boom Box starting Custom Music no longer plays a split second at the wrong volume.
+- A YouTube/SoundCloud song that can't be downloaded is no longer retried every second while it's coming up in
+  the queue; it's tried again when it actually plays.
+- The download cache now keeps the songs you play often, as the "Downloaded songs to keep" setting says. Before,
+  it deleted the oldest downloads first, however recently they'd been played.
+- Lyrics for YouTube/SoundCloud songs are now cached in normal files (they were written somewhere Windows hides),
+  so they're fetched once more after updating.
+
+**Good to know**
+
+- Songs queued before this update show just "YouTube" or "SoundCloud" as their source. Queue them again to see
+  the channel. Songs downloaded before it pick up their channel after being played once from a search.
 
 ## 1.2.5 — Radio joins the search box
 
