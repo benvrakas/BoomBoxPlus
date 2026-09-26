@@ -21,6 +21,7 @@ public:
 	static const FString MaxCachedSongsKey;
 	static const FString GameMusicLevelKey;
 	static const FString GameMusicFadeTimeKey;
+	static const FString MuteInBackgroundKey;
 	static const FString SpotifyClientIdKey;
 	static const FString SpotifyClientSecretKey;
 

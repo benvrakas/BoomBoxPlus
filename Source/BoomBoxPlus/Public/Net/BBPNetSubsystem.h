@@ -77,7 +77,7 @@ struct FBBPNetCache
 	TArray<FBBPNetCacheEntry> Entries;
 };
 
-// Radio stations this player tuned in to recently, written between sessions.
+// This player's saved radio stations (and YouTube live streams), kept between sessions.
 USTRUCT()
 struct FBBPRadioStations
 {
@@ -110,14 +110,18 @@ public:
 	// Calls back on the game thread with a queueable track, or a full-sentence error for the player.
 	void TuneRadio(const FString& Text, FBBPOnRadioTuned OnDone);
 
-	// Stations tuned in to recently, newest first.
-	const TArray<FBBPTrack>& GetRecentStations() const { return RadioStations.Stations; }
+	// Saved stations, newest first.
+	const TArray<FBBPTrack>& GetStations() const { return RadioStations.Stations; }
 
-	// Moves Station to the top of the recent stations and saves the list.
+	// Adds a live track to the front of the saved stations (or updates it where it already is) and saves the list.
+	// When the list is full, the oldest station is dropped.
 	void RememberStation(const FBBPTrack& Station);
 
-	// How many recent stations are kept (the music page has a button for each).
-	static constexpr int32 MaxRecentStations = 4;
+	// Removes the saved station with this track id and saves the list.
+	void ForgetStation(const FString& StationId);
+
+	// How many stations are kept.
+	static constexpr int32 MaxStations = 12;
 
 	// Identifies a supported link in the search box text.
 	static EBBPLinkKind ClassifyLink(const FString& Text);

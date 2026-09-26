@@ -171,14 +171,22 @@ void UBBPTrackRow::SetupAsQueueEntry(const FBBPQueueEntry& Entry, int32 InIndex,
 void UBBPTrackRow::HandleAddFront()
 {
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: +Front '%s'"), *Track.Title);
-	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
+	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>())
+	{
+		Page->EnsureCustomMusicLoaded();
+		Page->NoteQueued(Track);
+	}
 	UBBPBlueprintLibrary::RequestAddTrack(BoomBox.Get(), Track, true);
 }
 
 void UBBPTrackRow::HandleAddEnd()
 {
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: +End '%s'"), *Track.Title);
-	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->EnsureCustomMusicLoaded();
+	if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>())
+	{
+		Page->EnsureCustomMusicLoaded();
+		Page->NoteQueued(Track);
+	}
 	UBBPBlueprintLibrary::RequestAddTrack(BoomBox.Get(), Track, false);
 }
 
@@ -189,6 +197,7 @@ void UBBPTrackRow::HandlePlay()
 	if (EntryId == INDEX_NONE)
 	{
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: Play Now '%s'"), *Track.Title);
+		if (UBBPMusicPage* Page = GetTypedOuter<UBBPMusicPage>()) Page->NoteQueued(Track);
 		UBBPBlueprintLibrary::RequestPlayTrackNow(BoomBox.Get(), Track);
 		return;
 	}

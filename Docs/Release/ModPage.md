@@ -42,13 +42,15 @@ Inspired by the PEAK mod sPEAKer.
 - **Internet radio.** Paste a station's stream address into the search box and press Enter, same as any
   other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
   streams**. The station's name is filled in automatically, the song the station announces becomes the title
-  (and updates as the station moves on), and your last 4 stations are one click away underneath the search box.
+  (and updates as the station moves on). Your stations are kept in a list under the search box: up to 12,
+  YouTube live streams included, one click to play and an **x** to remove.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
   carry it or place it.
 - **Your own volume, right on the page.** A "My Volume" slider sits next to the transport controls, from 0
-  to 200% (default 100%, so you can boost Custom Music above the game's own mix). It's local to you — it
+  to 200% (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type
+  an exact value. It's local to you — it
   doesn't change what anyone else hears — and takes effect the instant you move it.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
   mid-song, in sync.
@@ -138,6 +140,7 @@ itself, next to the transport controls, rather than a setting here.
 | Downloaded songs to keep | 50 | How many YouTube/SoundCloud downloads stay on disk. The oldest unused ones are deleted first. |
 | Game music level while playing | 0 | How loud the game's music is while custom music is playing. (0 = silent, 1 = unchanged). |
 | Game music fade time | 2 s | How long the fade takes. |
+| Mute when the game is in the background | On | Silences Custom Music while you're in another window; it keeps its place. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 
 ### Good to know

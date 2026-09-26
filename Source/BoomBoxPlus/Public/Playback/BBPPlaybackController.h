@@ -48,8 +48,11 @@ struct FBBPEmitter
 	// Playback state revision last applied.
 	int32 AppliedRevision = -1;
 
-	// Volume last applied to Component.
+	// Volume this Boom Box plays at for this player, before any background mute.
 	float AppliedVolume = -1.f;
+
+	// Volume multiplier actually on Component: AppliedVolume, or 0 while muted in the background.
+	float AppliedOutput = -1.f;
 
 	// Seconds until the next drift check.
 	float DriftCheckTimer = 0.f;
@@ -172,6 +175,9 @@ private:
 
 	// True once the missing audio device has been reported.
 	bool bReportedNoAudioDevice = false;
+
+	// True while Custom Music is muted because the game window isn't in front (the MuteInBackground setting).
+	bool bMutedInBackground = false;
 
 	float PrefetchTimer = 0.f;
 

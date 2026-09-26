@@ -384,11 +384,11 @@ void UBBPNetSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		if (FJsonObjectConverter::JsonObjectStringToUStruct(StationsJson, &RadioStations))
 		{
 			RadioStations.Stations.RemoveAll([](const FBBPTrack& Station) { return !Station.IsLive() || !BBPRadio::IsStreamUrl(Station.SourceRef); });
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: %d recent radio stations"), RadioStations.Stations.Num());
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: %d saved radio stations"), RadioStations.Stations.Num());
 		}
 		else
 		{
-			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not read '%s'; starting with no recent stations"), *GetRadioStationsPath());
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: could not read '%s'; starting with no saved stations"), *GetRadioStationsPath());
 		}
 	}
 
@@ -593,13 +593,30 @@ void UBBPNetSubsystem::RememberStation(const FBBPTrack& Station)
 	{
 		return;
 	}
-	RadioStations.Stations.RemoveAll([&Station](const FBBPTrack& Existing) { return Existing.Id == Station.Id; });
-	RadioStations.Stations.Insert(Station, 0);
-	if (RadioStations.Stations.Num() > MaxRecentStations)
+	// A station already in the list keeps its place, so the list doesn't reshuffle every time one is played.
+	if (FBBPTrack* Existing = RadioStations.Stations.FindByPredicate([&Station](const FBBPTrack& Saved) { return Saved.Id == Station.Id; }))
 	{
-		RadioStations.Stations.SetNum(MaxRecentStations);
+		*Existing = Station;
+	}
+	else
+	{
+		RadioStations.Stations.Insert(Station, 0);
+		if (RadioStations.Stations.Num() > MaxStations)
+		{
+			RadioStations.Stations.SetNum(MaxStations);
+		}
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: saved station '%s' (%d saved)"), *Station.Title, RadioStations.Stations.Num());
 	}
 	SaveRadioStations();
+}
+
+void UBBPNetSubsystem::ForgetStation(const FString& StationId)
+{
+	if (RadioStations.Stations.RemoveAll([&StationId](const FBBPTrack& Saved) { return Saved.Id == StationId; }) > 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: removed saved station %s (%d left)"), *StationId, RadioStations.Stations.Num());
+		SaveRadioStations();
+	}
 }
 
 void UBBPNetSubsystem::ResolveSpotifyTrack(const FString& Url, FBBPOnNetText OnDone)

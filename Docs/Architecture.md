@@ -118,9 +118,10 @@ carry migration code for old config layouts.
 
 | Key | Default | Used by |
 |---|---|---|
-| `MusicVolume` | 0.5 (range 0–1, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom. Hidden from the Mods menu (`bHidden`) — reached from the Custom Music page's "My Volume" slider instead |
+| `MusicVolume` | 1.0 (range 0–2, clamped in code; SML float settings have no min/max) | Playback controller, multiplied with each Boom Box's own volume, the game sliders and headroom. Hidden from the Mods menu (`bHidden`) — reached from the Custom Music page's "My Volume" slider instead |
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
+| `MuteInBackground` | on | Playback controller: zeroes every emitter's volume while `FPlatformApplicationMisc::IsThisApplicationForeground()` is false. Unreal's own unfocused-volume setting doesn't reach it, since the game mixes in Wwise |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
 | `MaxCachedSongs` | 50 | Download cache eviction |
 | `GameMusicLevel` / `GameMusicFadeTime` | 0 / 2 s | Game music fader; level 1 leaves the game's music alone |

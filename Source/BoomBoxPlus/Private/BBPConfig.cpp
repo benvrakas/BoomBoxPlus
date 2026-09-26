@@ -19,6 +19,7 @@ const FString UBBPConfig::HostOnlyControlKey = TEXT("HostOnlyControl");
 const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
 const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
 const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
+const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
 
@@ -109,6 +110,13 @@ UBBPConfig::UBBPConfig()
 	GameMusicFadeTime->DefaultValue = 2.f;
 	GameMusicFadeTime->Value = 2.f;
 	AddSetting(GameMusicFadeTimeKey, GameMusicFadeTime);
+
+	UConfigPropertyBool* MuteInBackground = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("MuteInBackground"));
+	MuteInBackground->DisplayName = LOCTEXT("MuteInBackground", "Mute when the game is in the background");
+	MuteInBackground->Tooltip = LOCTEXT("MuteInBackgroundTip", "Silence Custom Music while you're in another window. It keeps playing in time, so it's at the right spot when you come back.");
+	MuteInBackground->DefaultValue = true;
+	MuteInBackground->Value = true;
+	AddSetting(MuteInBackgroundKey, MuteInBackground);
 
 	UConfigPropertyString* SpotifyClientId = CreateDefaultSubobject<UConfigPropertyString>(TEXT("SpotifyClientId"));
 	SpotifyClientId->DisplayName = LOCTEXT("SpotifyClientId", "Spotify Client ID (optional)");

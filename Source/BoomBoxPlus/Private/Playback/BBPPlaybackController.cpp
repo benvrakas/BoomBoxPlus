@@ -10,6 +10,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "FGBoomboxListenerInterface.h"
 #include "FGGameUserSettings.h"
+#include "HAL/PlatformApplicationMisc.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Lyrics/BBPLyricsSubsystem.h"
 #include "Net/BBPNetSubsystem.h"
@@ -373,6 +374,13 @@ void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
 	const float MusicVolume = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f) * GameVolumeScale;
+	// Unreal's own unfocused-volume setting doesn't apply here: the game mixes its audio in Wwise, not Unreal.
+	const bool bMute = UBBPConfig::GetBool(Playlist, UBBPConfig::MuteInBackgroundKey, true) && !FPlatformApplicationMisc::IsThisApplicationForeground();
+	if (bMute != bMutedInBackground)
+	{
+		bMutedInBackground = bMute;
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game window %s; Custom Music %s"), bMute ? TEXT("in the background") : TEXT("in front"), bMute ? TEXT("muted") : TEXT("unmuted"));
+	}
 
 	for (int32 i = Emitters.Num() - 1; i >= 0; --i)
 	{
@@ -409,12 +417,19 @@ void UBBPPlaybackController::SyncEmitters()
 		}
 		// Set before the first track starts on a new emitter, so it never plays a moment at the default volume.
 		const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MusicVolume;
-		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedVolume, Volume, 0.001f))
+		if (!FMath::IsNearlyEqual(Emitter->AppliedVolume, Volume, 0.001f))
 		{
 			Emitter->AppliedVolume = Volume;
-			Emitter->Component->SetVolumeMultiplier(Volume);
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: volume %.3f on %s (Boom Box %.2f x music volume setting x game sliders %.3f)"),
 				Volume, *GetNameSafe(BoomBox), ActiveBoomBox.Volume, MusicVolume);
+		}
+		// Muting only zeroes the component: the stream keeps playing in time (the wave plays when silent), and
+		// AppliedVolume still says the music is audible, so the game's own music doesn't fade back in meanwhile.
+		const float Output = bMutedInBackground ? 0.f : Volume;
+		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
+		{
+			Emitter->AppliedOutput = Output;
+			Emitter->Component->SetVolumeMultiplier(Output);
 		}
 	}
 }

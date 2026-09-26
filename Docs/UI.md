@@ -172,8 +172,9 @@ later, but the mod page slider covers the need.
 
 ## Personal volume slider
 
-"My Volume" sits on the transport row (`MyVolumeSlider` + `MyVolumeText`, both `BindWidgetOptional`), next
-to Repeat. It's a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0
+"My Volume" sits on the transport row (`MyVolumeSlider` + `MyVolumeBox`, both `BindWidgetOptional`), next
+to Repeat. Since 1.3.0 the percentage is an `UEditableTextBox`: click it, type 0-200 (a `%` is ignored) and press
+Enter (`HandleMyVolumeCommitted`); anything that isn't a number, or Esc, puts the current value back. It's a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0
 (unboosted) sits at its midpoint and the top half boosts Custom Music above the game's own mix. It reads
 and writes the `MusicVolume` mod-config value directly — `UBBPConfig::GetFloat` /
 the new `UBBPConfig::SetFloat` — which is a local, unreplicated setting already (see Multiplayer.md), so
@@ -186,7 +187,8 @@ already reads `MusicVolume` fresh every tick, so a drag audibly changes the volu
 disk write happens.
 
 `RefreshTransport()` (called from `NativeTick`, so at least once per frame the page is visible) calls
-`RefreshMyVolume()`, which snaps the slider to the live config value and updates the `NN%` label — except
+`RefreshMyVolume()`, which snaps the slider to the live config value and updates the `NN%` box (not while the box
+has focus, so typing isn't overwritten) — except
 while `bChangingMyVolume` is set (between `OnMouseCaptureBegin`/`OnControllerCaptureBegin` and their `End`
 counterparts), so a drag isn't fought by the same per-tick refresh that reads it back. Same pattern as
 `bSeeking` for the seek slider, but its own flag: reusing `bSeeking` would have made this slider block seek
@@ -218,12 +220,18 @@ queue normally alongside it. YouTube live links don't go through `TuneRadio`: th
 included the new `Stream` kind, so pasting a station address always failed with "That's a song or playlist
 link". Only the recent-station buttons, which skip `TuneRadio`, worked. Fixed in 1.2.6.)
 
-What's left of the old Radio panel is a row under the search box: a "Recent stations:" label and up to four
-compact buttons (newest first, from `UBBPNetSubsystem::GetRecentStations`), which play that station again without
-retyping the address. Tuning in successfully (via the search box) is what earns a station a spot here, not
-pressing Play Now specifically. The label is hidden while there are no recent stations. Each button has its own
-`HandleRecentStationN` handler because `UBBPGameButton::OnClicked` carries no payload. The Link panel, freed
-from sharing a row with Radio, is back to a plain full-width panel.
+**Stations list** (1.3.0; replaced 1.2.5's four "recent stations" buttons). Under the search box, a `UWrapBox`
+(`StationsBox`) holds a "Stations:" label and one `UBBPStationButton` per saved station: the station's name, which
+plays it now (`UBBPMusicPage::PlayStation`), and an "x" that removes it (`ForgetStation`). The box wraps onto more
+lines as stations are added, up to `UBBPNetSubsystem::MaxStations` (12, newest first; the oldest drops off when
+it's full). With none saved, the label says how to add one. Station buttons are made on demand by
+`RefreshRadioStations` and collapsed rather than destroyed, like the track rows, and each knows its own station,
+so there are no per-index handlers (`UBBPGameButton::OnClicked` carries no payload).
+
+A station is saved when a stream address tunes in, and when a live result (a station or a YouTube live stream) is
+queued or played from the results (`UBBPTrackRow` calls `UBBPMusicPage::NoteQueued`). Playing a saved station doesn't
+move it: `RememberStation` keeps an existing station's place, so the list doesn't reshuffle as it's used. The Link
+panel, freed from sharing a row with Radio, is back to a plain full-width panel.
 
 The Now Playing panel has three text lines: the title and the "Artist, Source" subtitle (the same as the vanilla
 page and the toast; see "One title and subtitle everywhere" above), the latter with a **Copy Link** button, and a

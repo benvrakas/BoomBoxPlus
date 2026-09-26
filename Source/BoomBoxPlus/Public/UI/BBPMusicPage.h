@@ -56,6 +56,15 @@ public:
 	// Loads the Custom Music tape into this page's Boom Box if another tape (or none) is in.
 	void EnsureCustomMusicLoaded();
 
+	// Plays a saved station now on this page's Boom Box.
+	void PlayStation(const FBBPTrack& Station);
+
+	// Removes a saved station and updates the station buttons.
+	void ForgetStation(const FString& StationId);
+
+	// Called when a search result is queued or played: a live stream (radio or YouTube live) is saved as a station.
+	void NoteQueued(const FBBPTrack& Track);
+
 	// Returns the channel this page's Boom Box plays, or null if it has none yet.
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|UI")
 	ABBPMusicChannel* GetChannel() const;
@@ -148,8 +157,9 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USlider> MyVolumeSlider;
 
+	// My Volume as a percentage; click it to type a value (0-200) and press Enter.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> MyVolumeText;
+	TObjectPtr<UEditableTextBox> MyVolumeBox;
 
 	// This Boom Box's link code and how many Boom Boxes share its queue.
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -169,13 +179,17 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkMessageText;
 
-	// "Recent stations:" in front of the recent station buttons; hidden while there are none.
+	// "Stations:" in front of the saved stations, or how to add one while there are none.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecentStationsLabel;
+	TObjectPtr<UTextBlock> StationsLabel;
 
-	// One button per recent station (newest first); pressing one plays it now.
+	// Holds StationsLabel and one UBBPStationButton per saved station, wrapping onto more lines as needed.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UWrapBox> StationsBox;
+
+	// Station buttons created so far; extras are collapsed rather than destroyed.
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UBBPGameButton>> RadioStationButtons;
+	TArray<TObjectPtr<class UBBPStationButton>> StationButtons;
 
 private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
@@ -388,23 +402,11 @@ private:
 	// Resizes PageSizeBox to the current screen size; cheap when nothing changed.
 	void UpdatePageSize();
 
-	// Plays recent station Index now.
-	void PlayRecentStation(int32 Index);
-
-	// Relabels the recent station buttons from the saved list.
+	// Rebuilds the station buttons from the saved list.
 	void RefreshRadioStations();
 
 	UFUNCTION()
-	void HandleRecentStation0();
-
-	UFUNCTION()
-	void HandleRecentStation1();
-
-	UFUNCTION()
-	void HandleRecentStation2();
-
-	UFUNCTION()
-	void HandleRecentStation3();
+	void HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 
 	// Shows a link message under the link field for a few seconds.
 	void SetLinkMessage(const FText& Message);

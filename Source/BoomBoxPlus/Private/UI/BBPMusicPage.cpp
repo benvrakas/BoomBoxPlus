@@ -17,6 +17,9 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WidgetSwitcher.h"
+#include "Components/WrapBox.h"
+#include "Components/WrapBoxSlot.h"
+#include "UI/BBPStationButton.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
@@ -128,10 +131,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
 	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 	if (SpotifyButton) SpotifyButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleConnectSpotify);
-	if (RadioStationButtons.IsValidIndex(0) && RadioStationButtons[0]) RadioStationButtons[0]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation0);
-	if (RadioStationButtons.IsValidIndex(1) && RadioStationButtons[1]) RadioStationButtons[1]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation1);
-	if (RadioStationButtons.IsValidIndex(2) && RadioStationButtons[2]) RadioStationButtons[2]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation2);
-	if (RadioStationButtons.IsValidIndex(3) && RadioStationButtons[3]) RadioStationButtons[3]->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRecentStation3);
+	if (MyVolumeBox) MyVolumeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCommitted);
 	if (SeekSlider)
 	{
 		SeekSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
@@ -256,8 +256,14 @@ void UBBPMusicPage::BuildDefaultLayout()
 	MyVolumeSize->SetWidthOverride(90.f);
 	MyVolumeSize->SetContent(MyVolumeSlider);
 	AddToRow(Transport, MyVolumeSize, false, 6.f);
-	MyVolumeText = MakeText(WidgetTree, 11, DimTextColor, FText::GetEmpty(), EFontWeight::SemiBold);
-	AddToRow(Transport, MyVolumeText, false, 0.f);
+	MyVolumeBox = WidgetTree->ConstructWidget<UEditableTextBox>();
+	StyleTextBox(MyVolumeBox, 11);
+	MyVolumeBox->SetJustification(ETextJustify::Center);
+	MyVolumeBox->SetToolTipText(LOCTEXT("MyVolumeTip", "Type a volume from 0 to 200 and press Enter."));
+	USizeBox* MyVolumeBoxSize = WidgetTree->ConstructWidget<USizeBox>();
+	MyVolumeBoxSize->SetWidthOverride(56.f);
+	MyVolumeBoxSize->SetContent(MyVolumeBox);
+	AddToRow(Transport, MyVolumeBoxSize, false, 0.f);
 
 	// Two columns: search and results on the left, the queue on the right.
 	UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -280,18 +286,13 @@ void UBBPMusicPage::BuildDefaultLayout()
 	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link or live stream address."));
 	AddToRow(SearchRow, SearchBox, true, 0.f);
 
-	// One-click buttons for stations tuned in to before, so their address doesn't need pasting again.
-	UHorizontalBox* StationsRow = AddRow(SearchColumn, 6.f);
-	RecentStationsLabel = MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("RecentStations", "Recent stations:"));
-	RecentStationsLabel->SetVisibility(ESlateVisibility::Collapsed);
-	AddToRow(StationsRow, RecentStationsLabel, false);
-	for (int32 i = 0; i < UBBPNetSubsystem::MaxRecentStations; ++i)
-	{
-		UBBPGameButton* StationButton = MakeButton(WidgetTree, FText::GetEmpty(), true);
-		StationButton->SetVisibility(ESlateVisibility::Collapsed);
-		AddToRow(StationsRow, StationButton, false);
-		RadioStationButtons.Add(StationButton);
-	}
+	// Saved stations: one click plays one, its "x" removes it. Station buttons are added by RefreshRadioStations.
+	StationsBox = WidgetTree->ConstructWidget<UWrapBox>();
+	SearchColumn->AddChildToVerticalBox(StationsBox)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	StationsLabel = MakeText(WidgetTree, 11, DimTextColor);
+	UWrapBoxSlot* LabelSlot = StationsBox->AddChildToWrapBox(StationsLabel);
+	LabelSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 4.f));
+	LabelSlot->SetVerticalAlignment(VAlign_Center);
 
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
@@ -1036,10 +1037,29 @@ void UBBPMusicPage::RefreshMyVolume()
 	{
 		MyVolumeSlider->SetValue(Value);
 	}
-	if (MyVolumeText)
+	// Left alone while the player is typing in it.
+	if (MyVolumeBox && !MyVolumeBox->HasAnyUserFocus() && !MyVolumeBox->HasFocusedDescendants())
 	{
-		MyVolumeText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
 	}
+}
+
+void UBBPMusicPage::HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	FString Typed = Text.ToString().Replace(TEXT("%"), TEXT("")).TrimStartAndEnd();
+	if (CommitMethod != ETextCommit::OnCleared && !Typed.IsEmpty() && Typed.IsNumeric())
+	{
+		const float Percent = FMath::Clamp(FCString::Atof(*Typed), 0.f, 200.f);
+		UBBPConfig::SetFloat(this, UBBPConfig::MusicVolumeKey, Percent / 100.f);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: My Volume typed as %.0f%%"), Percent);
+	}
+	// Anything that isn't a number just puts the current value back.
+	if (MyVolumeBox)
+	{
+		const float Value = FMath::Clamp(UBBPConfig::GetFloat(this, UBBPConfig::MusicVolumeKey, 1.f), 0.f, 2.f);
+		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+	}
+	RefreshMyVolume();
 }
 
 void UBBPMusicPage::HandleSearchChanged(const FText& Text)
@@ -1061,24 +1081,34 @@ void UBBPMusicPage::HandleSearchCommitted(const FText& Text, ETextCommit::Type C
 	}
 }
 
-void UBBPMusicPage::HandleRecentStation0() { PlayRecentStation(0); }
-void UBBPMusicPage::HandleRecentStation1() { PlayRecentStation(1); }
-void UBBPMusicPage::HandleRecentStation2() { PlayRecentStation(2); }
-void UBBPMusicPage::HandleRecentStation3() { PlayRecentStation(3); }
+void UBBPMusicPage::PlayStation(const FBBPTrack& Station)
+{
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: playing saved station '%s' (%s)"), *Station.Title, *Station.SourceRef);
+	EnsureCustomMusicLoaded();
+	UBBPBlueprintLibrary::RequestPlayTrackNow(GetBoomBox(), Station);
+}
 
-void UBBPMusicPage::PlayRecentStation(int32 Index)
+void UBBPMusicPage::ForgetStation(const FString& StationId)
 {
 	const UGameInstance* GameInstance = GetGameInstance();
-	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
-	if (!Net || !Net->GetRecentStations().IsValidIndex(Index))
+	if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+	{
+		Net->ForgetStation(StationId);
+	}
+	RefreshRadioStations();
+}
+
+void UBBPMusicPage::NoteQueued(const FBBPTrack& Track)
+{
+	if (!Track.IsLive())
 	{
 		return;
 	}
-	const FBBPTrack Station = Net->GetRecentStations()[Index];
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: playing recent station '%s' (%s)"), *Station.Title, *Station.SourceRef);
-	Net->RememberStation(Station);
-	EnsureCustomMusicLoaded();
-	UBBPBlueprintLibrary::RequestPlayTrackNow(GetBoomBox(), Station);
+	const UGameInstance* GameInstance = GetGameInstance();
+	if (UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr)
+	{
+		Net->RememberStation(Track);
+	}
 	RefreshRadioStations();
 }
 
@@ -1086,24 +1116,36 @@ void UBBPMusicPage::RefreshRadioStations()
 {
 	const UGameInstance* GameInstance = GetGameInstance();
 	const UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
-	const TArray<FBBPTrack> Stations = Net ? Net->GetRecentStations() : TArray<FBBPTrack>();
-	for (int32 i = 0; i < RadioStationButtons.Num(); ++i)
+	const TArray<FBBPTrack> Stations = Net ? Net->GetStations() : TArray<FBBPTrack>();
+	if (StationsLabel)
 	{
-		UBBPGameButton* Button = RadioStationButtons[i];
+		StationsLabel->SetText(Stations.Num() > 0 ? LOCTEXT("Stations", "Stations:")
+			: LOCTEXT("NoStations", "Stations: none yet. Tune in to a stream address, or queue a YouTube live stream, to save one here."));
+	}
+	if (!StationsBox)
+	{
+		return;
+	}
+	while (StationButtons.Num() < Stations.Num())
+	{
+		UBBPStationButton* Button = CreateWidget<UBBPStationButton>(this, UBBPStationButton::StaticClass());
 		if (!Button)
 		{
-			continue;
+			break;
 		}
+		UWrapBoxSlot* ButtonSlot = StationsBox->AddChildToWrapBox(Button);
+		ButtonSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 4.f));
+		StationButtons.Add(Button);
+	}
+	for (int32 i = 0; i < StationButtons.Num(); ++i)
+	{
 		const bool bShow = Stations.IsValidIndex(i);
-		BBPWidgetStyle::SetShown(Button, bShow);
 		if (bShow)
 		{
-			const FString Title = BBPWidgetStyle::ToDisplayText(Stations[i].Title).ToString();
-			Button->SetLabel(FText::FromString(Title.Len() > 24 ? Title.Left(23) + TEXT("...") : Title));
-			Button->SetToolTipText(FText::FromString(Stations[i].SourceRef));
+			StationButtons[i]->SetStation(Stations[i]);
 		}
+		BBPWidgetStyle::SetShown(StationButtons[i], bShow);
 	}
-	BBPWidgetStyle::SetShown(RecentStationsLabel, Stations.Num() > 0);
 }
 
 void UBBPMusicPage::RunOnlineSearch(const FString& Text)

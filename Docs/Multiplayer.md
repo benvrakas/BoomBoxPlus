@@ -196,7 +196,12 @@ game Master volume              (option RTPC.Menu_Volume_Master, per player)
 x game Boom Box volume          (option RTPC.Boombox_Bus_Volume, per player)
 x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
 x Music volume ("My Volume" on the page)  (default 1.0, clamped to 0–2 - can boost above the game's own mix)
+x 0 while the game window is in the background, if "Mute when the game is in the background" is on (default)
 ```
+
+The background mute only zeroes the audio component's multiplier (`FBBPEmitter::AppliedOutput`). The stream keeps
+decoding in time (the wave plays when silent), so it comes back at the right position, and `AppliedVolume` keeps
+the unmuted value, so the game's own music isn't faded back in while you're in another window.
 
 There is no hidden gain. An earlier fixed 0.3 "headroom" factor was removed: it was tuned while the
 Master slider was being ignored (see below), and "My Volume" (the `MusicVolume` setting, hidden from the

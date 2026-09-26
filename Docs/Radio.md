@@ -25,7 +25,7 @@ song titles show for it).
 |---|---|
 | `BBPRadio` (`Private/Net/BBPRadio.*`) | URL checks, `.pls`/`.m3u` parsing, ffmpeg input arguments, ffmpeg log parsing |
 | `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name |
-| `UBBPNetSubsystem` recent stations | Last 4 stations tuned in, `Saved/BoomBoxPlus/RadioStations.json` |
+| `UBBPNetSubsystem` saved stations | Up to 12 stations and YouTube live streams (`GetStations`/`RememberStation`/`ForgetStation`), `Saved/BoomBoxPlus/RadioStations.json` |
 | `FBBPLiveStreamWorker` | Thread per playing station: runs ffmpeg, pumps stdout into the ring buffer, reads stderr for titles, restarts on drops |
 | `FBBPStreamState` (`Private/Audio/BBPStreamState.h`) | Ring buffer shared with file playback; live streams get a 6 s ring and a 2 s prebuffer |
 | `UBBPStreamingSoundWave::StartLiveStream` | Live variant of `StartStream`; `Seek` does nothing |
@@ -60,8 +60,8 @@ ordinary video. Either way it queues like any other result.
 
 **No separate Radio panel since 1.2.5.** A stream address is just another link the search box classifies
 (`EBBPLinkKind::Stream`); tuning in shows the station as a single search result with the normal Play Now/
-Play Next/Add buttons. Only a row of up to four "recent station" quick-access buttons remains, under the
-search box. See UI.md.
+Play Next/Add buttons. Under the search box, a list of saved stations (1.3.0; up to 12, each with a remove
+button) plays one with a click. See UI.md.
 
 ## Security
 

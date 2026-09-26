@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0 — Stations
+
+**New**
+
+- **A list of your stations.** The radio stations under the search box are now a list you manage, not just
+  your last four: up to 12, each with an **x** to remove it. Clicking one plays it without reshuffling the list.
+  **YouTube live streams** are saved there too when you queue one.
+- **Mute when the game is in the background** (new setting, on by default): Custom Music goes quiet while you're
+  in another window and picks up at the right spot when you come back.
+- **Type your volume.** Click the percentage next to the My Volume slider, type a number from 0 to 200 and press
+  Enter.
+
+**Good to know**
+
+- Your saved stations carry over from 1.2.6.
+
 ## 1.2.6 — Now playing, everywhere
 
 **New**
