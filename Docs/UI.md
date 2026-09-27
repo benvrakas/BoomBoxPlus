@@ -180,8 +180,12 @@ its midpoint and the top half boosts Custom Music above the game's own mix.
 
 **Per Boom Box, per player** (1.3.0). The value is this player's volume for the Boom Box whose page is open, so two
 players with Boom Boxes side by side can each turn the other's down. It lives in `UBBPPlaybackController`
-(`GetMyVolume`/`SetMyVolume`), keyed by `ABBPPlaylistSubsystem::GetBoomBoxKey` (the same save-stable key queue
-saving uses), and is never sent to the server. It's kept between sessions in `Saved/BoomBoxPlus/MyVolumes.json`,
+(`GetMyVolume`/`SetMyVolume`), keyed by the **server's** `ABBPPlaylistSubsystem::GetBoomBoxKey` for the Boom Box
+(the same save-stable key queue saving uses), which the server sends along in `FBBPActiveBoomBox::Key`. It is never
+sent back to the server. Clients can't use their own copy's name: a client re-creates a replicated actor, with a new
+generated name, whenever it leaves network range and comes back (a 1.3.0 client log showed the same host Boom Boxes
+reappearing as `..._2147438105`, `..._2147405903`, `..._2147364940`), so a volume keyed that way reset without
+warning. It's kept between sessions in `Saved/BoomBoxPlus/MyVolumes.json`,
 written at most once a second while a slider is dragged and on shutdown; only values other than 100% are stored.
 A Boom Box picked up and placed again is a new actor with a new key, so it starts back at 100%, the same way it
 gets a new queue. `SyncEmitters` reads it fresh every tick, so a drag is heard immediately. Until 1.2.6 this was one
@@ -195,6 +199,16 @@ while `bChangingMyVolume` is set (between `OnMouseCaptureBegin`/`OnControllerCap
 counterparts), so a drag isn't fought by the same per-tick refresh that reads it back. Same pattern as
 `bSeeking` for the seek slider, but its own flag: reusing `bSeeking` would have made this slider block seek
 bar updates too.
+
+## Boom Boxes you can hear
+
+Under the queue, `NearbySection` lists every Custom Music Boom Box within hearing range of the local player
+(`UBBPPlaybackController::GetAudibleBoomBoxes`, nearest first, at most 6), refreshed four times a second. Each
+`UBBPNearbyBoomBoxRow` shows "This Boom Box" or "Boom Box <link code>", the distance and what it's playing, with a
+0-200% slider that is the same per-player value as that Boom Box's My Volume. It exists because My Volume belongs
+to the Boom Box whose page is open: the 1.3.0 client log that prompted it showed a player turning their own (silent)
+Boom Box up and down while the music they heard came from two others. The section is hidden when no Custom Music
+Boom Box is in range.
 
 ## Link panel
 

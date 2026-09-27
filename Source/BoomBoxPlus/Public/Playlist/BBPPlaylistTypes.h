@@ -46,7 +46,12 @@ struct BOOMBOXPLUS_API FBBPActiveBoomBox
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	float Volume = 1.f;
 
-	bool operator==(const FBBPActiveBoomBox& Other) const { return BoomBox == Other.BoomBox && Volume == Other.Volume; }
+	// The server's ABBPPlaylistSubsystem::GetBoomBoxKey for it. Clients use this rather than their own copy's name,
+	// which changes whenever the actor is re-replicated (for example after leaving and re-entering network range).
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	FString Key;
+
+	bool operator==(const FBBPActiveBoomBox& Other) const { return BoomBox == Other.BoomBox && Volume == Other.Volume && Key == Other.Key; }
 };
 
 // Transport state shared by every player. Replicated as one unit so clients never see a half-applied change.

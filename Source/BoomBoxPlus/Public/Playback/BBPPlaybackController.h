@@ -71,13 +71,22 @@ struct FBBPEmitter
 	bool bAppliedVanillaPlaying = false;
 };
 
+// A Custom Music Boom Box the local player can hear.
+struct FBBPNearbyBoomBox
+{
+	AFGBoomBoxPlayer* BoomBox = nullptr;
+	// The channel it plays, or null before it has one.
+	const ABBPMusicChannel* Channel = nullptr;
+	float DistanceMeters = 0.f;
+};
+
 // This player's own volume per Boom Box ("My Volume"), kept between sessions in Saved/BoomBoxPlus/MyVolumes.json.
 USTRUCT()
 struct FBBPMyVolumes
 {
 	GENERATED_BODY()
 
-	// 0-2 by ABBPPlaylistSubsystem::GetBoomBoxKey; a Boom Box that isn't listed plays at 1.
+	// 0-2 by the server's ABBPPlaylistSubsystem::GetBoomBoxKey (see GetMyVolumeKey); a Boom Box that isn't listed plays at 1.
 	UPROPERTY()
 	TMap<FString, float> Volumes;
 };
@@ -100,6 +109,9 @@ public:
 	// it changes nothing for other players.
 	float GetMyVolume(const AFGBoomBoxPlayer* BoomBox) const;
 	void SetMyVolume(const AFGBoomBoxPlayer* BoomBox, float Volume);
+
+	// Custom Music Boom Boxes within hearing range of the local player, nearest first.
+	void GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out) const;
 
 	// Returns the channel playing on the nearest Custom Music Boom Box the local player can hear, or null.
 	// With bRequireSound, only counts Boom Boxes actually producing sound on this machine.
@@ -201,6 +213,10 @@ private:
 	// write the file every frame.
 	bool bMyVolumesDirty = false;
 	float MyVolumesSaveTimer = 0.f;
+
+	// Key MyVolumes stores BoomBox under: the server's name for it (FBBPActiveBoomBox::Key), stable across sessions and
+	// re-replication; this machine's own name only for a Boom Box that isn't playing Custom Music.
+	FString GetMyVolumeKey(const AFGBoomBoxPlayer* BoomBox) const;
 
 	void LoadMyVolumes();
 	void SaveMyVolumes();

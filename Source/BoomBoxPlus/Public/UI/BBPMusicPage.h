@@ -187,6 +187,18 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UWrapBox> StationsBox;
 
+	// "Boom Boxes you can hear": every Custom Music Boom Box in hearing range, each with this player's own volume.
+	// Hidden while there are none.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> NearbySection;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UVerticalBox> NearbyList;
+
+	// Nearby rows created so far; extras are collapsed rather than destroyed.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<class UBBPNearbyBoomBoxRow>> NearbyRows;
+
 	// Station buttons created so far; extras are collapsed rather than destroyed.
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<class UBBPStationButton>> StationButtons;
@@ -410,6 +422,10 @@ private:
 
 	// Rebuilds the station buttons from the saved list.
 	void RefreshRadioStations();
+
+	// Updates the "Boom Boxes you can hear" rows; called a few times a second while the page is shown.
+	void RefreshNearby();
+	float NearbyRefreshTimer = 0.f;
 
 	UFUNCTION()
 	void HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type CommitMethod);

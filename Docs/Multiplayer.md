@@ -195,11 +195,12 @@ Boom Box's tick (UI.md, "Driving the vanilla Player page").
 
 ## Volume
 
-Final volume of a Boom Box's audio is the product of four sliders, each 0–1:
+Final volume of a Boom Box's audio is the product of these, each 0–1 unless noted:
 
 ```
 game Master volume              (option RTPC.Menu_Volume_Master, per player)
 x game Boom Box volume          (option RTPC.Boombox_Bus_Volume, per player)
+x game Music volume             (option RTPC.Music_Bus_Volume, per player; since 1.3.1)
 x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
 x My Volume for this Boom Box     (per player per Boom Box, never replicated; default 1.0, 0–2 - can boost above the game's own mix)
 x 0 while the game window is in the background, if "Mute when the game is in the background" is on (default)

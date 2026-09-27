@@ -19,6 +19,7 @@
 #include "Components/WidgetSwitcher.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
+#include "UI/BBPNearbyBoomBoxRow.h"
 #include "UI/BBPStationButton.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
@@ -61,6 +62,8 @@ namespace
 	constexpr int32 MaxQueueRows = 100;
 	constexpr int32 QueueRowsBeforeCurrent = 2;
 	constexpr float RebuildInterval = 0.3f;
+	constexpr float NearbyRefreshInterval = 0.25f;
+	constexpr int32 MaxNearbyRows = 6;
 	const FName BoomBoxPropertyName(TEXT("mBoomBox"));
 }
 
@@ -338,6 +341,18 @@ void UBBPMusicPage::BuildDefaultLayout()
 	StyleScrollBox(QueueList);
 	QueuePanel->SetContent(QueueList);
 
+	// Every Custom Music Boom Box this player can hear, each with its own My Volume (rows added by RefreshNearby).
+	UVerticalBox* Nearby = WidgetTree->ConstructWidget<UVerticalBox>();
+	NearbySection = Nearby;
+	Nearby->SetVisibility(ESlateVisibility::Collapsed);
+	QueueColumn->AddChildToVerticalBox(Nearby)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
+	UTextBlock* NearbyTitle = nullptr;
+	Nearby->AddChildToVerticalBox(MakeSectionHeader(WidgetTree, LOCTEXT("Nearby", "Boom Boxes you can hear"), NearbyTitle));
+	UBorder* NearbyPanel = MakePanel(WidgetTree, InsetColor, FMargin(10.f, 6.f));
+	Nearby->AddChildToVerticalBox(NearbyPanel)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+	NearbyList = WidgetTree->ConstructWidget<UVerticalBox>();
+	NearbyPanel->SetContent(NearbyList);
+
 	// Linking: this Boom Box's code, and a field for another Boom Box's code.
 	UBorder* LinkPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 8.f));
 	Column->AddChildToVerticalBox(LinkPanel)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
@@ -466,6 +481,13 @@ void UBBPMusicPage::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 
 	RefreshTransport();
 	RefreshLink();
+
+	NearbyRefreshTimer -= InDeltaTime;
+	if (NearbyRefreshTimer <= 0.f)
+	{
+		NearbyRefreshTimer = NearbyRefreshInterval;
+		RefreshNearby();
+	}
 }
 
 void UBBPMusicPage::TryBindSources()
@@ -1098,6 +1120,55 @@ void UBBPMusicPage::HandleSearchCommitted(const FText& Text, ETextCommit::Type C
 	if (CommitMethod == ETextCommit::OnEnter)
 	{
 		RunOnlineSearch(Text.ToString().TrimStartAndEnd());
+	}
+}
+
+void UBBPMusicPage::RefreshNearby()
+{
+	UBBPPlaybackController* Controller = GetPlaybackController();
+	TArray<FBBPNearbyBoomBox> Nearby;
+	if (Controller)
+	{
+		Controller->GetAudibleBoomBoxes(Nearby);
+	}
+	if (Nearby.Num() > MaxNearbyRows)
+	{
+		Nearby.SetNum(MaxNearbyRows);
+	}
+	BBPWidgetStyle::SetShown(NearbySection, Nearby.Num() > 0);
+	if (!NearbyList)
+	{
+		return;
+	}
+	while (NearbyRows.Num() < Nearby.Num())
+	{
+		UBBPNearbyBoomBoxRow* Row = CreateWidget<UBBPNearbyBoomBoxRow>(this, UBBPNearbyBoomBoxRow::StaticClass());
+		if (!Row)
+		{
+			break;
+		}
+		NearbyList->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
+		NearbyRows.Add(Row);
+	}
+	const AFGBoomBoxPlayer* Viewed = GetBoomBox();
+	for (int32 i = 0; i < NearbyRows.Num(); ++i)
+	{
+		const bool bShow = Nearby.IsValidIndex(i);
+		BBPWidgetStyle::SetShown(NearbyRows[i], bShow);
+		if (!bShow)
+		{
+			continue;
+		}
+		const FBBPNearbyBoomBox& Box = Nearby[i];
+		const FString Name = Box.BoomBox == Viewed ? FString(TEXT("This Boom Box"))
+			: Box.Channel ? FString::Printf(TEXT("Boom Box %04d"), Box.Channel->GetLinkCode())
+			: FString(TEXT("Boom Box"));
+		FBBPNowPlaying Song;
+		const FString Playing = !UBBPPlaybackController::DescribeNowPlaying(Box.Channel, Controller, Song) ? FString(TEXT("nothing queued"))
+			: Box.Channel->IsPlaying() ? Song.Title
+			: FString::Printf(TEXT("paused: %s"), *Song.Title);
+		const FString Label = FString::Printf(TEXT("%s  |  %d m  |  %s"), *Name, FMath::RoundToInt(Box.DistanceMeters), *Playing);
+		NearbyRows[i]->Setup(Box.BoomBox, BBPWidgetStyle::ToDisplayText(Label), Controller->GetMyVolume(Box.BoomBox));
 	}
 }
 

@@ -131,9 +131,47 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	}
 }
 
+void UBBPPlaybackController::GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out) const
+{
+	Out.Reset();
+	const APawn* Pawn = Playlist ? UGameplayStatics::GetPlayerPawn(Playlist, 0) : nullptr;
+	if (!Pawn)
+	{
+		return;
+	}
+	const float RangeSquared = FMath::Square(GetAudibleRange());
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+		if (!BoomBox)
+		{
+			continue;
+		}
+		const float DistanceSquared = FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
+		if (DistanceSquared <= RangeSquared)
+		{
+			Out.Add({ BoomBox, Emitter.Channel.Get(), FMath::Sqrt(DistanceSquared) / 100.f });
+		}
+	}
+	Out.Sort([](const FBBPNearbyBoomBox& A, const FBBPNearbyBoomBox& B) { return A.DistanceMeters < B.DistanceMeters; });
+}
+
+FString UBBPPlaybackController::GetMyVolumeKey(const AFGBoomBoxPlayer* BoomBox) const
+{
+	if (Playlist)
+	{
+		const FBBPActiveBoomBox* Active = Playlist->GetActiveBoomBoxes().FindByPredicate([BoomBox](const FBBPActiveBoomBox& A) { return A.BoomBox == BoomBox; });
+		if (Active && !Active->Key.IsEmpty())
+		{
+			return Active->Key;
+		}
+	}
+	return ABBPPlaylistSubsystem::GetBoomBoxKey(BoomBox);
+}
+
 float UBBPPlaybackController::GetMyVolume(const AFGBoomBoxPlayer* BoomBox) const
 {
-	const float* Found = BoomBox ? MyVolumes.Volumes.Find(ABBPPlaylistSubsystem::GetBoomBoxKey(BoomBox)) : nullptr;
+	const float* Found = BoomBox ? MyVolumes.Volumes.Find(GetMyVolumeKey(BoomBox)) : nullptr;
 	return Found ? FMath::Clamp(*Found, 0.f, 2.f) : 1.f;
 }
 
@@ -141,10 +179,11 @@ void UBBPPlaybackController::SetMyVolume(const AFGBoomBoxPlayer* BoomBox, float 
 {
 	if (!BoomBox)
 	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: My Volume change to %.0f%% ignored: no Boom Box given"), Volume * 100.f);
 		return;
 	}
 	Volume = FMath::Clamp(Volume, 0.f, 2.f);
-	const FString Key = ABBPPlaylistSubsystem::GetBoomBoxKey(BoomBox);
+	const FString Key = GetMyVolumeKey(BoomBox);
 	// 1 is the default, so it isn't stored: the file only lists Boom Boxes someone actually turned up or down.
 	if (FMath::IsNearlyEqual(Volume, 1.f, 0.005f))
 	{
@@ -199,10 +238,11 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	// The Master slider is stored as "RTPC.Menu_Volume_Master"; "RTPC.Master_Bus_Volume" is not a saved option.
 	const float Master = ReadVolumeOption(*Settings, TEXT("RTPC.Menu_Volume_Master"));
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
-	const float Scale = Master * BoomBox;
+	const float Music = ReadVolumeOption(*Settings, TEXT("RTPC.Music_Bus_Volume"));
+	const float Scale = Master * BoomBox * Music;
 	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
 	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f"), Master, BoomBox);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f x Music %.2f"), Master, BoomBox, Music);
 		GameVolumeScale = Scale;
 	}
 }

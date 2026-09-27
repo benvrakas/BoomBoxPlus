@@ -51,7 +51,8 @@ Inspired by the PEAK mod sPEAKer.
 - **Your own volume for each Boom Box.** A "My Volume" slider sits next to the transport controls, from 0 to 200%
   (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type an exact
   value. It's yours alone and set per Boom Box: two players with Boom Boxes side by side can each turn the other's
-  down and listen to their own music. It's remembered between sessions.
+  down and listen to their own music. It's remembered between sessions, and every Boom Box you can hear is listed
+  on the page with its own slider.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
   mid-song, in sync.
 - **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, both

@@ -612,6 +612,7 @@ void ABBPPlaylistSubsystem::RefreshActiveBoomBoxes()
 			FBBPActiveBoomBox& Active = Found.AddDefaulted_GetRef();
 			Active.BoomBox = *It;
 			Active.Volume = It->GetmState().mVolume;
+			Active.Key = GetBoomBoxKey(*It);
 		}
 	}
 	if (Found != ActiveBoomBoxes)

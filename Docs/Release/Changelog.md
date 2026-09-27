@@ -2,6 +2,12 @@
 
 ## 1.3.1
 
+- **Boom Boxes you can hear.** The Custom Music page lists every Boom Box you can hear, nearest first, with what it's
+  playing and a volume slider for each, so you can turn down the one next door without walking over to it. These
+  are the same per-player volumes as My Volume.
+- Custom Music now follows the game's **Music** volume slider too (as well as Master and Boom Box).
+- Fixed other players' My Volume settings quietly going back to 100% after they walked away from a Boom Box and came
+  back, and not being remembered between sessions. (Only the host's were kept.)
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
 
 ## 1.3.0 — Stations
