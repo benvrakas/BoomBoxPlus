@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
+
 ## 1.3.0 — Stations
 
 **New**

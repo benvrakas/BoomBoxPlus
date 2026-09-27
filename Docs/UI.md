@@ -189,7 +189,7 @@ global value, the hidden `MusicVolume` mod setting; that setting is gone, and SM
 `BoomBoxPlus.cfg` files.
 
 `RefreshTransport()` (called from `NativeTick`, so at least once per frame the page is visible) calls
-`RefreshMyVolume()`, which snaps the slider to the live value and updates the `NN%` box (not while the box
+`RefreshMyVolume()`, which snaps the slider to the live value and updates the number box (the `%` is a label after it, since 1.3.1) (not while the box
 has focus, so typing isn't overwritten) — except
 while `bChangingMyVolume` is set (between `OnMouseCaptureBegin`/`OnControllerCaptureBegin` and their `End`
 counterparts), so a drag isn't fought by the same per-tick refresh that reads it back. Same pattern as

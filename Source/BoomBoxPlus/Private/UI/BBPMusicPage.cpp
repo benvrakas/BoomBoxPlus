@@ -261,9 +261,10 @@ void UBBPMusicPage::BuildDefaultLayout()
 	MyVolumeBox->SetJustification(ETextJustify::Center);
 	MyVolumeBox->SetToolTipText(LOCTEXT("MyVolumeTip", "Type a volume from 0 to 200 and press Enter."));
 	USizeBox* MyVolumeBoxSize = WidgetTree->ConstructWidget<USizeBox>();
-	MyVolumeBoxSize->SetWidthOverride(56.f);
+	MyVolumeBoxSize->SetWidthOverride(44.f);
 	MyVolumeBoxSize->SetContent(MyVolumeBox);
-	AddToRow(Transport, MyVolumeBoxSize, false, 0.f);
+	AddToRow(Transport, MyVolumeBoxSize, false, 3.f);
+	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, FText::FromString(TEXT("%")), EFontWeight::SemiBold), false, 0.f);
 
 	// Two columns: search and results on the left, the queue on the right.
 	UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>();
@@ -1060,7 +1061,7 @@ void UBBPMusicPage::RefreshMyVolume()
 	// Left alone while the player is typing in it.
 	if (MyVolumeBox && !MyVolumeBox->HasAnyUserFocus() && !MyVolumeBox->HasFocusedDescendants())
 	{
-		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Value * 100.f))));
+		MyVolumeBox->SetText(FText::FromString(FString::FromInt(FMath::RoundToInt(Value * 100.f))));
 	}
 }
 
@@ -1076,7 +1077,7 @@ void UBBPMusicPage::HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type
 	// Anything that isn't a number just puts the current value back.
 	if (MyVolumeBox)
 	{
-		MyVolumeBox->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetMyVolume() * 100.f))));
+		MyVolumeBox->SetText(FText::FromString(FString::FromInt(FMath::RoundToInt(GetMyVolume() * 100.f))));
 	}
 	RefreshMyVolume();
 }
