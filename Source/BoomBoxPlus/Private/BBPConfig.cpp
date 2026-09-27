@@ -6,6 +6,7 @@
 #include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertySection.h"
 #include "Configuration/Properties/ConfigPropertyString.h"
+#include "Configuration/Properties/WidgetExtension/CP_Float.h"
 #include "Configuration/Properties/WidgetExtension/CP_Integer.h"
 #include "Configuration/Properties/WidgetExtension/CP_Section.h"
 #include "Engine/GameInstance.h"
@@ -156,6 +157,45 @@ namespace
 		return Clone;
 	}
 
+	// Lowest and highest value the Mods menu accepts for each number setting.
+	const TMap<FString, TPair<float, float>>& GetNumberRanges()
+	{
+		static const TMap<FString, TPair<float, float>> Ranges = {
+			{ UBBPConfig::MaxCachedSongsKey, { 0.f, 10000.f } },
+			{ UBBPConfig::GameMusicLevelKey, { 0.f, 1.f } },
+			{ UBBPConfig::GameMusicFadeTimeKey, { 0.f, 60.f } },
+			{ UBBPConfig::ListenModeKey, { 0.f, static_cast<float>(EBBPListenMode::OnlyCarried) } },
+		};
+		return Ranges;
+	}
+
+	// Sets the accepted range of Property, a number setting stored under Key, replacing SML's 0 to 1 default.
+	void ApplyNumberRange(const FString& Key, UConfigProperty* Property)
+	{
+		UCP_Float* Float = Cast<UCP_Float>(Property);
+		UCP_Integer* Integer = Cast<UCP_Integer>(Property);
+		if (!Float && !Integer)
+		{
+			return;
+		}
+		const TPair<float, float>* Range = GetNumberRanges().Find(Key);
+		if (!Range)
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: no range for number setting '%s'; the Mods menu only accepts 0 to 1"), *Key);
+			return;
+		}
+		if (Float)
+		{
+			Float->MinValue = Range->Key;
+			Float->MaxValue = Range->Value;
+		}
+		else
+		{
+			Integer->MinValue = FMath::RoundToInt(Range->Key);
+			Integer->MaxValue = FMath::RoundToInt(Range->Value);
+		}
+	}
+
 	// Converts OldSection and everything under it to SML's Blueprint editor classes; each property was invisible in
 	// the Mods menu without this.
 	UConfigPropertySection* ConvertSectionRecursive(const UConfigPropertySection* OldSection, UClass* SectionEditorClass, UObject* Outer, int32& OutConverted, int32& OutTotal)
@@ -187,7 +227,9 @@ namespace
 			}
 			else if (UClass* EditorClass = LoadEditorClass(Old->GetClass()))
 			{
-				NewSection->SectionProperties.Add(Pair.Key, CloneAs(Old, EditorClass, NewSection));
+				UConfigProperty* Clone = CloneAs(Old, EditorClass, NewSection);
+				ApplyNumberRange(Pair.Key, Clone);
+				NewSection->SectionProperties.Add(Pair.Key, Clone);
 				++OutConverted;
 				continue;
 			}
