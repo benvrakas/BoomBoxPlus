@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.4
+
+- Fixed **Downloaded songs to keep** and **Game music fade time** in **Mods → BoomBoxPlus** showing red and refusing
+  their values. Every number setting now accepts its full range.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.4, as usual.
+
 ## 1.3.3
 
 - Fixed internet radio sounding garbled for the first few seconds after tuning in (new in 1.3.2).
