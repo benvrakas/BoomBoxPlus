@@ -120,6 +120,7 @@ carry migration code for old config layouts.
 |---|---|---|
 | `ShowLyrics` | on | HUD overlay |
 | `ShowNowPlaying` | on | HUD overlay |
+| `ListenMode` | 0 (All) | Playback controller: which Boom Boxes this player hears (`EBBPListenMode`: All, NearestPerGroup, OnlyCarried). A dropdown in the Mods menu: `UseSMLEditorClasses` sets the converted `UCP_Integer`'s `WidgetType` to `CPI_Enum` with `EnumClass`, and gives the enum an `EnumDisplayNameFn`, because a packaged game has no `UMETA(DisplayName)` data and SML labels entries with `GetDisplayNameTextByIndex`. Also cycled by the music page's **Hear:** button (`UBBPConfig::SetInt`) |
 | `MuteInBackground` | on | Playback controller: zeroes every emitter's volume while `FPlatformApplicationMisc::IsThisApplicationForeground()` is false. Unreal's own unfocused-volume setting doesn't reach it, since the game mixes in Wwise |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
 | `MaxCachedSongs` | 50 | Download cache eviction |

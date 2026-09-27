@@ -5,6 +5,9 @@
 - **Boom Boxes you can hear.** The Custom Music page lists every Boom Box you can hear, nearest first, with what it's
   playing and a volume slider for each, so you can turn down the one next door without walking over to it. These
   are the same per-player volumes as My Volume.
+- **Choose which Boom Boxes you hear**: all of them (as before), only the **nearest of each linked group**, or
+  **only the one you carry**. Set it in **Mods → BoomBoxPlus** or with the **Hear:** button on the Custom Music page.
+  It only changes what you hear, and muted Boom Boxes keep their place in the song.
 - Custom Music now follows the game's **Music** volume slider too (as well as Master and Boom Box).
 - Fixed other players' My Volume settings quietly going back to 100% after they walked away from a Boom Box and came
   back, and not being remembered between sessions. (Only the host's were kept.)

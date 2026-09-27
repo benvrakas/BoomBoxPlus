@@ -202,6 +202,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UVerticalBox> NearbyList;
 
+	// Cycles this player's listening mode (the ListenMode setting): all Boom Boxes, nearest of each group, only the carried one.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> ListenModeButton;
+
 	// Nearby rows created so far; extras are collapsed rather than destroyed.
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<class UBBPNearbyBoomBoxRow>> NearbyRows;
@@ -444,6 +448,9 @@ private:
 
 	// Updates the "Boom Boxes you can hear" rows; called a few times a second while the page is shown.
 	void RefreshNearby();
+
+	UFUNCTION()
+	void HandleListenMode();
 	float NearbyRefreshTimer = 0.f;
 
 	UFUNCTION()

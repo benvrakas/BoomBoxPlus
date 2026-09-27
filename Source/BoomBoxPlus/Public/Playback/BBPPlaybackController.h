@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "BBPConfig.h"
 #include "Playback/BBPGameMusicFader.h"
 #include "BBPPlaybackController.generated.h"
 
@@ -51,8 +52,11 @@ struct FBBPEmitter
 	// Volume this Boom Box plays at for this player, before any background mute.
 	float AppliedVolume = -1.f;
 
-	// Volume multiplier actually on Component: AppliedVolume, or 0 while muted in the background.
+	// Volume multiplier actually on Component: AppliedVolume, or 0 while muted in the background or by the listening mode.
 	float AppliedOutput = -1.f;
+
+	// True while this player's listening mode leaves this Boom Box out.
+	bool bMutedByMode = false;
 
 	// Seconds until the next drift check.
 	float DriftCheckTimer = 0.f;
@@ -78,6 +82,8 @@ struct FBBPNearbyBoomBox
 	// The channel it plays, or null before it has one.
 	const ABBPMusicChannel* Channel = nullptr;
 	float DistanceMeters = 0.f;
+	// True if the listening mode mutes it for this player.
+	bool bMutedByMode = false;
 };
 
 // This player's own volume per Boom Box ("My Volume"), kept between sessions in Saved/BoomBoxPlus/MyVolumes.json.
@@ -206,6 +212,9 @@ private:
 
 	// True while Custom Music is muted because the game window isn't in front (the MuteInBackground setting).
 	bool bMutedInBackground = false;
+
+	// Listening mode last applied, to log changes.
+	EBBPListenMode AppliedListenMode = EBBPListenMode::All;
 
 	FBBPMyVolumes MyVolumes;
 

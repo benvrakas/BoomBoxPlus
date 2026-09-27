@@ -205,7 +205,8 @@ bar updates too.
 Under the queue, `NearbySection` lists every Custom Music Boom Box within hearing range of the local player
 (`UBBPPlaybackController::GetAudibleBoomBoxes`, nearest first, at most 6), refreshed four times a second. Each
 `UBBPNearbyBoomBoxRow` shows "This Boom Box" or "Boom Box <link code>", the distance and what it's playing, with a
-0-200% slider that is the same per-player value as that Boom Box's My Volume. It exists because My Volume belongs
+0-200% slider that is the same per-player value as that Boom Box's My Volume. The header has a **Hear:** button that
+cycles this player's listening mode (see Multiplayer.md, Volume), and a row the mode mutes says so. It exists because My Volume belongs
 to the Boom Box whose page is open: the 1.3.0 client log that prompted it showed a player turning their own (silent)
 Boom Box up and down while the music they heard came from two others. The section is hidden when no Custom Music
 Boom Box is in range.

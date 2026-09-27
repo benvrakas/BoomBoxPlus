@@ -208,7 +208,15 @@ x game Music volume             (option RTPC.Music_Bus_Volume, per player; since
 x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
 x My Volume for this Boom Box     (per player per Boom Box, never replicated; default 1.0, 0–2 - can boost above the game's own mix)
 x 0 while the game window is in the background, if "Mute when the game is in the background" is on (default)
+x 0 if this player's listening mode leaves this Boom Box out (ListenMode: all / nearest of each group / only carried)
 ```
+
+**Listening mode** (1.3.1, the `ListenMode` setting, per player): "All Boom Boxes"; "Nearest of each group", where of
+each channel's Boom Boxes only the one nearest the player's pawn plays and unlinked Boom Boxes are unaffected; or
+"Only the one you carry", where only the Boom Box the player carries (`IsInEquipmentMode` and `mOwningCharacter` is
+their pawn) plays. `SyncEmitters` works it out every tick and sets `FBBPEmitter::bMutedByMode`. Unlike the background
+mute, a Boom Box muted by the mode doesn't count as heard: `GetAudibleChannel` skips it, so the game's own music
+comes back and no lyrics or notifications come from it.
 
 The background mute only zeroes the audio component's multiplier (`FBBPEmitter::AppliedOutput`). The stream keeps
 decoding in time (the wave plays when silent), so it comes back at the right position, and `AppliedVolume` keeps

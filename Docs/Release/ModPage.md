@@ -52,7 +52,8 @@ Inspired by the PEAK mod sPEAKer.
   (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type an exact
   value. It's yours alone and set per Boom Box: two players with Boom Boxes side by side can each turn the other's
   down and listen to their own music. It's remembered between sessions, and every Boom Box you can hear is listed
-  on the page with its own slider.
+  on the page with its own slider. You can also choose to hear only the nearest Boom Box of each linked group, or
+  only the one you're carrying.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
   mid-song, in sync.
 - **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, enter the other
@@ -141,6 +142,7 @@ next to the transport controls, rather than a setting here.
 | Downloaded songs to keep | 50 | How many YouTube/SoundCloud downloads stay on disk. The oldest unused ones are deleted first. |
 | Game music level while playing | 0 | How loud the game's music is while custom music is playing. (0 = silent, 1 = unchanged). |
 | Game music fade time | 2 s | How long the fade takes. |
+| Which Boom Boxes you hear | All Boom Boxes | All of them, only the nearest of each linked group, or only the one you carry. Only changes what you hear. Also the **Hear:** button on the Custom Music page. |
 | Mute when the game is in the background | On | Silences Custom Music while you're in another window; it keeps its place. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 

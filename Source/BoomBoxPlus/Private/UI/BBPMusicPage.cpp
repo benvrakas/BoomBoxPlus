@@ -125,6 +125,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (RepeatButton) RepeatButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRepeat);
 	if (ClearQueueButton) ClearQueueButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleClearQueue);
 	if (CopyLinkButton) CopyLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleCopyLink);
+	if (ListenModeButton) ListenModeButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleListenMode);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
 	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowPlayerPage);
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
@@ -350,7 +351,11 @@ void UBBPMusicPage::BuildDefaultLayout()
 	Nearby->SetVisibility(ESlateVisibility::Collapsed);
 	QueueColumn->AddChildToVerticalBox(Nearby)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 	UTextBlock* NearbyTitle = nullptr;
-	Nearby->AddChildToVerticalBox(MakeSectionHeader(WidgetTree, LOCTEXT("Nearby", "Boom Boxes you can hear"), NearbyTitle));
+	UHorizontalBox* NearbyHeader = AddRow(Nearby, 0.f);
+	AddToRow(NearbyHeader, MakeSectionHeader(WidgetTree, LOCTEXT("Nearby", "Boom Boxes you can hear"), NearbyTitle), true);
+	ListenModeButton = MakeButton(WidgetTree, FText::GetEmpty(), true);
+	ListenModeButton->SetToolTipText(LOCTEXT("ListenModeButtonTip", "Which Boom Boxes you hear: all of them, only the nearest of each linked group, or only the one you carry. Click to change; only affects you."));
+	AddToRow(NearbyHeader, ListenModeButton, false, 0.f);
 	UBorder* NearbyPanel = MakePanel(WidgetTree, InsetColor, FMargin(10.f, 6.f));
 	Nearby->AddChildToVerticalBox(NearbyPanel)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 	NearbyList = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -1195,6 +1200,8 @@ void UBBPMusicPage::RefreshNearby()
 		Nearby.SetNum(MaxNearbyRows);
 	}
 	BBPWidgetStyle::SetShown(NearbySection, Nearby.Num() > 0);
+	BBPWidgetStyle::SetButtonLabel(ListenModeButton, FText::Format(LOCTEXT("ListenModeButton", "Hear: {0}"),
+		UBBPConfig::GetListenModeName(UBBPConfig::GetListenMode(this))));
 	if (!NearbyList)
 	{
 		return;
@@ -1226,9 +1233,18 @@ void UBBPMusicPage::RefreshNearby()
 		const FString Playing = !UBBPPlaybackController::DescribeNowPlaying(Box.Channel, Controller, Song) ? FString(TEXT("nothing queued"))
 			: Box.Channel->IsPlaying() ? Song.Title
 			: FString::Printf(TEXT("paused: %s"), *Song.Title);
-		const FString Label = FString::Printf(TEXT("%s  |  %d m  |  %s"), *Name, FMath::RoundToInt(Box.DistanceMeters), *Playing);
+		const FString Label = FString::Printf(TEXT("%s  |  %d m  |  %s%s"), *Name, FMath::RoundToInt(Box.DistanceMeters), *Playing,
+			Box.bMutedByMode ? TEXT("  (muted by what you hear)") : TEXT(""));
 		NearbyRows[i]->Setup(Box.BoomBox, BBPWidgetStyle::ToDisplayText(Label), Controller->GetMyVolume(Box.BoomBox));
 	}
+}
+
+void UBBPMusicPage::HandleListenMode()
+{
+	const int32 Next = (static_cast<int32>(UBBPConfig::GetListenMode(this)) + 1) % (static_cast<int32>(EBBPListenMode::OnlyCarried) + 1);
+	UBBPConfig::SetInt(this, UBBPConfig::ListenModeKey, Next);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: listening mode set to '%s'"), *UBBPConfig::GetListenModeName(static_cast<EBBPListenMode>(Next)).ToString());
+	RefreshNearby();
 }
 
 void UBBPMusicPage::PlayStation(const FBBPTrack& Station)

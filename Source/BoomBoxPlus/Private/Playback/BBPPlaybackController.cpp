@@ -150,7 +150,7 @@ void UBBPPlaybackController::GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out)
 		const float DistanceSquared = FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
 		if (DistanceSquared <= RangeSquared)
 		{
-			Out.Add({ BoomBox, Emitter.Channel.Get(), FMath::Sqrt(DistanceSquared) / 100.f });
+			Out.Add({ BoomBox, Emitter.Channel.Get(), FMath::Sqrt(DistanceSquared) / 100.f, Emitter.bMutedByMode });
 		}
 	}
 	Out.Sort([](const FBBPNearbyBoomBox& A, const FBBPNearbyBoomBox& B) { return A.DistanceMeters < B.DistanceMeters; });
@@ -336,7 +336,8 @@ const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireS
 	{
 		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
 		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
-		if (!BoomBox || !Channel || !Channel->IsPlaying())
+		// A Boom Box the listening mode mutes isn't heard: no game-music fade, lyrics or notifications from it.
+		if (!BoomBox || !Channel || !Channel->IsPlaying() || Emitter.bMutedByMode)
 		{
 			continue;
 		}
@@ -509,6 +510,55 @@ void UBBPPlaybackController::SyncEmitters()
 		}
 	}
 
+	// The listening mode (this player's setting) decides which Boom Boxes they hear; the rest are muted like the
+	// background mute, so they stay in time and come back at the right spot.
+	const EBBPListenMode Mode = UBBPConfig::GetListenMode(Playlist);
+	if (Mode != AppliedListenMode)
+	{
+		AppliedListenMode = Mode;
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: listening mode is now '%s'"), *UBBPConfig::GetListenModeName(Mode).ToString());
+	}
+	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
+	TMap<const ABBPMusicChannel*, const AFGBoomBoxPlayer*> NearestOfChannel;
+	if (Mode == EBBPListenMode::NearestPerGroup && Pawn)
+	{
+		TMap<const ABBPMusicChannel*, double> NearestDistance;
+		for (const FBBPActiveBoomBox& A : Active)
+		{
+			const ABBPMusicChannel* Channel = IsValid(A.BoomBox) ? Playlist->FindChannel(A.BoomBox) : nullptr;
+			if (!Channel)
+			{
+				continue;
+			}
+			const double DistanceSquared = FVector::DistSquared(A.BoomBox->GetActorLocation(), Pawn->GetActorLocation());
+			const double* Best = NearestDistance.Find(Channel);
+			if (!Best || DistanceSquared < *Best)
+			{
+				NearestDistance.Add(Channel, DistanceSquared);
+				NearestOfChannel.Add(Channel, A.BoomBox);
+			}
+		}
+	}
+	auto IsHeardInMode = [this, Mode, Pawn, &NearestOfChannel](AFGBoomBoxPlayer* BoomBox)
+	{
+		switch (Mode)
+		{
+		case EBBPListenMode::NearestPerGroup:
+		{
+			const ABBPMusicChannel* Channel = Playlist->FindChannel(BoomBox);
+			const AFGBoomBoxPlayer* const* Nearest = Channel ? NearestOfChannel.Find(Channel) : nullptr;
+			return !Nearest || *Nearest == BoomBox;
+		}
+		case EBBPListenMode::OnlyCarried:
+		{
+			const UObject* Carrier = BoomBox->GetmOwningCharacter();
+			return Pawn && BoomBox->IsInEquipmentMode() && Carrier == Pawn;
+		}
+		default:
+			return true;
+		}
+	};
+
 	for (const FBBPActiveBoomBox& ActiveBoomBox : Active)
 	{
 		AFGBoomBoxPlayer* BoomBox = ActiveBoomBox.BoomBox;
@@ -536,7 +586,8 @@ void UBBPPlaybackController::SyncEmitters()
 		}
 		// Muting only zeroes the component: the stream keeps playing in time (the wave plays when silent), and
 		// AppliedVolume still says the music is audible, so the game's own music doesn't fade back in meanwhile.
-		const float Output = bMutedInBackground ? 0.f : Volume;
+		Emitter->bMutedByMode = IsValid(BoomBox) && !IsHeardInMode(BoomBox);
+		const float Output = bMutedInBackground || Emitter->bMutedByMode ? 0.f : Volume;
 		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
 		{
 			Emitter->AppliedOutput = Output;

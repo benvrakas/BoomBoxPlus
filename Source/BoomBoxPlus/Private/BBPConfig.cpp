@@ -6,6 +6,7 @@
 #include "Configuration/Properties/ConfigPropertyInteger.h"
 #include "Configuration/Properties/ConfigPropertySection.h"
 #include "Configuration/Properties/ConfigPropertyString.h"
+#include "Configuration/Properties/WidgetExtension/CP_Integer.h"
 #include "Configuration/Properties/WidgetExtension/CP_Section.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -19,6 +20,7 @@ const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
 const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
 const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
 const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
+const FString UBBPConfig::ListenModeKey = TEXT("ListenMode");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
 
@@ -105,6 +107,14 @@ UBBPConfig::UBBPConfig()
 	MuteInBackground->DefaultValue = true;
 	MuteInBackground->Value = true;
 	AddSetting(MuteInBackgroundKey, MuteInBackground);
+
+	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
+	UConfigPropertyInteger* ListenMode = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("ListenMode"));
+	ListenMode->DisplayName = LOCTEXT("ListenMode", "Which Boom Boxes you hear");
+	ListenMode->Tooltip = LOCTEXT("ListenModeTip", "All Boom Boxes: every one in range. Nearest of each group: of linked Boom Boxes, only the one closest to you. Only the one you carry: just the Boom Box in your hands. Only changes what you hear. Also on the Custom Music page.");
+	ListenMode->DefaultValue = static_cast<int32>(EBBPListenMode::All);
+	ListenMode->Value = static_cast<int32>(EBBPListenMode::All);
+	AddSetting(ListenModeKey, ListenMode);
 
 	UConfigPropertyString* SpotifyClientId = CreateDefaultSubobject<UConfigPropertyString>(TEXT("SpotifyClientId"));
 	SpotifyClientId->DisplayName = LOCTEXT("SpotifyClientId", "Spotify Client ID (optional)");
@@ -204,6 +214,54 @@ void UBBPConfig::UseSMLEditorClasses()
 	int32 Converted = 0, Total = 0;
 	Defaults->RootSection = ConvertSectionRecursive(OldRoot, SectionClass, Defaults, Converted, Total);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Config: %d of %d settings/sections use SML's editor widgets"), Converted, Total);
+
+	// The listening mode is a dropdown. SML labels it with the enum's display names, which a packaged game only has
+	// through EnumDisplayNameFn (UMETA DisplayName is editor-only data).
+	UEnum* ListenModeEnum = StaticEnum<EBBPListenMode>();
+	ListenModeEnum->SetEnumDisplayNameFn([](int32 Index) { return GetListenModeName(static_cast<EBBPListenMode>(Index)); });
+	const TObjectPtr<UConfigProperty>* ListenModeProperty = Defaults->RootSection->SectionProperties.Find(ListenModeKey);
+	if (UCP_Integer* Dropdown = ListenModeProperty ? Cast<UCP_Integer>(ListenModeProperty->Get()) : nullptr)
+	{
+		Dropdown->WidgetType = ECP_IntegerWidgetType::CPI_Enum;
+		Dropdown->EnumClass = ListenModeEnum;
+		Dropdown->MinValue = 0;
+		Dropdown->MaxValue = static_cast<int32>(EBBPListenMode::OnlyCarried);
+	}
+	else
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: the listening mode setting isn't SML's integer editor class; it shows as a plain number"));
+	}
+}
+
+void UBBPConfig::SetInt(const UObject* WorldContext, const FString& Key, int32 Value)
+{
+	const UWorld* World = WorldContext ? WorldContext->GetWorld() : nullptr;
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UConfigManager* Manager = GameInstance ? GameInstance->GetSubsystem<UConfigManager>() : nullptr;
+	UConfigPropertyInteger* Property = Manager ? Cast<UConfigPropertyInteger>(FindProperty(WorldContext, Key)) : nullptr;
+	if (!Property)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Config: could not set '%s'; configuration not available"), *Key);
+		return;
+	}
+	Property->Value = Value;
+	Manager->MarkConfigurationDirty(MakeConfigId());
+}
+
+EBBPListenMode UBBPConfig::GetListenMode(const UObject* WorldContext)
+{
+	const int32 Value = GetInt(WorldContext, ListenModeKey, static_cast<int32>(EBBPListenMode::All));
+	return Value >= 0 && Value <= static_cast<int32>(EBBPListenMode::OnlyCarried) ? static_cast<EBBPListenMode>(Value) : EBBPListenMode::All;
+}
+
+FText UBBPConfig::GetListenModeName(EBBPListenMode Mode)
+{
+	switch (Mode)
+	{
+	case EBBPListenMode::NearestPerGroup: return LOCTEXT("ListenNearest", "Nearest of each group");
+	case EBBPListenMode::OnlyCarried: return LOCTEXT("ListenCarried", "Only the one you carry");
+	default: return LOCTEXT("ListenAll", "All Boom Boxes");
+	}
 }
 
 bool UBBPConfig::GetBool(const UObject* WorldContext, const FString& Key, bool Fallback)
