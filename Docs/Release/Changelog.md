@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.1
+## 1.3.2
 
 - **Boom Boxes you can hear.** The Custom Music page lists every Boom Box you can hear, nearest first, with what it's
   playing and a volume slider for each, so you can turn down the one next door without walking over to it. These
@@ -24,7 +24,7 @@
 
 **Good to know**
 
-- Everyone in a multiplayer session needs 1.3.1, as usual.
+- Everyone in a multiplayer session needs 1.3.2, as usual.
 - Other players' My Volume settings (not the host's) start back at 100% once, since they were stored in a way that
   didn't last anyway.
 

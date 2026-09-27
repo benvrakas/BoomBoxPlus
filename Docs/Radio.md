@@ -27,7 +27,7 @@ song titles show for it).
 | `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name |
 | `UBBPNetSubsystem` saved stations | Up to 12 stations and YouTube live streams (`GetStations`/`RememberStation`/`ForgetStation`), `Saved/BoomBoxPlus/RadioStations.json` |
 | `FBBPLiveStreamWorker` | Thread per station playing on this machine: runs ffmpeg, hands stdout to `FBBPLiveFanOut`, reads stderr for titles, restarts on drops |
-| `FBBPLiveFanOut` (`Private/Audio/BBPLiveFanOut.h`) | Delivers one station's audio to every wave playing it on this machine and keeps them at the same point (1.3.1) |
+| `FBBPLiveFanOut` (`Private/Audio/BBPLiveFanOut.h`) | Delivers one station's audio to every wave playing it on this machine and keeps them at the same point (1.3.2) |
 | `FBBPStreamState` (`Private/Audio/BBPStreamState.h`) | Ring buffer shared with file playback; live streams get a 6 s ring and a 2 s prebuffer |
 | `UBBPStreamingSoundWave::StartLiveStream` | Live variant of `StartStream`; `Seek` does nothing |
 | `ABBPMusicChannel::PlayTrackNow` / `Server_PlayTrackNow` | "Play Now": insert after the current entry and start it |
@@ -37,7 +37,7 @@ song titles show for it).
 There is no shared position for a live stream: every machine connects to the station itself and hears it
 "live", a few seconds apart depending on buffering.
 
-**On one machine, though, every Boom Box playing a station is in step** (1.3.1). Before, each Boom Box's wave ran
+**On one machine, though, every Boom Box playing a station is in step** (1.3.2). Before, each Boom Box's wave ran
 its own ffmpeg and buffered on its own, so linked Boom Boxes on one client drifted apart by whatever each had
 buffered, and echoed. Now `UBBPStreamingSoundWave::StartLiveStream` shares one `FBBPLiveSource` (one worker, one
 connection) per stream Url, and `FBBPLiveFanOut` writes each chunk to every wave's own ring:

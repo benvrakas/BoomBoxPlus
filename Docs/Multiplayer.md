@@ -26,7 +26,7 @@ link request (`FBBPLinkRequest`: from-code, to-code, expiry), replicated on the 
 happens when someone at the other Boom Box enters this one's code **within 3 minutes**
 (`ABBPPlaylistSubsystem::LinkWindowSeconds`); otherwise the request lapses. Both pages show the pending
 request with a countdown ("Waiting for Boom Box 1234 to accept (or enter 5678). 2:41 left." / "Boom Box 5678
-wants to link and share one queue. 2:41 left to answer."). Since 1.3.1 the receiving page has **Accept** and
+wants to link and share one queue. 2:41 left to answer."). Since 1.3.2 the receiving page has **Accept** and
 **Decline** buttons: Accept sends the requester's code back (the same as typing it), and Decline
 (`Server_DeclineLink` → `ABBPPlaylistSubsystem::DeclineLinkRequest`) marks the request `bDeclined` and shortens its
 expiry to `DeclinedShownSeconds` (8 s), so the requester's page shows "Boom Box 5678 declined the link request."
@@ -204,14 +204,14 @@ Final volume of a Boom Box's audio is the product of these, each 0–1 unless no
 ```
 game Master volume              (option RTPC.Menu_Volume_Master, per player)
 x game Boom Box volume          (option RTPC.Boombox_Bus_Volume, per player)
-x game Music volume             (option RTPC.Music_Bus_Volume, per player; since 1.3.1)
+x game Music volume             (option RTPC.Music_Bus_Volume, per player; since 1.3.2)
 x the Boom Box's own volume     (mState.mVolume, per Boom Box, replicated via ActiveBoomBoxes)
 x My Volume for this Boom Box     (per player per Boom Box, never replicated; default 1.0, 0–2 - can boost above the game's own mix)
 x 0 while the game window is in the background, if "Mute when the game is in the background" is on (default)
 x 0 if this player's listening mode leaves this Boom Box out (ListenMode: all / nearest of each group / only carried)
 ```
 
-**Listening mode** (1.3.1, the `ListenMode` setting, per player): "All Boom Boxes"; "Nearest of each group", where of
+**Listening mode** (1.3.2, the `ListenMode` setting, per player): "All Boom Boxes"; "Nearest of each group", where of
 each channel's Boom Boxes only the one nearest the player's pawn plays and unlinked Boom Boxes are unaffected; or
 "Only the one you carry", where only the Boom Box the player carries (`IsInEquipmentMode` and `mOwningCharacter` is
 their pawn) plays. `SyncEmitters` works it out every tick and sets `FBBPEmitter::bMutedByMode`. Unlike the background
