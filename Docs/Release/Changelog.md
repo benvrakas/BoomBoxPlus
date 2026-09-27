@@ -12,6 +12,12 @@
   time they play; a lookup that can't succeed is now remembered.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
 
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.1, as usual.
+- Other players' My Volume settings (not the host's) start back at 100% once, since they were stored in a way that
+  didn't last anyway.
+
 ## 1.3.0 — Stations
 
 **New**
