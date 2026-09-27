@@ -74,6 +74,12 @@ namespace BBPWidgetStyle
 	// Styles a slider like the game's overclock slider.
 	void StyleSlider(USlider* Slider);
 
+	// Styles a My Volume slider: 0 to 2 (200%) in 5% steps.
+	void StyleVolumeSlider(USlider* Slider);
+
+	// Rounds a My Volume slider value to the nearest 5% step.
+	float SnapVolume(float Value);
+
 	// Shows or collapses a widget; ignores null.
 	void SetShown(UWidget* Widget, bool bShown);
 }

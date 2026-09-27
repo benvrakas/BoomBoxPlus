@@ -256,9 +256,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 
 	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("MyVolumeLabel", "My Volume")), false, 6.f);
 	MyVolumeSlider = WidgetTree->ConstructWidget<USlider>();
-	StyleSlider(MyVolumeSlider);
-	MyVolumeSlider->SetMinValue(0.f);
-	MyVolumeSlider->SetMaxValue(2.f);
+	StyleVolumeSlider(MyVolumeSlider);
 	USizeBox* MyVolumeSize = WidgetTree->ConstructWidget<USizeBox>();
 	MyVolumeSize->SetWidthOverride(90.f);
 	MyVolumeSize->SetContent(MyVolumeSlider);
@@ -1123,7 +1121,7 @@ void UBBPMusicPage::SetMyVolume(float Value)
 
 void UBBPMusicPage::HandleMyVolumeChanged(float Value)
 {
-	SetMyVolume(Value);
+	SetMyVolume(BBPWidgetStyle::SnapVolume(Value));
 	RefreshMyVolume();
 }
 

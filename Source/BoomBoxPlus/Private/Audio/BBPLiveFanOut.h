@@ -49,16 +49,33 @@ public:
 		Listeners.RemoveAll([State](const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener) { return &Listener.Get() == State; });
 	}
 
-	// Appends samples to every listener (one that isn't being played keeps only the newest), then brings any that fell
-	// behind back in step.
-	void Write(const int16* Src, int32 NumSamples)
+	// Appends up to NumSamples to every listener and returns how many were taken: at most what the listener with the
+	// most room can hold, so the rest waits in the worker. Listeners with less room (not being played) drop their oldest
+	// audio to keep the newest. Then brings any that fell behind back in step.
+	int32 Write(const int16* Src, int32 NumSamples)
 	{
 		FScopeLock ScopeLock(&Lock);
+		if (Listeners.Num() == 0)
+		{
+			return NumSamples;
+		}
+		int32 Room = 0;
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			Room = FMath::Max(Room, Listener->GetFreeSamples());
+		}
+		NumSamples = FMath::Min(NumSamples, Room);
+		NumSamples -= NumSamples % Listeners[0]->Channels;
+		if (NumSamples <= 0)
+		{
+			return 0;
+		}
 		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
 		{
 			Listener->WriteDroppingOldest(Src, NumSamples);
 		}
 		Align();
+		return NumSamples;
 	}
 
 	void SetTitle(const FString& InTitle)

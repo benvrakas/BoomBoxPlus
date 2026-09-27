@@ -52,9 +52,7 @@ void UBBPNearbyBoomBoxRow::BuildDefaultLayout()
 	LabelSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 
 	VolumeSlider = WidgetTree->ConstructWidget<USlider>();
-	BBPWidgetStyle::StyleSlider(VolumeSlider);
-	VolumeSlider->SetMinValue(0.f);
-	VolumeSlider->SetMaxValue(2.f);
+	BBPWidgetStyle::StyleVolumeSlider(VolumeSlider);
 	USizeBox* SliderSize = WidgetTree->ConstructWidget<USizeBox>();
 	SliderSize->SetWidthOverride(SliderWidth);
 	SliderSize->SetContent(VolumeSlider);
@@ -96,6 +94,7 @@ void UBBPNearbyBoomBoxRow::ShowVolume(float Value)
 
 void UBBPNearbyBoomBoxRow::HandleVolumeChanged(float Value)
 {
+	Value = BBPWidgetStyle::SnapVolume(Value);
 	// Only this player's volume for this one Boom Box: nothing is sent to the server.
 	if (UBBPPlaybackController* Controller = GetController(this))
 	{

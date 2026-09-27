@@ -228,6 +228,24 @@ void BBPWidgetStyle::StyleSlider(USlider* Slider)
 	Slider->SetSliderHandleColor(FLinearColor::White);
 }
 
+void BBPWidgetStyle::StyleVolumeSlider(USlider* Slider)
+{
+	if (!Slider)
+	{
+		return;
+	}
+	StyleSlider(Slider);
+	Slider->SetMinValue(0.f);
+	Slider->SetMaxValue(2.f);
+	Slider->SetStepSize(0.05f);
+	Slider->MouseUsesStep = true;
+}
+
+float BBPWidgetStyle::SnapVolume(float Value)
+{
+	return FMath::Clamp(FMath::RoundToFloat(Value * 20.f) / 20.f, 0.f, 2.f);
+}
+
 void BBPWidgetStyle::SetShown(UWidget* Widget, bool bShown)
 {
 	if (Widget)

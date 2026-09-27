@@ -269,14 +269,17 @@ bool FBBPLiveStreamWorker::PumpAudio()
 			Pending.Append(Chunk);
 		}
 	}
-	// Listeners never refuse audio (each keeps the newest), so everything read is handed over at once.
 	int32 Samples = Pending.Num() / (int32)sizeof(int16);
 	Samples -= Samples % BBPRadio::Channels;
 	if (Samples <= 0)
 	{
 		return false;
 	}
-	Out->Write(reinterpret_cast<const int16*>(Pending.GetData()), Samples);
+	Samples = Out->Write(reinterpret_cast<const int16*>(Pending.GetData()), Samples);
+	if (Samples <= 0)
+	{
+		return false;
+	}
 	Pending.RemoveAt(0, Samples * sizeof(int16), EAllowShrinking::No);
 	return true;
 }

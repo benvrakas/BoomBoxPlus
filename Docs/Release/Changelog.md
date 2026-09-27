@@ -21,6 +21,7 @@
 - YouTube/SoundCloud results and pasted links now show at the **top** of the results, above your own matching
   music; a pasted link shows only its own tracks instead of your whole library first.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
+- The My Volume slider and the nearby Boom Box sliders move in **5% steps**. Typing a number still sets any value.
 
 **Good to know**
 
