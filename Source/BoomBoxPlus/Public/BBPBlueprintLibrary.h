@@ -81,6 +81,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);
 
+	// Declines the Boom Box using FromCode's request to link with BoomBox.
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestDeclineLink(AFGBoomBoxPlayer* BoomBox, int32 FromCode);
+
 	// Asks the server to give BoomBox a channel (and link code) if it has none yet.
 	static void RequestChannel(AFGBoomBoxPlayer* BoomBox);
 

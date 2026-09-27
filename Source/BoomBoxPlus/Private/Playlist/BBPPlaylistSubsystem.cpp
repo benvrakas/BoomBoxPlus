@@ -219,7 +219,7 @@ bool ABBPPlaylistSubsystem::LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code, F
 	const int32 OwnCode = Own->GetLinkCode();
 	const int32 Matching = LinkRequests.IndexOfByPredicate([OwnCode, Code](const FBBPLinkRequest& Request)
 	{
-		return Request.FromCode == Code && Request.ToCode == OwnCode;
+		return Request.FromCode == Code && Request.ToCode == OwnCode && !Request.bDeclined;
 	});
 
 	if (Matching == INDEX_NONE)
@@ -245,6 +245,27 @@ bool ABBPPlaylistSubsystem::LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code, F
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channels %04d and %04d entered each other's codes; linking"), OwnCode, Code);
 	MergeChannels(Target, Own);
 	OutMessage = FString::Printf(TEXT("Linked with Boom Box %04d. %d Boom Boxes now share one merged queue."), Code, Target->GetMembers().Num());
+	return true;
+}
+
+bool ABBPPlaylistSubsystem::DeclineLinkRequest(AFGBoomBoxPlayer* BoomBox, int32 FromCode, FString& OutMessage)
+{
+	const ABBPMusicChannel* Own = HasAuthority() ? FindChannel(BoomBox) : nullptr;
+	const int32 OwnCode = Own ? Own->GetLinkCode() : 0;
+	FBBPLinkRequest* Request = Own ? LinkRequests.FindByPredicate([OwnCode, FromCode](const FBBPLinkRequest& R)
+	{
+		return R.FromCode == FromCode && R.ToCode == OwnCode && !R.bDeclined;
+	}) : nullptr;
+	if (!Request)
+	{
+		OutMessage = TEXT("That link request is no longer waiting.");
+		return false;
+	}
+	Request->bDeclined = true;
+	Request->ExpiresAt = GetServerTime() + DeclinedShownSeconds;
+	ForceNetUpdate();
+	OutMessage = FString::Printf(TEXT("Declined Boom Box %04d's link request."), FromCode);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d declined the link request from %04d"), OwnCode, FromCode);
 	return true;
 }
 

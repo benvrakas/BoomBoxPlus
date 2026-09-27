@@ -60,6 +60,13 @@ public:
 	// Seconds both sides have to enter each other's code.
 	static constexpr double LinkWindowSeconds = 180.0;
 
+	// Server only. Declines the request from the channel using FromCode to link with BoomBox's channel. Returns false
+	// with a reason if there is no such request.
+	bool DeclineLinkRequest(AFGBoomBoxPlayer* BoomBox, int32 FromCode, FString& OutMessage);
+
+	// Seconds a declined request stays listed, so the requester sees it was declined.
+	static constexpr double DeclinedShownSeconds = 8.0;
+
 	// Link requests waiting for the other side.
 	const TArray<FBBPLinkRequest>& GetLinkRequests() const { return LinkRequests; }
 

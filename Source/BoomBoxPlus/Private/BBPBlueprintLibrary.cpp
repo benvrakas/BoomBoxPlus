@@ -200,6 +200,14 @@ void UBBPBlueprintLibrary::RequestUnlinkBoomBox(AFGBoomBoxPlayer* BoomBox)
 	}
 }
 
+void UBBPBlueprintLibrary::RequestDeclineLink(AFGBoomBoxPlayer* BoomBox, int32 FromCode)
+{
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("DeclineLink")))
+	{
+		RCO->Server_DeclineLink(BoomBox, FromCode);
+	}
+}
+
 void UBBPBlueprintLibrary::RequestChannel(AFGBoomBoxPlayer* BoomBox)
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("EnsureChannel")))

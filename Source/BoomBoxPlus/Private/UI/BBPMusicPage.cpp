@@ -25,6 +25,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
 #include "HAL/PlatformApplicationMisc.h"
+#include "Misc/ScopeExit.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
 #include "Net/BBPRadio.h"
@@ -131,6 +132,8 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
 	if (LinkButton) LinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleLink);
 	if (UnlinkButton) UnlinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUnlink);
+	if (AcceptLinkButton) AcceptLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAcceptLink);
+	if (DeclineLinkButton) DeclineLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleDeclineLink);
 	if (LinkCodeBox) LinkCodeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleLinkCodeCommitted);
 	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 	if (SpotifyButton) SpotifyButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleConnectSpotify);
@@ -373,9 +376,17 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(LinkRow, LinkButton, false);
 	UnlinkButton = MakeButton(WidgetTree, LOCTEXT("Unlink", "Leave Group"));
 	AddToRow(LinkRow, UnlinkButton, false, 0.f);
+	UHorizontalBox* LinkMessageRow = AddRow(LinkColumn, 4.f);
 	LinkMessageText = MakeText(WidgetTree, 11, DimTextColor);
 	Truncate(LinkMessageText);
-	LinkColumn->AddChildToVerticalBox(LinkMessageText)->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+	AddToRow(LinkMessageRow, LinkMessageText, true, 10.f);
+	// Answer another Boom Box's link request (shown only while one is waiting for this Boom Box).
+	AcceptLinkButton = MakeButton(WidgetTree, LOCTEXT("AcceptLink", "Accept"), true);
+	AcceptLinkButton->SetVisibility(ESlateVisibility::Collapsed);
+	AddToRow(LinkMessageRow, AcceptLinkButton, false);
+	DeclineLinkButton = MakeButton(WidgetTree, LOCTEXT("DeclineLink", "Decline"), true);
+	DeclineLinkButton->SetVisibility(ESlateVisibility::Collapsed);
+	AddToRow(LinkMessageRow, DeclineLinkButton, false, 0.f);
 }
 
 void UBBPMusicPage::UpdatePageSize()
@@ -934,6 +945,13 @@ void UBBPMusicPage::RefreshLink()
 	}
 	BBPWidgetStyle::SetShown(UnlinkButton, Shared > 1);
 
+	// The Accept/Decline buttons follow whichever request is waiting for this Boom Box, if any.
+	IncomingLinkCode = 0;
+	ON_SCOPE_EXIT
+	{
+		BBPWidgetStyle::SetShown(AcceptLinkButton, IncomingLinkCode != 0);
+		BBPWidgetStyle::SetShown(DeclineLinkButton, IncomingLinkCode != 0);
+	};
 	if (!LinkMessageText)
 	{
 		return;
@@ -950,14 +968,17 @@ void UBBPMusicPage::RefreshLink()
 			const FText Code = FText::FromString(FString::Printf(TEXT("%04d"), Request.FromCode == OwnCode ? Request.ToCode : Request.FromCode));
 			if (Request.FromCode == OwnCode)
 			{
-				LinkMessageText->SetText(FText::Format(LOCTEXT("LinkWaiting", "Waiting for Boom Box {0} to enter {1}. {2} left."),
-					Code, FText::FromString(FString::Printf(TEXT("%04d"), OwnCode)), FormatTimeLeft(Request.ExpiresAt - Now)));
+				LinkMessageText->SetText(Request.bDeclined
+					? FText::Format(LOCTEXT("LinkDeclined", "Boom Box {0} declined the link request."), Code)
+					: FText::Format(LOCTEXT("LinkWaiting", "Waiting for Boom Box {0} to accept (or enter {1}). {2} left."),
+						Code, FText::FromString(FString::Printf(TEXT("%04d"), OwnCode)), FormatTimeLeft(Request.ExpiresAt - Now)));
 				LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::AccentColor);
 				return;
 			}
-			if (Request.ToCode == OwnCode)
+			if (Request.ToCode == OwnCode && !Request.bDeclined)
 			{
-				LinkMessageText->SetText(FText::Format(LOCTEXT("LinkIncoming", "Boom Box {0} wants to link. Enter {0} within {1} to merge queues."),
+				IncomingLinkCode = Request.FromCode;
+				LinkMessageText->SetText(FText::Format(LOCTEXT("LinkIncoming", "Boom Box {0} wants to link and share one queue. {1} left to answer."),
 					Code, FormatTimeLeft(Request.ExpiresAt - Now)));
 				LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::AccentColor);
 				return;
@@ -967,7 +988,7 @@ void UBBPMusicPage::RefreshLink()
 	const bool bRecent = LinkMessageTime >= 0.0 && FPlatformTime::Seconds() - LinkMessageTime < LinkMessageSeconds;
 	LinkMessageText->SetText(bRecent ? LinkMessage : Shared > 1
 		? LOCTEXT("LinkHintShared", "These Boom Boxes share one queue and stay paired across saves.")
-		: LOCTEXT("LinkHintSolo", "To share a queue, both Boom Boxes enter each other's code within 3 minutes."));
+		: LOCTEXT("LinkHintSolo", "To share a queue, enter the other Boom Box's code; they have 3 minutes to accept."));
 	LinkMessageText->SetColorAndOpacity(BBPWidgetStyle::DimTextColor);
 }
 
@@ -1008,6 +1029,28 @@ void UBBPMusicPage::HandleLink()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: linking %s to code %s"), *GetNameSafe(GetBoomBox()), *Code);
 	UBBPBlueprintLibrary::RequestLinkBoomBox(GetBoomBox(), FCString::Atoi(*Code));
 	LinkCodeBox->SetText(FText::GetEmpty());
+}
+
+void UBBPMusicPage::HandleAcceptLink()
+{
+	if (IncomingLinkCode == 0)
+	{
+		return;
+	}
+	// Accepting is the same as entering the other Boom Box's code: both sides have now asked.
+	SetLinkMessage(LOCTEXT("Linking", "Sending link request..."));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: %s accepting the link request from %04d"), *GetNameSafe(GetBoomBox()), IncomingLinkCode);
+	UBBPBlueprintLibrary::RequestLinkBoomBox(GetBoomBox(), IncomingLinkCode);
+}
+
+void UBBPMusicPage::HandleDeclineLink()
+{
+	if (IncomingLinkCode == 0)
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: %s declining the link request from %04d"), *GetNameSafe(GetBoomBox()), IncomingLinkCode);
+	UBBPBlueprintLibrary::RequestDeclineLink(GetBoomBox(), IncomingLinkCode);
 }
 
 void UBBPMusicPage::HandleUnlink()

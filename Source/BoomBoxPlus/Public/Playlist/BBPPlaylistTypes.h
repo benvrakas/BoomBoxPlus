@@ -142,4 +142,8 @@ struct BOOMBOXPLUS_API FBBPLinkRequest
 	// Server time after which the request lapses.
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	double ExpiresAt = 0.0;
+
+	// True once the other side declined; kept a few seconds (ExpiresAt moves up) so the requester sees it.
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	bool bDeclined = false;
 };

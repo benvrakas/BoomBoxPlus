@@ -175,6 +175,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> UnlinkButton;
 
+	// Answer a link request another Boom Box sent this one; shown only while one is waiting.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> AcceptLinkButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> DeclineLinkButton;
+
 	// Result of the last link or unlink.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkMessageText;
@@ -305,6 +312,15 @@ private:
 
 	UFUNCTION()
 	void HandleUnlink();
+
+	UFUNCTION()
+	void HandleAcceptLink();
+
+	UFUNCTION()
+	void HandleDeclineLink();
+
+	// Link code of the request waiting for this Boom Box (what Accept/Decline answer), or 0 if none.
+	int32 IncomingLinkCode = 0;
 
 	UFUNCTION()
 	void HandleLinkCodeCommitted(const FText& Text, ETextCommit::Type CommitMethod);

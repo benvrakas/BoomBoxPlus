@@ -25,9 +25,13 @@ channel gets a random, unused **4-digit link code**, shown on the music page.
 link request (`FBBPLinkRequest`: from-code, to-code, expiry), replicated on the subsystem. The link only
 happens when someone at the other Boom Box enters this one's code **within 3 minutes**
 (`ABBPPlaylistSubsystem::LinkWindowSeconds`); otherwise the request lapses. Both pages show the pending
-request with a countdown ("Waiting for Boom Box 1234 to enter 5678. 2:41 left." / "Boom Box 5678 wants to
-link. Enter 5678 within 2:41 to merge queues."). A channel has at most one outgoing request; entering a new
-code replaces it. When the second code arrives in time, the whole second channel (every Boom Box on it) is
+request with a countdown ("Waiting for Boom Box 1234 to accept (or enter 5678). 2:41 left." / "Boom Box 5678
+wants to link and share one queue. 2:41 left to answer."). Since 1.3.1 the receiving page has **Accept** and
+**Decline** buttons: Accept sends the requester's code back (the same as typing it), and Decline
+(`Server_DeclineLink` → `ABBPPlaylistSubsystem::DeclineLinkRequest`) marks the request `bDeclined` and shortens its
+expiry to `DeclinedShownSeconds` (8 s), so the requester's page shows "Boom Box 5678 declined the link request."
+before it lapses. A declined request no longer counts as a match. A channel has at most one outgoing request;
+entering a new code replaces it. When the second code arrives in time, the whole second channel (every Boom Box on it) is
 merged into the first requester's channel (`MergeChannels`) and all requests involving either code are
 dropped. **Unlink** puts one Boom Box back on a channel of its own, starting from a copy of the shared queue
 and playback (so the music doesn't cut out).

@@ -10,6 +10,8 @@
   back, and not being remembered between sessions. (Only the host's were kept.)
 - Songs whose title contains an emoji (or that are over 20 minutes long) no longer ask LRCLIB for lyrics every
   time they play; a lookup that can't succeed is now remembered.
+- **Accept or decline link requests.** When another Boom Box asks to link with yours, its page shows **Accept** and
+  **Decline** buttons, instead of you having to type the other code back. The asker sees if you decline.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
 
 **Good to know**

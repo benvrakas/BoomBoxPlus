@@ -55,9 +55,9 @@ Inspired by the PEAK mod sPEAKer.
   on the page with its own slider.
 - **Multiplayer sync.** Everyone hears the same song at the same position. Players who join late start
   mid-song, in sync.
-- **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, both
-  players enter each other's 4-digit link code within 3 minutes; both queues are merged, alternating songs
-  from each. Queues, the song that was playing and groups are kept in your save. A group stays paired across restarts — press **Leave Group** on any Boom Box to take
+- **One queue per Boom Box, or share one.** Every Boom Box has its own queue. To share a queue, enter the other
+  Boom Box's 4-digit link code; the other side gets **Accept** and **Decline** buttons (or can enter your code) and
+  has 3 minutes to answer. Both queues are merged, alternating songs from each. Queues, the song that was playing and groups are kept in your save. A group stays paired across restarts — press **Leave Group** on any Boom Box to take
   just that one out again.
 - **Always know what's playing.** The Custom Music page, the Boom Box's own screen and a short notification
   at the bottom of the screen all show the song, and under it the artist and where it's from, e.g.

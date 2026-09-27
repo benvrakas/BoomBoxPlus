@@ -82,6 +82,11 @@ public:
 	void Server_LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code);
 	bool Server_LinkBoomBox_Validate(AFGBoomBoxPlayer* BoomBox, int32 Code);
 
+	// Declines the request from the Boom Box using FromCode to link with BoomBox.
+	UFUNCTION(Server, Reliable, WithValidation = Server_DeclineLink_Validate)
+	void Server_DeclineLink(AFGBoomBoxPlayer* BoomBox, int32 FromCode);
+	bool Server_DeclineLink_Validate(AFGBoomBoxPlayer* BoomBox, int32 FromCode);
+
 	// Gives BoomBox its own channel again.
 	UFUNCTION(Server, Reliable)
 	void Server_UnlinkBoomBox(AFGBoomBoxPlayer* BoomBox);

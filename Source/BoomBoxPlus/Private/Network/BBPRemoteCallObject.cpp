@@ -272,6 +272,33 @@ bool UBBPRemoteCallObject::Server_LinkBoomBox_Validate(AFGBoomBoxPlayer* BoomBox
 	return Code >= 0 && Code <= 9999;
 }
 
+void UBBPRemoteCallObject::Server_DeclineLink_Implementation(AFGBoomBoxPlayer* BoomBox, int32 FromCode)
+{
+	FString Message;
+	bool bSuccess = false;
+	ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	if (!BoomBox || !Playlist)
+	{
+		Message = TEXT("Declining failed.");
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("RCO: DeclineLink from %s ignored (Boom Box %s, subsystem %d)"), *GetRequesterName(), *GetNameSafe(BoomBox), Playlist != nullptr);
+	}
+	else if (!MayControl(TEXT("DeclineLink")))
+	{
+		Message = TEXT("Only the host can answer link requests.");
+	}
+	else
+	{
+		bSuccess = Playlist->DeclineLinkRequest(BoomBox, FromCode, Message);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("RCO: %s declining %04d for %s: %s"), *GetRequesterName(), FromCode, *GetNameSafe(BoomBox), *Message);
+	}
+	Client_LinkResult(BoomBox, bSuccess, Message);
+}
+
+bool UBBPRemoteCallObject::Server_DeclineLink_Validate(AFGBoomBoxPlayer* BoomBox, int32 FromCode)
+{
+	return FromCode >= 0 && FromCode <= 9999;
+}
+
 void UBBPRemoteCallObject::Server_EnsureChannel_Implementation(AFGBoomBoxPlayer* BoomBox)
 {
 	ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
