@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.3
+
+- Fixed internet radio sounding garbled for the first few seconds after tuning in (new in 1.3.2).
+- The My Volume slider and the nearby Boom Box sliders move in **5% steps**. Typing a number still sets any value.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.3, as usual.
+
 ## 1.3.2
 
 - **Boom Boxes you can hear.** The Custom Music page lists every Boom Box you can hear, nearest first, with what it's
@@ -21,7 +30,6 @@
 - YouTube/SoundCloud results and pasted links now show at the **top** of the results, above your own matching
   music; a pasted link shows only its own tracks instead of your whole library first.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
-- The My Volume slider and the nearby Boom Box sliders move in **5% steps**. Typing a number still sets any value.
 
 **Good to know**
 

@@ -176,7 +176,7 @@ later, but the mod page slider covers the need.
 to Repeat. Since 1.3.0 the percentage is an `UEditableTextBox`: click it, type 0-200 (a `%` is ignored) and press
 Enter (`HandleMyVolumeCommitted`); anything that isn't a number, or Esc, puts the current value back. The slider
 is a plain UMG `USlider`, given an explicit 0–2 range (`SetMinValue`/`SetMaxValue`) so 1.0 (unboosted) sits at
-its midpoint and the top half boosts Custom Music above the game's own mix. Since 1.3.2 it and the nearby Boom Box
+its midpoint and the top half boosts Custom Music above the game's own mix. Since 1.3.3 it and the nearby Boom Box
 sliders move in 5% steps (`BBPWidgetStyle::StyleVolumeSlider`: `StepSize` 0.05 with `MouseUsesStep`, and
 `SnapVolume` rounds each change, since the step alone only applies to mouse drags). A typed number isn't rounded.
 
