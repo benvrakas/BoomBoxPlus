@@ -216,6 +216,9 @@ private:
 
 	// Mark the results or queue list for rebuilding; the rebuild happens on a later tick, at most every RebuildInterval.
 	void RefreshResults();
+
+	// Set when an online search starts or its results arrive, so the next rebuild shows the list from the top.
+	bool bScrollResultsToTop = false;
 	void RefreshQueue();
 
 	// Rebuild the results or queue list now.

@@ -749,17 +749,28 @@ void UBBPMusicPage::RebuildResults()
 		LibraryStatusText->SetText(Status);
 	}
 
-	TArray<FBBPTrack> Tracks;
+	// What was just searched online (or the pasted link) goes first; your own matching music follows. A pasted link
+	// leaves SearchQuery empty, which would match the whole library, so it shows only the link's tracks.
+	TArray<FBBPTrack> Tracks = OnlineResults;
 	FString Message;
+	const bool bOnlineOnly = SearchQuery.IsEmpty() && (OnlineResults.Num() > 0 || !OnlineStatus.IsEmpty());
 	if (Library && Library->GetTrackCount() > 0)
 	{
-		Tracks = Library->Search(SearchQuery, MaxResults);
+		if (!bOnlineOnly)
+		{
+			for (const FBBPTrack& Local : Library->Search(SearchQuery, MaxResults))
+			{
+				if (!OnlineResults.ContainsByPredicate([&Local](const FBBPTrack& Online) { return Online.Id == Local.Id; }))
+				{
+					Tracks.Add(Local);
+				}
+			}
+		}
 	}
 	else if (Library && OnlineStatus.IsEmpty())
 	{
 		Message = FString::Printf(TEXT("No music files yet. Put .mp3, .ogg or .wav files in:\n%s\nor press Enter to search YouTube and SoundCloud."), *Library->GetMusicFolder());
 	}
-	Tracks.Append(OnlineResults);
 	if (Tracks.Num() == 0 && Message.IsEmpty() && OnlineStatus.IsEmpty())
 	{
 		Message = TEXT("No matches. Press Enter to search YouTube and SoundCloud.");
@@ -802,6 +813,11 @@ void UBBPMusicPage::RebuildResults()
 	{
 		Row.SetupAsResult(Tracks[Index]);
 	});
+	if (bScrollResultsToTop && ResultsList)
+	{
+		bScrollResultsToTop = false;
+		ResultsList->ScrollToStart();
+	}
 }
 
 void UBBPMusicPage::RebuildQueue()
@@ -1293,6 +1309,7 @@ void UBBPMusicPage::RunOnlineSearch(const FString& Text)
 
 	const int32 Generation = ++SearchGeneration;
 	LastOnlineQuery = Text;
+	bScrollResultsToTop = true;
 	CancelMatchJob();
 	OnlineResults.Reset();
 	OnlineNote.Reset();
@@ -1409,6 +1426,7 @@ void UBBPMusicPage::ShowOnlineResults(int32 Generation, const TArray<FBBPTrack>&
 	}
 	OnlineResults = Tracks;
 	bOnlineIsCollection = bIsCollection && Tracks.Num() > 1;
+	bScrollResultsToTop = true;
 	OnlineStatus = !Error.IsEmpty() ? FString::Printf(TEXT("Online search failed: %s"), *Error)
 		: Tracks.Num() == 0 ? FString(TEXT("Nothing found online."))
 		: FString(TEXT("From YouTube / SoundCloud:"));

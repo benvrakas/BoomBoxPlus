@@ -12,6 +12,8 @@
   time they play; a lookup that can't succeed is now remembered.
 - **Accept or decline link requests.** When another Boom Box asks to link with yours, its page shows **Accept** and
   **Decline** buttons, instead of you having to type the other code back. The asker sees if you decline.
+- YouTube/SoundCloud results and pasted links now show at the **top** of the results, above your own matching
+  music; a pasted link shows only its own tracks instead of your whole library first.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
 
 **Good to know**
