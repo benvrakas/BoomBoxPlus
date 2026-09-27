@@ -8,6 +8,8 @@
 - Custom Music now follows the game's **Music** volume slider too (as well as Master and Boom Box).
 - Fixed other players' My Volume settings quietly going back to 100% after they walked away from a Boom Box and came
   back, and not being remembered between sessions. (Only the host's were kept.)
+- Songs whose title contains an emoji (or that are over 20 minutes long) no longer ask LRCLIB for lyrics every
+  time they play; a lookup that can't succeed is now remembered.
 - The **%** sign now sits next to the My Volume box instead of inside it, so you only type the number.
 
 ## 1.3.0 — Stations

@@ -17,6 +17,24 @@ namespace
 	const TCHAR* UserAgent = TEXT("BoomBoxPlus/1.0 (Satisfactory mod)");
 	constexpr float MaxDurationMismatchSeconds = 5.f;
 	constexpr float HttpTimeoutSeconds = 15.f;
+
+	// Longer tracks are mixes, streams or albums, which LRCLIB has no synced lyrics for.
+	constexpr float MaxLyricsTrackSeconds = 20.f * 60.f;
+
+	// Drops characters outside the Basic Multilingual Plane (emoji and the like): LRCLIB answers 400 to them.
+	FString CleanQueryText(const FString& Text)
+	{
+		FString Out;
+		Out.Reserve(Text.Len());
+		for (const TCHAR Char : Text)
+		{
+			if (Char < 0xD800 || Char > 0xDFFF)
+			{
+				Out.AppendChar(Char);
+			}
+		}
+		return Out.TrimStartAndEnd();
+	}
 	const TCHAR* NoLyricsMarker = TEXT("[bbp:none]");
 }
 
@@ -95,15 +113,23 @@ void UBBPLyricsSubsystem::RequestLyrics(const FBBPTrack& Track, const FString& L
 
 void UBBPLyricsSubsystem::FetchFromLrclib(const FBBPTrack& Track)
 {
-	if (Track.Title.IsEmpty() || Track.Artist.IsEmpty())
+	const FString Title = CleanQueryText(Track.Title);
+	const FString Artist = CleanQueryText(Track.Artist);
+	if (Title.IsEmpty() || Artist.IsEmpty())
 	{
 		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Lyrics: skipping lookup for '%s', artist or title unknown"), *Track.Title);
 		StoreLyrics(Track.Id, FBBPLyrics(), FString());
 		return;
 	}
+	if (Track.Duration > MaxLyricsTrackSeconds)
+	{
+		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Lyrics: skipping lookup for '%s', %.0f min is too long for a song"), *Track.Title, Track.Duration / 60.f);
+		StoreLyrics(Track.Id, FBBPLyrics(), FString());
+		return;
+	}
 
 	FString Url = FString::Printf(TEXT("%s?track_name=%s&artist_name=%s"), LrclibGetUrl,
-		*FGenericPlatformHttp::UrlEncode(Track.Title), *FGenericPlatformHttp::UrlEncode(Track.Artist));
+		*FGenericPlatformHttp::UrlEncode(Title), *FGenericPlatformHttp::UrlEncode(Artist));
 	if (Track.Duration > 0.f)
 	{
 		Url += FString::Printf(TEXT("&duration=%d"), FMath::RoundToInt(Track.Duration));
@@ -133,9 +159,10 @@ void UBBPLyricsSubsystem::FetchFromLrclib(const FBBPTrack& Track)
 			return;
 		}
 		const int32 Code = Response->GetResponseCode();
-		if (Code == 404)
+		// Any other 4xx (except rate limiting) won't change by asking again, so it's remembered like "no lyrics".
+		if (Code == 404 || (Code >= 400 && Code < 500 && Code != 429))
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Lyrics: none on LRCLIB for '%s' - '%s'"), *TrackCopy.Artist, *TrackCopy.Title);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Lyrics: none on LRCLIB for '%s' - '%s' (HTTP %d)"), *TrackCopy.Artist, *TrackCopy.Title, Code);
 			This->StoreLyrics(TrackCopy.Id, FBBPLyrics(), NoLyricsMarker);
 			return;
 		}

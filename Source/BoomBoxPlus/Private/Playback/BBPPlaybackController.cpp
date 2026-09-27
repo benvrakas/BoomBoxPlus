@@ -705,7 +705,8 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	}
 
 	Emitter.DriftCheckTimer -= DeltaSeconds;
-	if (Emitter.DriftCheckTimer <= 0.f)
+	// A finished stream has nothing left to seek in: the file can be a little shorter than the length the source reported.
+	if (Emitter.DriftCheckTimer <= 0.f && !Emitter.Wave->IsFinished())
 	{
 		Emitter.DriftCheckTimer = DriftCheckInterval;
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
