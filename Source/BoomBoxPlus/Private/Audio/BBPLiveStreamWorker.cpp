@@ -1,5 +1,5 @@
 #include "Audio/BBPLiveStreamWorker.h"
-#include "Audio/BBPStreamState.h"
+#include "Audio/BBPLiveFanOut.h"
 #include "BoomBoxPlus.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -23,8 +23,8 @@ namespace
 	constexpr uint32 ResolvePollMs = 50;
 }
 
-FBBPLiveStreamWorker::FBBPLiveStreamWorker(TSharedRef<FBBPStreamState, ESPMode::ThreadSafe> InState, FString InFfmpegPath, FString InYtDlpPath, FString InUrl)
-	: State(InState)
+FBBPLiveStreamWorker::FBBPLiveStreamWorker(TSharedRef<FBBPLiveFanOut, ESPMode::ThreadSafe> InOut, FString InFfmpegPath, FString InYtDlpPath, FString InUrl)
+	: Out(InOut)
 	, FfmpegPath(MoveTemp(InFfmpegPath))
 	, YtDlpPath(MoveTemp(InYtDlpPath))
 	, Url(MoveTemp(InUrl))
@@ -35,22 +35,21 @@ uint32 FBBPLiveStreamWorker::Run()
 {
 	int32 RestartsInARow = 0;
 	bool bEverGotAudio = false;
-	while (!State->bStopRequested)
+	while (!Out->bStopRequested)
 	{
 		if (!Launch())
 		{
-			if (++RestartsInARow > MaxRestarts || State->bStopRequested)
+			if (++RestartsInARow > MaxRestarts || Out->bStopRequested)
 			{
-				State->bFailed = !bEverGotAudio;
-				State->bEndOfStream = true;
+				Out->Finish(!bEverGotAudio);
 				break;
 			}
-			State->WakeEvent->Wait(RestartDelayMs);
+			Out->WakeEvent->Wait(RestartDelayMs);
 			continue;
 		}
 		const double StartedAt = FPlatformTime::Seconds();
 		bool bGotAudio = false;
-		while (!State->bStopRequested)
+		while (!Out->bStopRequested)
 		{
 			PumpLog();
 			const bool bMoved = PumpAudio();
@@ -74,13 +73,13 @@ uint32 FBBPLiveStreamWorker::Run()
 				Pending.Append(Tail);
 				continue;
 			}
-			State->WakeEvent->Wait(PollMs);
+			Out->WakeEvent->Wait(PollMs);
 		}
 		PumpLog();
 		int32 ReturnCode = -1;
 		FPlatformProcess::GetProcReturnCode(Process, &ReturnCode);
 		Shutdown();
-		if (State->bStopRequested)
+		if (Out->bStopRequested)
 		{
 			break;
 		}
@@ -100,12 +99,11 @@ uint32 FBBPLiveStreamWorker::Run()
 		if (++RestartsInARow > MaxRestarts)
 		{
 			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Radio: giving up on '%s' after %d attempts"), *Url, RestartsInARow);
-			State->bFailed = !bEverGotAudio;
-			State->bEndOfStream = true;
+			Out->Finish(!bEverGotAudio);
 			break;
 		}
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Radio: reconnecting to '%s' (attempt %d of %d)"), *Url, RestartsInARow, MaxRestarts);
-		State->WakeEvent->Wait(RestartDelayMs);
+		Out->WakeEvent->Wait(RestartDelayMs);
 	}
 	Shutdown();
 	return 0;
@@ -113,8 +111,8 @@ uint32 FBBPLiveStreamWorker::Run()
 
 void FBBPLiveStreamWorker::Stop()
 {
-	State->bStopRequested = true;
-	State->WakeEvent->Trigger();
+	Out->bStopRequested = true;
+	Out->WakeEvent->Trigger();
 }
 
 FString FBBPLiveStreamWorker::ResolveStreamUrl()
@@ -154,20 +152,20 @@ FString FBBPLiveStreamWorker::ResolveStreamUrl()
 	const double StartedAt = FPlatformTime::Seconds();
 	while (FPlatformProcess::IsProcRunning(Lookup))
 	{
-		if (State->bStopRequested || FPlatformTime::Seconds() - StartedAt > ResolveTimeoutSeconds)
+		if (Out->bStopRequested || FPlatformTime::Seconds() - StartedAt > ResolveTimeoutSeconds)
 		{
 			FPlatformProcess::TerminateProc(Lookup, true);
 			break;
 		}
 		Output += FPlatformProcess::ReadPipe(ReadPipe);
-		State->WakeEvent->Wait(ResolvePollMs);
+		Out->WakeEvent->Wait(ResolvePollMs);
 	}
 	Output += FPlatformProcess::ReadPipe(ReadPipe);
 	int32 ReturnCode = -1;
 	FPlatformProcess::GetProcReturnCode(Lookup, &ReturnCode);
 	FPlatformProcess::CloseProc(Lookup);
 	FPlatformProcess::ClosePipe(ReadPipe, WritePipe);
-	if (State->bStopRequested)
+	if (Out->bStopRequested)
 	{
 		return FString();
 	}
@@ -271,13 +269,14 @@ bool FBBPLiveStreamWorker::PumpAudio()
 			Pending.Append(Chunk);
 		}
 	}
-	int32 Samples = FMath::Min(Pending.Num() / (int32)sizeof(int16), State->GetFreeSamples());
+	// Listeners never refuse audio (each keeps the newest), so everything read is handed over at once.
+	int32 Samples = Pending.Num() / (int32)sizeof(int16);
 	Samples -= Samples % BBPRadio::Channels;
 	if (Samples <= 0)
 	{
 		return false;
 	}
-	State->Write(reinterpret_cast<const int16*>(Pending.GetData()), Samples);
+	Out->Write(reinterpret_cast<const int16*>(Pending.GetData()), Samples);
 	Pending.RemoveAt(0, Samples * sizeof(int16), EAllowShrinking::No);
 	return true;
 }
@@ -310,7 +309,7 @@ void FBBPLiveStreamWorker::PumpLog()
 		if (SongTitle != OldTitle)
 		{
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Radio: '%s' now playing '%s'"), *StationName, *SongTitle);
-			State->SetLiveTitle(SongTitle);
+			Out->SetTitle(SongTitle);
 		}
 	}
 }

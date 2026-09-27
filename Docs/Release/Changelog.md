@@ -9,6 +9,9 @@
   **only the one you carry**. Set it in **Mods → BoomBoxPlus** or with the **Hear:** button on the Custom Music page.
   It only changes what you hear, and muted Boom Boxes keep their place in the song.
 - Custom Music now follows the game's **Music** volume slider too (as well as Master and Boom Box).
+- **Linked Boom Boxes play radio in step.** Each Boom Box used to connect to the station on its own and buffer a
+  different amount, so a group could echo. Now your game makes one connection per station and every Boom Box
+  plays the same moment of it (and uses less bandwidth).
 - Fixed other players' My Volume settings quietly going back to 100% after they walked away from a Boom Box and came
   back, and not being remembered between sessions. (Only the host's were kept.)
 - Songs whose title contains an emoji (or that are over 20 minutes long) no longer ask LRCLIB for lyrics every

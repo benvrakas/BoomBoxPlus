@@ -1,5 +1,6 @@
 #include "Audio/BBPStreamingSoundWave.h"
 #include "Audio/BBPDecoder.h"
+#include "Audio/BBPLiveFanOut.h"
 #include "Audio/BBPLiveStreamWorker.h"
 #include "Audio/BBPStreamState.h"
 #include "BoomBoxPlus.h"
@@ -133,6 +134,50 @@ private:
 	FString FilePath;
 };
 
+// One live stream on this machine: the ffmpeg worker and the listeners it feeds. Kept alive by the waves playing it;
+// the last one to stop stops the worker.
+class FBBPLiveSource
+{
+public:
+	explicit FBBPLiveSource(const FString& InUrl)
+		: Url(InUrl)
+		, Out(MakeShared<FBBPLiveFanOut, ESPMode::ThreadSafe>())
+	{
+	}
+
+	~FBBPLiveSource()
+	{
+		if (Thread)
+		{
+			// Kill stops the worker (FBBPLiveStreamWorker::Stop) and waits for it.
+			Thread->Kill(true);
+			delete Thread;
+		}
+		delete Worker;
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Radio: no Boom Box plays '%s' any more; disconnected"), *Url);
+	}
+
+	bool Start(const FString& FfmpegPath, const FString& YtDlpPath)
+	{
+		Worker = new FBBPLiveStreamWorker(Out, FfmpegPath, YtDlpPath, Url);
+		Thread = FRunnableThread::Create(Worker, TEXT("BBPRadio"), 0, TPri_AboveNormal);
+		return Thread != nullptr;
+	}
+
+	const FString Url;
+	const TSharedRef<FBBPLiveFanOut, ESPMode::ThreadSafe> Out;
+
+private:
+	FBBPLiveStreamWorker* Worker = nullptr;
+	FRunnableThread* Thread = nullptr;
+};
+
+namespace
+{
+	// Live streams playing on this machine, by Url. Game thread only.
+	TMap<FString, TWeakPtr<FBBPLiveSource>> LiveSources;
+}
+
 UBBPStreamingSoundWave::UBBPStreamingSoundWave(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -193,14 +238,37 @@ bool UBBPStreamingSoundWave::StartLiveStream(const FString& FfmpegPath, const FS
 
 	State = MakeShared<FBBPStreamState, ESPMode::ThreadSafe>(BBPRadio::SampleRate, BBPRadio::Channels, 0, LiveBufferSeconds, LivePrebufferSeconds);
 	State->PendingSeekFrame = -1;
-	Worker = new FBBPLiveStreamWorker(State.ToSharedRef(), FfmpegPath, YtDlpPath, Url);
-	WorkerThread = FRunnableThread::Create(Worker, TEXT("BBPRadio"), 0, TPri_AboveNormal);
-	if (!WorkerThread)
+
+	// Linked Boom Boxes (and any others on the same station) share one connection, so they play in step.
+	// A stream that gave up (station down) isn't joined: this starts a fresh connection instead.
+	LiveSource = LiveSources.FindRef(Url).Pin();
+	if (LiveSource && LiveSource->Out->IsFinished())
+	{
+		LiveSource.Reset();
+	}
+	if (LiveSource)
+	{
+		LiveSource->Out->Subscribe(State.ToSharedRef());
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Streaming radio '%s' (joined the stream already playing on this machine)"), *Url);
+		return true;
+	}
+	LiveSource = MakeShared<FBBPLiveSource>(Url);
+	LiveSource->Out->Subscribe(State.ToSharedRef());
+	if (!LiveSource->Start(FfmpegPath, YtDlpPath))
 	{
 		UE_LOG(LogBoomBoxPlus, Error, TEXT("Could not create radio thread for '%s'"), *Url);
+		LiveSource.Reset();
 		State->bFailed = true;
 		return false;
 	}
+	for (auto It = LiveSources.CreateIterator(); It; ++It)
+	{
+		if (!It.Value().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	LiveSources.Add(Url, LiveSource);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Streaming radio '%s'"), *Url);
 	return true;
 }
@@ -223,6 +291,11 @@ void UBBPStreamingSoundWave::Seek(float PositionSeconds)
 
 void UBBPStreamingSoundWave::StopStream()
 {
+	if (LiveSource)
+	{
+		LiveSource->Out->Unsubscribe(State.Get());
+		LiveSource.Reset();
+	}
 	if (WorkerThread)
 	{
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Stopping stream '%s' at %.2f s (%d underruns)"), *StreamPath, GetPlaybackSeconds(), GetUnderrunCount());

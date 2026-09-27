@@ -26,7 +26,8 @@ song titles show for it).
 | `BBPRadio` (`Private/Net/BBPRadio.*`) | URL checks, `.pls`/`.m3u` parsing, ffmpeg input arguments, ffmpeg log parsing |
 | `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name |
 | `UBBPNetSubsystem` saved stations | Up to 12 stations and YouTube live streams (`GetStations`/`RememberStation`/`ForgetStation`), `Saved/BoomBoxPlus/RadioStations.json` |
-| `FBBPLiveStreamWorker` | Thread per playing station: runs ffmpeg, pumps stdout into the ring buffer, reads stderr for titles, restarts on drops |
+| `FBBPLiveStreamWorker` | Thread per station playing on this machine: runs ffmpeg, hands stdout to `FBBPLiveFanOut`, reads stderr for titles, restarts on drops |
+| `FBBPLiveFanOut` (`Private/Audio/BBPLiveFanOut.h`) | Delivers one station's audio to every wave playing it on this machine and keeps them at the same point (1.3.1) |
 | `FBBPStreamState` (`Private/Audio/BBPStreamState.h`) | Ring buffer shared with file playback; live streams get a 6 s ring and a 2 s prebuffer |
 | `UBBPStreamingSoundWave::StartLiveStream` | Live variant of `StartStream`; `Seek` does nothing |
 | `ABBPMusicChannel::PlayTrackNow` / `Server_PlayTrackNow` | "Play Now": insert after the current entry and start it |
@@ -34,7 +35,23 @@ song titles show for it).
 ## Sync model
 
 There is no shared position for a live stream: every machine connects to the station itself and hears it
-"live", a few seconds apart depending on buffering. The channel still replicates which entry plays and
+"live", a few seconds apart depending on buffering.
+
+**On one machine, though, every Boom Box playing a station is in step** (1.3.1). Before, each Boom Box's wave ran
+its own ffmpeg and buffered on its own, so linked Boom Boxes on one client drifted apart by whatever each had
+buffered, and echoed. Now `UBBPStreamingSoundWave::StartLiveStream` shares one `FBBPLiveSource` (one worker, one
+connection) per stream Url, and `FBBPLiveFanOut` writes each chunk to every wave's own ring:
+
+- a wave that joins copies a playing wave's unplayed audio (`FBBPStreamState::CopyBufferFrom`), so it starts at the
+  same point;
+- rings drop their oldest audio instead of refusing new audio (`WriteDroppingOldest`), so a wave that isn't being
+  played (a silent or out-of-range Boom Box, which Unreal stops rendering) always holds the newest audio;
+- after every write, any wave more than 60 ms behind the one furthest ahead (least buffered) is trimmed to match
+  (`FBBPLiveFanOut::Align`); smaller differences are left alone, since they're just audio callback timing and
+  trimming them would click.
+
+The last wave to stop releases the source, which stops the worker. A source whose worker gave up isn't joined; the
+next wave starts a fresh connection. The channel still replicates which entry plays and
 whether it's paused. In `UBBPPlaybackController`:
 
 - Drift correction and seeking are skipped for live emitters (`FBBPEmitter::bLive`).

@@ -21,7 +21,8 @@ public:
 	bool StartStream(const FString& FilePath, int32 InSampleRate, int32 InChannels, float StartSeconds);
 
 	// Begins playing the internet radio stream at Url through the bundled ffmpeg (48 kHz stereo); YouTube live pages are
-	// looked up with yt-dlp first. Live streams can't seek.
+	// looked up with yt-dlp first. Live streams can't seek. Every wave on this machine playing the same Url shares one
+	// connection and plays in step with the others (FBBPLiveFanOut).
 	bool StartLiveStream(const FString& FfmpegPath, const FString& YtDlpPath, const FString& Url);
 
 	// Continues the stream from PositionSeconds. Does nothing for live streams.
@@ -65,6 +66,11 @@ private:
 	FString StreamPath;
 
 	TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> State;
+
+	// Live streams: the connection shared with other waves playing the same Url.
+	TSharedPtr<class FBBPLiveSource> LiveSource;
+
+	// File streams: the decode thread.
 	FRunnable* Worker = nullptr;
 	bool bLive = false;
 	FRunnableThread* WorkerThread = nullptr;

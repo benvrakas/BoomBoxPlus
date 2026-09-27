@@ -40,18 +40,66 @@ public:
 	void Write(const int16* Src, int32 NumSamples)
 	{
 		FScopeLock ScopeLock(&Lock);
+		WriteLocked(Src, FMath::Min(NumSamples, Ring.Num() - NumBuffered));
+	}
+
+	// Appends interleaved samples, first dropping the oldest buffered audio if there isn't room, so the ring always
+	// holds the newest audio (live streams: a listener that isn't being played never falls behind the broadcast).
+	void WriteDroppingOldest(const int16* Src, int32 NumSamples)
+	{
+		FScopeLock ScopeLock(&Lock);
 		const int32 Capacity = Ring.Num();
-		NumSamples = FMath::Min(NumSamples, Capacity - NumBuffered);
-		int32 WriteIndex = (ReadIndex + NumBuffered) % Capacity;
-		for (int32 Remaining = NumSamples; Remaining > 0;)
+		if (NumSamples > Capacity)
 		{
-			const int32 Span = FMath::Min(Remaining, Capacity - WriteIndex);
-			FMemory::Memcpy(Ring.GetData() + WriteIndex, Src, Span * sizeof(int16));
-			Src += Span;
-			Remaining -= Span;
-			WriteIndex = (WriteIndex + Span) % Capacity;
+			Src += NumSamples - Capacity;
+			NumSamples = Capacity;
 		}
-		NumBuffered += NumSamples;
+		const int32 Overflow = NumBuffered + NumSamples - Capacity;
+		if (Overflow > 0)
+		{
+			DropOldestLocked(Overflow);
+		}
+		WriteLocked(Src, NumSamples);
+	}
+
+	// Returns the number of buffered samples not yet played.
+	int32 GetNumBuffered()
+	{
+		FScopeLock ScopeLock(&Lock);
+		return NumBuffered;
+	}
+
+	// Drops the oldest buffered audio until at most KeepSamples remain.
+	void TrimTo(int32 KeepSamples)
+	{
+		FScopeLock ScopeLock(&Lock);
+		if (NumBuffered > KeepSamples)
+		{
+			DropOldestLocked(NumBuffered - KeepSamples);
+		}
+	}
+
+	// Replaces this ring's audio with a copy of Other's unplayed audio, and stops prebuffering if Other isn't, so this
+	// listener continues from exactly where Other is.
+	void CopyBufferFrom(FBBPStreamState& Other)
+	{
+		TArray<int16> Copy;
+		bool bOtherBuffering = true;
+		{
+			FScopeLock OtherLock(&Other.Lock);
+			Copy.SetNumUninitialized(Other.NumBuffered);
+			const int32 OtherCapacity = Other.Ring.Num();
+			for (int32 i = 0; i < Other.NumBuffered; ++i)
+			{
+				Copy[i] = Other.Ring[(Other.ReadIndex + i) % OtherCapacity];
+			}
+			bOtherBuffering = Other.bBuffering;
+		}
+		FScopeLock ScopeLock(&Lock);
+		ReadIndex = 0;
+		NumBuffered = 0;
+		WriteLocked(Copy.GetData(), FMath::Min(Copy.Num(), Ring.Num()));
+		bBuffering = bOtherBuffering;
 	}
 
 	// Moves up to NumSamples buffered samples (whole frames only) into Dst and returns how many were moved.
@@ -139,6 +187,29 @@ public:
 	FEvent* WakeEvent = nullptr;
 
 private:
+	void WriteLocked(const int16* Src, int32 NumSamples)
+	{
+		const int32 Capacity = Ring.Num();
+		int32 WriteIndex = (ReadIndex + NumBuffered) % Capacity;
+		for (int32 Remaining = NumSamples; Remaining > 0;)
+		{
+			const int32 Span = FMath::Min(Remaining, Capacity - WriteIndex);
+			FMemory::Memcpy(Ring.GetData() + WriteIndex, Src, Span * sizeof(int16));
+			Src += Span;
+			Remaining -= Span;
+			WriteIndex = (WriteIndex + Span) % Capacity;
+		}
+		NumBuffered += NumSamples;
+	}
+
+	// Drops at least NumSamples of the oldest buffered audio, rounded up to whole frames.
+	void DropOldestLocked(int32 NumSamples)
+	{
+		NumSamples = FMath::Min(NumBuffered, ((NumSamples + Channels - 1) / Channels) * Channels);
+		ReadIndex = (ReadIndex + NumSamples) % Ring.Num();
+		NumBuffered -= NumSamples;
+	}
+
 	FCriticalSection Lock;
 	TArray<int16> Ring;
 	int32 ReadIndex = 0;

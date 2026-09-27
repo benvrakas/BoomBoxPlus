@@ -1,0 +1,134 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Audio/BBPStreamState.h"
+#include "HAL/PlatformProcess.h"
+#include "Misc/ScopeLock.h"
+#include <atomic>
+
+// One live stream's audio on this machine, delivered to every sound wave playing it (the Boom Boxes of a group, or
+// any Boom Boxes on the same station): each listener gets identical samples and is kept at the same playback point,
+// so they play in step instead of each connecting and buffering on its own.
+class FBBPLiveFanOut
+{
+public:
+	FBBPLiveFanOut()
+	{
+		WakeEvent = FPlatformProcess::GetSynchEventFromPool(false);
+	}
+
+	~FBBPLiveFanOut()
+	{
+		FPlatformProcess::ReturnSynchEventToPool(WakeEvent);
+	}
+
+	// Adds a listener. It starts with a copy of what a playing listener has buffered, so it plays from the same point.
+	void Subscribe(const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& State)
+	{
+		FScopeLock ScopeLock(&Lock);
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Other : Listeners)
+		{
+			if (!Other->IsBuffering())
+			{
+				State->CopyBufferFrom(*Other);
+				break;
+			}
+		}
+		State->SetLiveTitle(Title);
+		if (bFinished)
+		{
+			State->bFailed = bFailed;
+			State->bEndOfStream = true;
+		}
+		Listeners.Add(State);
+	}
+
+	void Unsubscribe(const FBBPStreamState* State)
+	{
+		FScopeLock ScopeLock(&Lock);
+		Listeners.RemoveAll([State](const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener) { return &Listener.Get() == State; });
+	}
+
+	// Appends samples to every listener (one that isn't being played keeps only the newest), then brings any that fell
+	// behind back in step.
+	void Write(const int16* Src, int32 NumSamples)
+	{
+		FScopeLock ScopeLock(&Lock);
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			Listener->WriteDroppingOldest(Src, NumSamples);
+		}
+		Align();
+	}
+
+	void SetTitle(const FString& InTitle)
+	{
+		FScopeLock ScopeLock(&Lock);
+		Title = InTitle;
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			Listener->SetLiveTitle(InTitle);
+		}
+	}
+
+	// Marks the stream over for every listener (bInFailed: it never delivered audio).
+	void Finish(bool bInFailed)
+	{
+		FScopeLock ScopeLock(&Lock);
+		bFinished = true;
+		bFailed = bInFailed;
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			Listener->bFailed = bInFailed;
+			Listener->bEndOfStream = true;
+		}
+	}
+
+	// Returns true once the worker has given up on the stream.
+	bool IsFinished()
+	{
+		FScopeLock ScopeLock(&Lock);
+		return bFinished;
+	}
+
+	std::atomic<bool> bStopRequested{false};
+
+	// Wakes the worker early for stop requests.
+	FEvent* WakeEvent = nullptr;
+
+private:
+	// Every listener gets the same writes, so the one with the least buffered is furthest ahead. Any more than
+	// AlignToleranceSamples behind it (one that wasn't being played, or joined late) is trimmed to match; smaller
+	// differences are just where each audio callback happens to be, and trimming them would click.
+	void Align()
+	{
+		int32 Least = MAX_int32;
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			if (!Listener->IsBuffering())
+			{
+				Least = FMath::Min(Least, Listener->GetNumBuffered());
+			}
+		}
+		if (Least == MAX_int32)
+		{
+			return;
+		}
+		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
+		{
+			if (!Listener->IsBuffering() && Listener->GetNumBuffered() > Least + AlignToleranceSamples)
+			{
+				Listener->TrimTo(Least);
+			}
+		}
+	}
+
+	// 60 ms of 48 kHz stereo.
+	static constexpr int32 AlignToleranceSamples = 48000 * 2 * 60 / 1000;
+
+	FCriticalSection Lock;
+	TArray<TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>> Listeners;
+	FString Title;
+	bool bFinished = false;
+	bool bFailed = false;
+};
