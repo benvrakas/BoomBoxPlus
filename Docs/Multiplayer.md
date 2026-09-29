@@ -143,7 +143,9 @@ replicated, so each player hears their own Doppler):
   from its audio component. Position deltas cover vehicles, hypertubes and Boom Boxes other players carry, where
   `GetVelocity` wouldn't. A move faster than 200 m/s in one frame is a teleport and resets the velocity.
 - Pitch = (c + listener speed towards the Boom Box) / (c - Boom Box speed towards the listener), c = 343 m/s, clamped
-  to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. It's 1 for a Boom Box the listener carries (it moves
+  to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. Closing speeds (both combined) under 6 m/s
+  (`DopplerDeadzone`) leave the pitch at 1, so walking around doesn't make the music waver. Above it, both speeds are
+  scaled by (closing speed - 6 m/s) / closing speed, so the shift grows from nothing at the edge instead of jumping. It's 1 for a Boom Box the listener carries (it moves
   with them, and turning the camera would otherwise swing the hand past the listener) and within 1 m.
 - A higher pitch plays the stream faster, so the song really moves ahead of the synced position (and behind when
   lower): the accumulated `DopplerOffset` (sum of (pitch - 1) x frame time while playing). The drift check allows

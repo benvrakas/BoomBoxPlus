@@ -48,6 +48,9 @@ namespace
 	// Closer than this (cm), the direction between Boom Box and listener is too unstable for Doppler.
 	constexpr float MinDopplerDistance = 100.f;
 
+	// Closing speed (cm/s, Boom Box and listener combined) below which the pitch doesn't change.
+	constexpr float DopplerDeadzone = 600.f;
+
 	constexpr float MinDopplerPitch = 0.5f;
 	constexpr float MaxDopplerPitch = 2.f;
 
@@ -1024,7 +1027,10 @@ void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
 			const FVector Direction = ToListener / Distance;
 			const float SourceApproach = FMath::Clamp((float)FVector::DotProduct(Emitter.Velocity, Direction), -0.5f * SpeedOfSound, 0.5f * SpeedOfSound);
 			const float ListenerApproach = -(float)FVector::DotProduct(ListenerVelocity, Direction);
-			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach) / (SpeedOfSound - SourceApproach), MinDopplerPitch, MaxDopplerPitch);
+			// Beyond the deadzone, both speeds shrink by the same share so the shift starts from nothing at its edge.
+			const float ClosingSpeed = FMath::Abs(SourceApproach + ListenerApproach);
+			const float Share = ClosingSpeed > DopplerDeadzone ? (ClosingSpeed - DopplerDeadzone) / ClosingSpeed : 0.f;
+			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach * Share) / (SpeedOfSound - SourceApproach * Share), MinDopplerPitch, MaxDopplerPitch);
 		}
 
 		// A song has a synced position to return to; a live stream doesn't.

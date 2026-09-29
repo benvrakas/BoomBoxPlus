@@ -5,6 +5,8 @@
 - **Doppler effect.** A Boom Box now sounds higher while you and it move towards each other and lower as you move
   apart, like a passing car: driving past one, riding a hypertube by it, or a player running past you with one in
   their hands. You hear it only from your own movement and theirs, and the music stays in step with everyone else.
+  Walking around doesn't change the pitch; it starts once you and the Boom Box close in or pull apart faster than
+  6 m/s combined.
   On by default; turn it off with **Doppler effect** in **Mods → BoomBoxPlus**.
 
 **Good to know**
