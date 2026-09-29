@@ -51,7 +51,7 @@ public:
 
 	// Appends up to NumSamples to every listener and returns how many were taken: at most what brings the least buffered
 	// listener up to half its ring, so the rest waits in the worker. The other half is headroom for listeners read a
-	// little later or slower; only one that isn't being played fills it and drops its oldest audio. Then brings any that
+	// little later; only one that isn't being played fills it and drops its oldest audio. Then brings any that
 	// fell behind back in step.
 	int32 Write(const int16* Src, int32 NumSamples)
 	{
@@ -118,7 +118,7 @@ private:
 	// Every listener gets the same writes, so the playing one with the least buffered is furthest ahead. A listener
 	// nobody is playing (not read for StalledSeconds) more than StalledToleranceSamples behind it is trimmed to match.
 	// Playing listeners are only trimmed beyond PlayingToleranceSamples: they differ by where each audio callback happens
-	// to be and by each Boom Box's Doppler pitch, and trimming that would click.
+	// to be, and trimming that would click.
 	void Align()
 	{
 		const double Now = FPlatformTime::Seconds();

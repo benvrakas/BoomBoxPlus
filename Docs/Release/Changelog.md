@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.7
+
+- **Doppler no longer speeds up or slows down the music.** Passing a Boom Box now only bends its pitch; the song keeps
+  its tempo and its place, instead of running a little fast on the way in and slow on the way out.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.7, as usual.
+
 ## 1.3.6
 
 - **Doppler strength** in **Mods → BoomBoxPlus** sets how strongly a Boom Box's pitch bends as you pass it: 1 (the

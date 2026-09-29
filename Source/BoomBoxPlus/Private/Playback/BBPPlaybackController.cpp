@@ -51,13 +51,6 @@ namespace
 	constexpr float MinDopplerPitch = 0.5f;
 	constexpr float MaxDopplerPitch = 2.f;
 
-	// Largest pitch change used to bring a Doppler offset back to the synced position, and the offset (s) that gets it.
-	constexpr float MaxOffsetCorrection = 0.004f;
-	constexpr float OffsetForFullCorrection = 0.25f;
-
-	// Pitch changes smaller than this aren't applied.
-	constexpr float PitchChangeThreshold = 0.0005f;
-
 	// Updates Velocity from a new Location; a teleport resets it to zero.
 	void TrackVelocity(const FVector& Location, float DeltaSeconds, FVector& LastLocation, FVector& Velocity, bool& bHasLastLocation)
 	{
@@ -782,11 +775,10 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		ApplyPaused(Emitter, State.bPaused || State.bLoading);
 		// Only seek when the change moved the position (seek/restart), not for shuffle or repeat changes.
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
-		const bool bNeedsSeek = FMath::Abs(Actual - (Expected + Emitter.DopplerOffset)) > DriftTolerance;
+		const bool bNeedsSeek = FMath::Abs(Actual - Expected) > DriftTolerance;
 		if (bNeedsSeek)
 		{
 			Emitter.Wave->Seek(Expected);
-			Emitter.DopplerOffset = 0.f;
 			Emitter.DriftCheckTimer = DriftCheckInterval;
 		}
 		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: applied state rev %d (%s at %.2f s%s)"),
@@ -805,13 +797,12 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	{
 		Emitter.DriftCheckTimer = DriftCheckInterval;
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
-		const float Drift = Actual - (Expected + Emitter.DopplerOffset);
+		const float Drift = Actual - Expected;
 		if (FMath::Abs(Drift) > DriftTolerance)
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: drift %+.2f s (playing %.2f, expected %.2f, Doppler offset %+.2f, %d underruns); resyncing"),
-				Drift, Actual, Expected, Emitter.DopplerOffset, Emitter.Wave->GetUnderrunCount());
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: drift %+.2f s (playing %.2f, expected %.2f, %d underruns); resyncing"),
+				Drift, Actual, Expected, Emitter.Wave->GetUnderrunCount());
 			Emitter.Wave->Seek(Expected);
-			Emitter.DopplerOffset = 0.f;
 		}
 	}
 }
@@ -981,7 +972,6 @@ void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
 {
 	ReleaseWave(Emitter);
 	Emitter.EntryId = INDEX_NONE;
-	Emitter.DopplerOffset = 0.f;
 }
 
 void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
@@ -1034,29 +1024,9 @@ void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
 			const float SourceTerm = FMath::Clamp(SourceApproach * Share, -0.5f * SpeedOfSound, 0.5f * SpeedOfSound);
 			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach * Share) / (SpeedOfSound - SourceTerm), MinDopplerPitch, MaxDopplerPitch);
 		}
-
-		// A song has a synced position to return to; a live stream doesn't.
-		if (Emitter.bLive || !Emitter.Wave)
+		if (Emitter.Wave)
 		{
-			Emitter.DopplerOffset = 0.f;
-		}
-		else
-		{
-			Pitch *= 1.f - FMath::Clamp(Emitter.DopplerOffset / OffsetForFullCorrection, -1.f, 1.f) * MaxOffsetCorrection;
-		}
-
-		if (!FMath::IsNearlyEqual(Emitter.AppliedPitch, Pitch, PitchChangeThreshold) || (Pitch == 1.f && Emitter.AppliedPitch != 1.f))
-		{
-			Emitter.AppliedPitch = Pitch;
-			Emitter.Component->SetPitchMultiplier(Pitch);
-		}
-
-		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
-		const bool bAdvancing = Emitter.Wave && !Emitter.bLive && Channel && !Emitter.Wave->IsFinished()
-			&& !Channel->GetPlaybackState().bPaused && !Channel->GetPlaybackState().bLoading;
-		if (bAdvancing)
-		{
-			Emitter.DopplerOffset += (Emitter.AppliedPitch - 1.f) * DeltaSeconds;
+			Emitter.Wave->SetPitchRatio(Pitch);
 		}
 	}
 }

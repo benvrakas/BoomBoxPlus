@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Sound/SoundWaveProcedural.h"
+#include <atomic>
 #include "BBPStreamingSoundWave.generated.h"
 
+class FBBPPitchShifter;
 class FBBPStreamState;
 class FRunnable;
 class FRunnableThread;
@@ -52,6 +54,9 @@ public:
 	// Returns how many audio callbacks ran out of decoded audio since the stream started (a live stream refilling its prebuffer does not count).
 	int32 GetUnderrunCount() const;
 
+	// Sets the pitch the audio plays at, as a ratio (1 unchanged, 2 an octave up), without changing its speed.
+	void SetPitchRatio(float Ratio) { PitchRatio = Ratio; }
+
 	//~ Begin USoundWaveProcedural interface
 	virtual int32 OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 NumSamples) override;
 	virtual Audio::EAudioMixerStreamDataFormat::Type GetGeneratedPCMDataFormat() const override;
@@ -72,6 +77,11 @@ private:
 
 	// File streams: the decode thread.
 	FRunnable* Worker = nullptr;
+
+	std::atomic<float> PitchRatio{1.f};
+
+	// Audio render thread only.
+	TSharedPtr<FBBPPitchShifter> PitchShifter;
 	bool bLive = false;
 	FRunnableThread* WorkerThread = nullptr;
 };

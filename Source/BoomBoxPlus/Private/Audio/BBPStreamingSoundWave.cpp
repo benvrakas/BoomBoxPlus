@@ -1,4 +1,5 @@
 #include "Audio/BBPStreamingSoundWave.h"
+#include "Audio/BBPPitchShifter.h"
 #include "Audio/BBPDecoder.h"
 #include "Audio/BBPLiveFanOut.h"
 #include "Audio/BBPLiveStreamWorker.h"
@@ -345,14 +346,24 @@ int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 
 {
 	OutAudio.SetNumUninitialized(NumSamples * sizeof(int16), EAllowShrinking::No);
 	int16* Dst = reinterpret_cast<int16*>(OutAudio.GetData());
-	const int32 Read = State.IsValid() ? State->Read(Dst, NumSamples) : 0;
+	const TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> Current = State;
+	const int32 Read = Current.IsValid() ? Current->Read(Dst, NumSamples) : 0;
 	if (Read < NumSamples)
 	{
 		FMemory::Memzero(Dst + Read, (NumSamples - Read) * sizeof(int16));
-		if (State.IsValid() && !State->bEndOfStream && (Read > 0 || !State->IsBuffering()))
+		if (Current.IsValid() && !Current->bEndOfStream && (Read > 0 || !Current->IsBuffering()))
 		{
-			++State->UnderrunCount;
+			++Current->UnderrunCount;
 		}
+	}
+	// Every wave runs through the shifter, shifted or not, so all of them are delayed alike and stay in step.
+	if (Current.IsValid())
+	{
+		if (!PitchShifter.IsValid() || PitchShifter->SampleRate != Current->SampleRate || PitchShifter->Channels != Current->Channels)
+		{
+			PitchShifter = MakeShared<FBBPPitchShifter>(Current->SampleRate, Current->Channels);
+		}
+		PitchShifter->Process(Dst, NumSamples / Current->Channels, PitchRatio.load());
 	}
 	return NumSamples;
 }

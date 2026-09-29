@@ -130,9 +130,6 @@ A new state `Revision` is applied immediately: the pause state is set, and the s
 its position differs from the expected one by more than the tolerance (shuffle/repeat toggles also bump
 `Revision` and must not cause a hiccup).
 
-Both checks compare against the expected position **plus the emitter's `DopplerOffset`** (1.3.5), and a seek resets
-the offset to 0.
-
 ## Doppler effect
 
 `UBBPPlaybackController::UpdateDoppler` runs every frame after the emitters update, only on this machine (nothing is
@@ -143,22 +140,31 @@ replicated, so each player hears their own Doppler):
   from its audio component. Position deltas cover vehicles, hypertubes and Boom Boxes other players carry, where
   `GetVelocity` wouldn't. A move faster than 200 m/s in one frame is a teleport and resets the velocity.
 - Pitch = (c + listener speed towards the Boom Box) / (c - Boom Box speed towards the listener), c = 343 m/s, clamped
-  to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. Closing speeds (both combined) under the
+  to 0.5-2 and handed to the wave (`UBBPStreamingSoundWave::SetPitchRatio`, see below). Closing speeds (both combined) under the
   `DopplerDeadzone` setting (m/s, default 10, 0-50) leave the pitch at 1. The default sits just above the character's
   sprint speed (`mMaxSprintSpeed`, 9 m/s), so running around doesn't make the music waver. Above it, both speeds are
   scaled by (closing speed - deadzone) / closing speed, so the shift grows from nothing at the edge instead of jumping. The `DopplerStrength` setting
   (1.3.6; default 1, true to life; 0-5) multiplies that factor too; the Boom Box's term stays within ±0.5 c so the
   denominator can't reach 0. It's 1 for a Boom Box the listener carries (it moves
   with them, and turning the camera would otherwise swing the hand past the listener) and within 1 m.
-- A higher pitch plays the stream faster, so the song really moves ahead of the synced position (and behind when
-  lower): the accumulated `DopplerOffset` (sum of (pitch - 1) x frame time while playing). The drift check allows
-  for it; otherwise driving past a Boom Box would trigger a resync. The offset is brought back to 0 by scaling the
-  pitch by up to 0.4% (full at 0.25 s of offset), which can't be heard; so a player standing still ends up back in
-  step with everyone else.
-- The `Doppler` setting (on by default) sets the pitch to 1; any leftover offset is still brought back.
+- The `Doppler` setting (on by default) sets the pitch to 1.
 
-Live streams have no synced position, so they get the pitch but no offset; see Radio.md for how linked Boom Boxes on
-one station stay aligned when their pitches differ.
+**Pitch without speed (1.3.7).** 1.3.5-1.3.6 used `UAudioComponent::SetPitchMultiplier`, which resamples: a higher
+pitch also played the music faster, so it ran ahead of the synced position (real Doppler does this too, but real sound
+also takes distance / c to arrive, which evens it out). Those versions tracked the drift as a `DopplerOffset`, let the
+drift check allow for it and pulled it back with a pitch change too small to hear, and the audible tempo change
+remained. Now each wave's own audio callback shifts the pitch and leaves the speed alone (`FBBPPitchShifter`,
+`Private/Audio/BBPPitchShifter.h`), so playback position is untouched and none of that is needed:
+
+- Two taps read a 50 ms delay line; their delay sweeps at (1 - pitch) window lengths per window, and each fades out
+  (sine window, the two half a cycle apart) where it jumps back. The same design as the engine's
+  `Audio::FTapDelayPitchShifter`, which we can't use because it doesn't let us steer its phase (next point).
+- At pitch 1 the taps come to rest where one is silent (phase 0 or 0.5), moving there with at most a 0.5% pitch
+  change: a frozen mix of both taps would sound hollow (comb filter). At rest the output is the input 25 ms late.
+- Every wave runs through it all the time, shifted or not, so every Boom Box has the same 25 ms delay and linked Boom
+  Boxes (and radio listeners of one station) stay in step. It's well inside the 0.25 s drift tolerance.
+- Checked offline with a Python port on a 440 Hz tone: pitch 1.05 gives 462 Hz with the same number of samples out as
+  in; back at 1 it settles to exactly the input delayed by 1200 samples.
 
 Each emitter remembers which channel it is playing. When its Boom Box's channel changes (link, unlink, or a
 first channel), the stream is stopped and restarted from the new channel's position, because entry ids from

@@ -66,12 +66,6 @@ struct FBBPEmitter
 	FVector Velocity = FVector::ZeroVector;
 	bool bHasLastLocation = false;
 
-	// Pitch multiplier on Component.
-	float AppliedPitch = 1.f;
-
-	// Seconds the song is ahead (+) or behind (-) the synced position because of the pitch; drift checks allow for it.
-	float DopplerOffset = 0.f;
-
 	// True once the missing-track or failure warning has been logged for EntryId.
 	bool bReportedProblem = false;
 
@@ -235,7 +229,7 @@ private:
 	// Doppler setting last applied, to log changes.
 	bool bAppliedDoppler = true;
 
-	// Sets each emitter's pitch from how fast it and the listener approach or separate, and keeps its DopplerOffset.
+	// Sets each emitter's pitch from how fast it and the listener approach or separate.
 	void UpdateDoppler(float DeltaSeconds);
 
 	FBBPMyVolumes MyVolumes;
