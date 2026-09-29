@@ -114,15 +114,18 @@ public:
 	FEvent* WakeEvent = nullptr;
 
 private:
-	// Every listener gets the same writes, so the one with the least buffered is furthest ahead. Any more than
-	// AlignToleranceSamples behind it (one that wasn't being played, or joined late) is trimmed to match; smaller
-	// differences are just where each audio callback happens to be, and trimming them would click.
+	// Every listener gets the same writes, so the playing one with the least buffered is furthest ahead. A listener
+	// nobody is playing (not read for StalledSeconds) more than StalledToleranceSamples behind it is trimmed to match.
+	// Playing listeners are only trimmed beyond PlayingToleranceSamples: they differ by where each audio callback happens
+	// to be and by each Boom Box's Doppler pitch, and trimming that would click.
 	void Align()
 	{
+		const double Now = FPlatformTime::Seconds();
+		auto IsStalled = [Now](const FBBPStreamState& Listener) { return Now - Listener.LastReadSeconds.load() > StalledSeconds; };
 		int32 Least = MAX_int32;
 		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
 		{
-			if (!Listener->IsBuffering())
+			if (!Listener->IsBuffering() && !IsStalled(*Listener))
 			{
 				Least = FMath::Min(Least, Listener->GetNumBuffered());
 			}
@@ -133,15 +136,19 @@ private:
 		}
 		for (const TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>& Listener : Listeners)
 		{
-			if (!Listener->IsBuffering() && Listener->GetNumBuffered() > Least + AlignToleranceSamples)
+			const int32 Tolerance = IsStalled(*Listener) ? StalledToleranceSamples : PlayingToleranceSamples;
+			if (!Listener->IsBuffering() && Listener->GetNumBuffered() > Least + Tolerance)
 			{
 				Listener->TrimTo(Least);
 			}
 		}
 	}
 
-	// 60 ms of 48 kHz stereo.
-	static constexpr int32 AlignToleranceSamples = 48000 * 2 * 60 / 1000;
+	static constexpr double StalledSeconds = 0.25;
+
+	// 60 ms and 1 s of 48 kHz stereo.
+	static constexpr int32 StalledToleranceSamples = 48000 * 2 * 60 / 1000;
+	static constexpr int32 PlayingToleranceSamples = 48000 * 2;
 
 	FCriticalSection Lock;
 	TArray<TSharedRef<FBBPStreamState, ESPMode::ThreadSafe>> Listeners;

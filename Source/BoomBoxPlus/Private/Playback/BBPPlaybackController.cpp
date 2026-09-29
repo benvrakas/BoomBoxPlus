@@ -18,6 +18,7 @@
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "JsonObjectConverter.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -34,6 +35,47 @@ namespace
 	constexpr float FalloffDistance = 21000.f;
 
 	constexpr float GameVolumeInterval = 1.f;
+
+	// Speed of sound, cm/s.
+	constexpr float SpeedOfSound = 34300.f;
+
+	// Seconds over which measured velocities are smoothed.
+	constexpr float VelocitySmoothingSeconds = 0.15f;
+
+	// A move faster than this between two frames (cm/s) is a teleport, not movement.
+	constexpr float MaxTrackedSpeed = 20000.f;
+
+	// Closer than this (cm), the direction between Boom Box and listener is too unstable for Doppler.
+	constexpr float MinDopplerDistance = 100.f;
+
+	constexpr float MinDopplerPitch = 0.5f;
+	constexpr float MaxDopplerPitch = 2.f;
+
+	// Largest pitch change used to bring a Doppler offset back to the synced position, and the offset (s) that gets it.
+	constexpr float MaxOffsetCorrection = 0.004f;
+	constexpr float OffsetForFullCorrection = 0.25f;
+
+	// Pitch changes smaller than this aren't applied.
+	constexpr float PitchChangeThreshold = 0.0005f;
+
+	// Updates Velocity from a new Location; a teleport resets it to zero.
+	void TrackVelocity(const FVector& Location, float DeltaSeconds, FVector& LastLocation, FVector& Velocity, bool& bHasLastLocation)
+	{
+		if (bHasLastLocation && DeltaSeconds > KINDA_SMALL_NUMBER)
+		{
+			const FVector Measured = (Location - LastLocation) / DeltaSeconds;
+			if (Measured.SizeSquared() > FMath::Square(MaxTrackedSpeed))
+			{
+				Velocity = FVector::ZeroVector;
+			}
+			else
+			{
+				Velocity = FMath::Lerp(Velocity, Measured, 1.f - FMath::Exp(-DeltaSeconds / VelocitySmoothingSeconds));
+			}
+		}
+		LastLocation = Location;
+		bHasLastLocation = true;
+	}
 
 	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100. An option that can't be read counts as 1.
 	float ReadVolumeOption(const UFGGameUserSettings& Settings, const TCHAR* Option)
@@ -121,6 +163,7 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	{
 		UpdateEmitter(Emitter, DeltaSeconds);
 	}
+	UpdateDoppler(DeltaSeconds);
 	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);
 	UpdateVanillaPages();
@@ -739,10 +782,11 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		ApplyPaused(Emitter, State.bPaused || State.bLoading);
 		// Only seek when the change moved the position (seek/restart), not for shuffle or repeat changes.
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
-		const bool bNeedsSeek = FMath::Abs(Actual - Expected) > DriftTolerance;
+		const bool bNeedsSeek = FMath::Abs(Actual - (Expected + Emitter.DopplerOffset)) > DriftTolerance;
 		if (bNeedsSeek)
 		{
 			Emitter.Wave->Seek(Expected);
+			Emitter.DopplerOffset = 0.f;
 			Emitter.DriftCheckTimer = DriftCheckInterval;
 		}
 		UE_LOG(LogBoomBoxPlus, Verbose, TEXT("Playback: applied state rev %d (%s at %.2f s%s)"),
@@ -761,12 +805,13 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	{
 		Emitter.DriftCheckTimer = DriftCheckInterval;
 		const float Actual = Emitter.Wave->GetPlaybackSeconds();
-		const float Drift = Actual - Expected;
+		const float Drift = Actual - (Expected + Emitter.DopplerOffset);
 		if (FMath::Abs(Drift) > DriftTolerance)
 		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: drift %+.2f s (playing %.2f, expected %.2f, %d underruns); resyncing"),
-				Drift, Actual, Expected, Emitter.Wave->GetUnderrunCount());
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: drift %+.2f s (playing %.2f, expected %.2f, Doppler offset %+.2f, %d underruns); resyncing"),
+				Drift, Actual, Expected, Emitter.DopplerOffset, Emitter.Wave->GetUnderrunCount());
 			Emitter.Wave->Seek(Expected);
+			Emitter.DopplerOffset = 0.f;
 		}
 	}
 }
@@ -936,6 +981,76 @@ void UBBPPlaybackController::StopTrack(FBBPEmitter& Emitter)
 {
 	ReleaseWave(Emitter);
 	Emitter.EntryId = INDEX_NONE;
+	Emitter.DopplerOffset = 0.f;
+}
+
+void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
+{
+	const bool bDoppler = UBBPConfig::GetBool(Playlist, UBBPConfig::DopplerKey, true);
+	if (bDoppler != bAppliedDoppler)
+	{
+		bAppliedDoppler = bDoppler;
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: Doppler effect %s"), bDoppler ? TEXT("on") : TEXT("off"));
+	}
+
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(Playlist, 0);
+	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
+	FVector ListenerLocation = FVector::ZeroVector;
+	if (PlayerController)
+	{
+		FVector FrontDir;
+		FVector RightDir;
+		PlayerController->GetAudioListenerPosition(ListenerLocation, FrontDir, RightDir);
+		TrackVelocity(ListenerLocation, DeltaSeconds, ListenerLastLocation, ListenerVelocity, bHasListenerLocation);
+	}
+
+	for (FBBPEmitter& Emitter : Emitters)
+	{
+		if (!Emitter.Component)
+		{
+			continue;
+		}
+		const FVector SourceLocation = Emitter.Component->GetComponentLocation();
+		TrackVelocity(SourceLocation, DeltaSeconds, Emitter.LastLocation, Emitter.Velocity, Emitter.bHasLastLocation);
+
+		// A Boom Box in the listener's own hands moves with them.
+		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+		const bool bCarriedByListener = BoomBox && Pawn && BoomBox->IsInEquipmentMode() && BoomBox->GetmOwningCharacter() == Pawn;
+		float Pitch = 1.f;
+		const FVector ToListener = ListenerLocation - SourceLocation;
+		const float Distance = ToListener.Size();
+		if (bDoppler && PlayerController && !bCarriedByListener && Distance > MinDopplerDistance)
+		{
+			const FVector Direction = ToListener / Distance;
+			const float SourceApproach = FMath::Clamp((float)FVector::DotProduct(Emitter.Velocity, Direction), -0.5f * SpeedOfSound, 0.5f * SpeedOfSound);
+			const float ListenerApproach = -(float)FVector::DotProduct(ListenerVelocity, Direction);
+			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach) / (SpeedOfSound - SourceApproach), MinDopplerPitch, MaxDopplerPitch);
+		}
+
+		// A song has a synced position to return to; a live stream doesn't.
+		if (Emitter.bLive || !Emitter.Wave)
+		{
+			Emitter.DopplerOffset = 0.f;
+		}
+		else
+		{
+			Pitch *= 1.f - FMath::Clamp(Emitter.DopplerOffset / OffsetForFullCorrection, -1.f, 1.f) * MaxOffsetCorrection;
+		}
+
+		if (!FMath::IsNearlyEqual(Emitter.AppliedPitch, Pitch, PitchChangeThreshold) || (Pitch == 1.f && Emitter.AppliedPitch != 1.f))
+		{
+			Emitter.AppliedPitch = Pitch;
+			Emitter.Component->SetPitchMultiplier(Pitch);
+		}
+
+		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
+		const bool bAdvancing = Emitter.Wave && !Emitter.bLive && Channel && !Emitter.Wave->IsFinished()
+			&& !Channel->GetPlaybackState().bPaused && !Channel->GetPlaybackState().bLoading;
+		if (bAdvancing)
+		{
+			Emitter.DopplerOffset += (Emitter.AppliedPitch - 1.f) * DeltaSeconds;
+		}
+	}
 }
 
 void UBBPPlaybackController::GetVanillaPosition(const ABBPMusicChannel* Channel, float& OutPosition, float& OutDuration)

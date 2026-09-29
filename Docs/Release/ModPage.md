@@ -144,6 +144,7 @@ next to the transport controls, rather than a setting here.
 | Game music fade time | 2 s | How long the fade takes. |
 | Which Boom Boxes you hear | All Boom Boxes | All of them, only the nearest of each linked group, or only the one you carry. Only changes what you hear. Also the **Hear:** button on the Custom Music page. |
 | Mute when the game is in the background | On | Silences Custom Music while you're in another window; it keeps its place. |
+| Doppler effect | On | A Boom Box sounds higher while you and it move towards each other and lower as you move apart, like a passing car. Only changes what you hear. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 
 ### Good to know

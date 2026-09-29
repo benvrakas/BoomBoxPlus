@@ -106,6 +106,7 @@ public:
 	int32 Read(int16* Dst, int32 NumSamples)
 	{
 		FScopeLock ScopeLock(&Lock);
+		LastReadSeconds = FPlatformTime::Seconds();
 		if (bBuffering)
 		{
 			if (NumBuffered < PrebufferSamples && !bEndOfStream)
@@ -177,6 +178,9 @@ public:
 
 	// Frame to seek to on the decode thread, or -1 if none is pending.
 	std::atomic<int64> PendingSeekFrame;
+
+	// FPlatformTime::Seconds() of the audio renderer's last Read, or 0 before the first.
+	std::atomic<double> LastReadSeconds{0.0};
 
 	std::atomic<int32> UnderrunCount{0};
 	std::atomic<bool> bStopRequested{false};

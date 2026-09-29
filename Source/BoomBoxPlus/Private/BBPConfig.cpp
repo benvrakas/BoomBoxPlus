@@ -21,6 +21,7 @@ const FString UBBPConfig::MaxCachedSongsKey = TEXT("MaxCachedSongs");
 const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
 const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
 const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
+const FString UBBPConfig::DopplerKey = TEXT("Doppler");
 const FString UBBPConfig::ListenModeKey = TEXT("ListenMode");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
@@ -108,6 +109,13 @@ UBBPConfig::UBBPConfig()
 	MuteInBackground->DefaultValue = true;
 	MuteInBackground->Value = true;
 	AddSetting(MuteInBackgroundKey, MuteInBackground);
+
+	UConfigPropertyBool* Doppler = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("Doppler"));
+	Doppler->DisplayName = LOCTEXT("Doppler", "Doppler effect");
+	Doppler->Tooltip = LOCTEXT("DopplerTip", "A Boom Box sounds higher while you and it move towards each other and lower while you move apart, like a passing car. Only changes what you hear.");
+	Doppler->DefaultValue = true;
+	Doppler->Value = true;
+	AddSetting(DopplerKey, Doppler);
 
 	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
 	UConfigPropertyInteger* ListenMode = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("ListenMode"));

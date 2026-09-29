@@ -130,6 +130,31 @@ A new state `Revision` is applied immediately: the pause state is set, and the s
 its position differs from the expected one by more than the tolerance (shuffle/repeat toggles also bump
 `Revision` and must not cause a hiccup).
 
+Both checks compare against the expected position **plus the emitter's `DopplerOffset`** (1.3.5), and a seek resets
+the offset to 0.
+
+## Doppler effect
+
+`UBBPPlaybackController::UpdateDoppler` runs every frame after the emitters update, only on this machine (nothing is
+replicated, so each player hears their own Doppler):
+
+- Velocities are measured from position changes, smoothed over 0.15 s (`TrackVelocity`): the listener's from
+  `APlayerController::GetAudioListenerPosition` (the camera, which is also what Unreal attenuates from), each Boom Box's
+  from its audio component. Position deltas cover vehicles, hypertubes and Boom Boxes other players carry, where
+  `GetVelocity` wouldn't. A move faster than 200 m/s in one frame is a teleport and resets the velocity.
+- Pitch = (c + listener speed towards the Boom Box) / (c - Boom Box speed towards the listener), c = 343 m/s, clamped
+  to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. It's 1 for a Boom Box the listener carries (it moves
+  with them, and turning the camera would otherwise swing the hand past the listener) and within 1 m.
+- A higher pitch plays the stream faster, so the song really moves ahead of the synced position (and behind when
+  lower): the accumulated `DopplerOffset` (sum of (pitch - 1) x frame time while playing). The drift check allows
+  for it; otherwise driving past a Boom Box would trigger a resync. The offset is brought back to 0 by scaling the
+  pitch by up to 0.4% (full at 0.25 s of offset), which can't be heard; so a player standing still ends up back in
+  step with everyone else.
+- The `Doppler` setting (on by default) sets the pitch to 1; any leftover offset is still brought back.
+
+Live streams have no synced position, so they get the pitch but no offset; see Radio.md for how linked Boom Boxes on
+one station stay aligned when their pitches differ.
+
 Each emitter remembers which channel it is playing. When its Boom Box's channel changes (link, unlink, or a
 first channel), the stream is stopped and restarted from the new channel's position, because entry ids from
 different channels can collide.

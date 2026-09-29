@@ -61,6 +61,17 @@ struct FBBPEmitter
 	// Seconds until the next drift check.
 	float DriftCheckTimer = 0.f;
 
+	// Doppler: where the audio was last frame and its smoothed velocity (cm/s).
+	FVector LastLocation = FVector::ZeroVector;
+	FVector Velocity = FVector::ZeroVector;
+	bool bHasLastLocation = false;
+
+	// Pitch multiplier on Component.
+	float AppliedPitch = 1.f;
+
+	// Seconds the song is ahead (+) or behind (-) the synced position because of the pitch; drift checks allow for it.
+	float DopplerOffset = 0.f;
+
 	// True once the missing-track or failure warning has been logged for EntryId.
 	bool bReportedProblem = false;
 
@@ -215,6 +226,17 @@ private:
 
 	// Listening mode last applied, to log changes.
 	EBBPListenMode AppliedListenMode = EBBPListenMode::All;
+
+	// Doppler: the listener's last location and smoothed velocity (cm/s).
+	FVector ListenerLastLocation = FVector::ZeroVector;
+	FVector ListenerVelocity = FVector::ZeroVector;
+	bool bHasListenerLocation = false;
+
+	// Doppler setting last applied, to log changes.
+	bool bAppliedDoppler = true;
+
+	// Sets each emitter's pitch from how fast it and the listener approach or separate, and keeps its DopplerOffset.
+	void UpdateDoppler(float DeltaSeconds);
 
 	FBBPMyVolumes MyVolumes;
 

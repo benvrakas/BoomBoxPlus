@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.5
+
+- **Doppler effect.** A Boom Box now sounds higher while you and it move towards each other and lower as you move
+  apart, like a passing car: driving past one, riding a hypertube by it, or a player running past you with one in
+  their hands. You hear it only from your own movement and theirs, and the music stays in step with everyone else.
+  On by default; turn it off with **Doppler effect** in **Mods → BoomBoxPlus**.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.5, as usual.
+
 ## 1.3.4
 
 - Fixed **Downloaded songs to keep** and **Game music fade time** in **Mods → BoomBoxPlus** showing red and refusing
