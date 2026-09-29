@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.6
+
+- **Doppler strength** in **Mods → BoomBoxPlus** sets how strongly a Boom Box's pitch bends as you pass it: 1 (the
+  default) is true to life, 2 bends it twice as much, 0.5 half as much.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.6, as usual.
+
 ## 1.3.5
 
 - **Doppler effect.** A Boom Box now sounds higher while you and it move towards each other and lower as you move

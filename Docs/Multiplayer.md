@@ -146,7 +146,9 @@ replicated, so each player hears their own Doppler):
   to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. Closing speeds (both combined) under the
   `DopplerDeadzone` setting (m/s, default 10, 0-50) leave the pitch at 1. The default sits just above the character's
   sprint speed (`mMaxSprintSpeed`, 9 m/s), so running around doesn't make the music waver. Above it, both speeds are
-  scaled by (closing speed - deadzone) / closing speed, so the shift grows from nothing at the edge instead of jumping. It's 1 for a Boom Box the listener carries (it moves
+  scaled by (closing speed - deadzone) / closing speed, so the shift grows from nothing at the edge instead of jumping. The `DopplerStrength` setting
+  (1.3.6; default 1, true to life; 0-5) multiplies that factor too; the Boom Box's term stays within ±0.5 c so the
+  denominator can't reach 0. It's 1 for a Boom Box the listener carries (it moves
   with them, and turning the camera would otherwise swing the hand past the listener) and within 1 m.
 - A higher pitch plays the stream faster, so the song really moves ahead of the synced position (and behind when
   lower): the accumulated `DopplerOffset` (sum of (pitch - 1) x frame time while playing). The drift check allows

@@ -23,6 +23,7 @@ const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
 const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
 const FString UBBPConfig::DopplerKey = TEXT("Doppler");
 const FString UBBPConfig::DopplerDeadzoneKey = TEXT("DopplerDeadzone");
+const FString UBBPConfig::DopplerStrengthKey = TEXT("DopplerStrength");
 const FString UBBPConfig::ListenModeKey = TEXT("ListenMode");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
@@ -125,6 +126,13 @@ UBBPConfig::UBBPConfig()
 	DopplerDeadzone->Value = 10.f;
 	AddSetting(DopplerDeadzoneKey, DopplerDeadzone);
 
+	UConfigPropertyFloat* DopplerStrength = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("DopplerStrength"));
+	DopplerStrength->DisplayName = LOCTEXT("DopplerStrength", "Doppler strength");
+	DopplerStrength->Tooltip = LOCTEXT("DopplerStrengthTip", "How strongly the pitch bends once past the deadzone. 1 is true to life, 2 bends it twice as much, 0.5 half as much.");
+	DopplerStrength->DefaultValue = 1.f;
+	DopplerStrength->Value = 1.f;
+	AddSetting(DopplerStrengthKey, DopplerStrength);
+
 	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
 	UConfigPropertyInteger* ListenMode = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("ListenMode"));
 	ListenMode->DisplayName = LOCTEXT("ListenMode", "Which Boom Boxes you hear");
@@ -181,6 +189,7 @@ namespace
 			{ UBBPConfig::GameMusicLevelKey, { 0.f, 1.f } },
 			{ UBBPConfig::GameMusicFadeTimeKey, { 0.f, 60.f } },
 			{ UBBPConfig::DopplerDeadzoneKey, { 0.f, 50.f } },
+			{ UBBPConfig::DopplerStrengthKey, { 0.f, 5.f } },
 			{ UBBPConfig::ListenModeKey, { 0.f, static_cast<float>(EBBPListenMode::OnlyCarried) } },
 		};
 		return Ranges;

@@ -994,6 +994,8 @@ void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
 	}
 	// Closing speed (Boom Box and listener combined) below which the pitch doesn't change; the setting is m/s, this cm/s.
 	const float DopplerDeadzone = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::DopplerDeadzoneKey, 10.f), 0.f, 50.f) * 100.f;
+	// Multiplies the speeds past the deadzone; 1 is true to life.
+	const float DopplerStrength = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::DopplerStrengthKey, 1.f), 0.f, 5.f);
 
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(Playlist, 0);
 	const APawn* Pawn = PlayerController ? PlayerController->GetPawn() : nullptr;
@@ -1028,8 +1030,9 @@ void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
 			const float ListenerApproach = -(float)FVector::DotProduct(ListenerVelocity, Direction);
 			// Beyond the deadzone, both speeds shrink by the same share so the shift starts from nothing at its edge.
 			const float ClosingSpeed = FMath::Abs(SourceApproach + ListenerApproach);
-			const float Share = ClosingSpeed > DopplerDeadzone ? (ClosingSpeed - DopplerDeadzone) / ClosingSpeed : 0.f;
-			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach * Share) / (SpeedOfSound - SourceApproach * Share), MinDopplerPitch, MaxDopplerPitch);
+			const float Share = (ClosingSpeed > DopplerDeadzone ? (ClosingSpeed - DopplerDeadzone) / ClosingSpeed : 0.f) * DopplerStrength;
+			const float SourceTerm = FMath::Clamp(SourceApproach * Share, -0.5f * SpeedOfSound, 0.5f * SpeedOfSound);
+			Pitch = FMath::Clamp((SpeedOfSound + ListenerApproach * Share) / (SpeedOfSound - SourceTerm), MinDopplerPitch, MaxDopplerPitch);
 		}
 
 		// A song has a synced position to return to; a live stream doesn't.
