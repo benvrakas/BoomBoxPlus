@@ -144,7 +144,8 @@ replicated, so each player hears their own Doppler):
   `GetVelocity` wouldn't. A move faster than 200 m/s in one frame is a teleport and resets the velocity.
 - Pitch = (c + listener speed towards the Boom Box) / (c - Boom Box speed towards the listener), c = 343 m/s, clamped
   to 0.5-2 and applied with `UAudioComponent::SetPitchMultiplier`. Closing speeds (both combined) under the
-  `DopplerDeadzone` setting (m/s, default 6, 0-50) leave the pitch at 1, so walking around doesn't make the music waver. Above it, both speeds are
+  `DopplerDeadzone` setting (m/s, default 10, 0-50) leave the pitch at 1. The default sits just above the character's
+  sprint speed (`mMaxSprintSpeed`, 9 m/s), so running around doesn't make the music waver. Above it, both speeds are
   scaled by (closing speed - deadzone) / closing speed, so the shift grows from nothing at the edge instead of jumping. It's 1 for a Boom Box the listener carries (it moves
   with them, and turning the camera would otherwise swing the hand past the listener) and within 1 m.
 - A higher pitch plays the stream faster, so the song really moves ahead of the synced position (and behind when

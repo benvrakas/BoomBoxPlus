@@ -120,9 +120,9 @@ UBBPConfig::UBBPConfig()
 
 	UConfigPropertyFloat* DopplerDeadzone = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("DopplerDeadzone"));
 	DopplerDeadzone->DisplayName = LOCTEXT("DopplerDeadzone", "Doppler deadzone (m/s)");
-	DopplerDeadzone->Tooltip = LOCTEXT("DopplerDeadzoneTip", "How fast you and a Boom Box must move towards or away from each other (combined) before its pitch starts to change. The default of 6 leaves walking alone; 0 bends the pitch at any speed.");
-	DopplerDeadzone->DefaultValue = 6.f;
-	DopplerDeadzone->Value = 6.f;
+	DopplerDeadzone->Tooltip = LOCTEXT("DopplerDeadzoneTip", "How fast you and a Boom Box must move towards or away from each other (combined) before its pitch starts to change. The default of 10 is just above sprinting speed (9), so running around leaves it alone; 0 bends the pitch at any speed.");
+	DopplerDeadzone->DefaultValue = 10.f;
+	DopplerDeadzone->Value = 10.f;
 	AddSetting(DopplerDeadzoneKey, DopplerDeadzone);
 
 	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
