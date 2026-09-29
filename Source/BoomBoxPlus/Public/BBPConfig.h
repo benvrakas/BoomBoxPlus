@@ -34,6 +34,7 @@ public:
 	static const FString GameMusicFadeTimeKey;
 	static const FString MuteInBackgroundKey;
 	static const FString DopplerKey;
+	static const FString DopplerDeadzoneKey;
 	static const FString ListenModeKey;
 	static const FString SpotifyClientIdKey;
 	static const FString SpotifyClientSecretKey;

@@ -22,6 +22,7 @@ const FString UBBPConfig::GameMusicLevelKey = TEXT("GameMusicLevel");
 const FString UBBPConfig::GameMusicFadeTimeKey = TEXT("GameMusicFadeTime");
 const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
 const FString UBBPConfig::DopplerKey = TEXT("Doppler");
+const FString UBBPConfig::DopplerDeadzoneKey = TEXT("DopplerDeadzone");
 const FString UBBPConfig::ListenModeKey = TEXT("ListenMode");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
@@ -117,6 +118,13 @@ UBBPConfig::UBBPConfig()
 	Doppler->Value = true;
 	AddSetting(DopplerKey, Doppler);
 
+	UConfigPropertyFloat* DopplerDeadzone = CreateDefaultSubobject<UConfigPropertyFloat>(TEXT("DopplerDeadzone"));
+	DopplerDeadzone->DisplayName = LOCTEXT("DopplerDeadzone", "Doppler deadzone (m/s)");
+	DopplerDeadzone->Tooltip = LOCTEXT("DopplerDeadzoneTip", "How fast you and a Boom Box must move towards or away from each other (combined) before its pitch starts to change. The default of 6 leaves walking alone; 0 bends the pitch at any speed.");
+	DopplerDeadzone->DefaultValue = 6.f;
+	DopplerDeadzone->Value = 6.f;
+	AddSetting(DopplerDeadzoneKey, DopplerDeadzone);
+
 	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
 	UConfigPropertyInteger* ListenMode = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("ListenMode"));
 	ListenMode->DisplayName = LOCTEXT("ListenMode", "Which Boom Boxes you hear");
@@ -172,6 +180,7 @@ namespace
 			{ UBBPConfig::MaxCachedSongsKey, { 0.f, 10000.f } },
 			{ UBBPConfig::GameMusicLevelKey, { 0.f, 1.f } },
 			{ UBBPConfig::GameMusicFadeTimeKey, { 0.f, 60.f } },
+			{ UBBPConfig::DopplerDeadzoneKey, { 0.f, 50.f } },
 			{ UBBPConfig::ListenModeKey, { 0.f, static_cast<float>(EBBPListenMode::OnlyCarried) } },
 		};
 		return Ranges;
