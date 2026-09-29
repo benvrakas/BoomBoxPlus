@@ -62,6 +62,12 @@ public:
 		WriteLocked(Src, NumSamples);
 	}
 
+	// Returns the number of samples the ring holds.
+	int32 GetCapacity() const
+	{
+		return Ring.Num();
+	}
+
 	// Returns the number of buffered samples not yet played.
 	int32 GetNumBuffered()
 	{

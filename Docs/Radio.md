@@ -44,10 +44,14 @@ connection) per stream Url, and `FBBPLiveFanOut` writes each chunk to every wave
 
 - a wave that joins copies a playing wave's unplayed audio (`FBBPStreamState::CopyBufferFrom`), so it starts at the
   same point;
-- the worker hands over only as much as the ring with the most room can take (`FBBPLiveFanOut::Write` returns what
-  it took; the rest waits in the worker and ffmpeg's pipe). That ring belongs to a wave that is playing, so audio
-  arrives at the speed it's played. Stations send several seconds at once on connect, faster than real time; taking
-  it all made the rings drop audio mid-playback, which garbled the first seconds in 1.3.2 (fixed in 1.3.3);
+- the worker hands over only as much as brings the least buffered ring up to **half full** (3 s;
+  `FBBPLiveFanOut::Write` returns what it took; the rest waits in the worker and ffmpeg's pipe). That ring belongs
+  to a wave that is playing, so audio arrives at the speed it's played. Stations send several seconds at once on
+  connect, faster than real time; taking it all made the rings drop audio mid-playback, which garbled the first
+  seconds in 1.3.2 (fixed in 1.3.3). 1.3.3-1.3.5 filled the emptiest ring to the top instead of halfway, which kept
+  every ring full: two waves playing one station are read at slightly different moments, so the one read second was
+  full when the next chunk came and dropped its oldest ~20 ms, a small skip every few chunks (fixed in 1.3.6). The
+  other half of each ring is headroom for that timing and for Doppler pitch differences;
 - rings with less room drop their oldest audio instead of refusing new audio (`WriteDroppingOldest`), so a wave that
   isn't being played (a silent or out-of-range Boom Box, which Unreal stops rendering) always holds the newest audio;
 - after every write, a wave nobody is playing (its `FBBPStreamState::LastReadSeconds` is over 0.25 s old) and more

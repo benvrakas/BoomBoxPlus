@@ -4,6 +4,8 @@
 
 - **Doppler strength** in **Mods → BoomBoxPlus** sets how strongly a Boom Box's pitch bends as you pass it: 1 (the
   default) is true to life, 2 bends it twice as much, 0.5 half as much.
+- Fixed radio skipping very slightly, over and over, when more than one Boom Box played the same station (since
+  1.3.3).
 
 **Good to know**
 
