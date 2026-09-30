@@ -145,7 +145,7 @@ next to the transport controls, rather than a setting here.
 | Which Boom Boxes you hear | All Boom Boxes | All of them, only the nearest of each linked group, or only the one you carry. Only changes what you hear. Also the **Hear:** button on the Custom Music page. |
 | Mute when the game is in the background | On | Silences Custom Music while you're in another window; it keeps its place. |
 | Doppler effect | On | A Boom Box sounds higher while you and it move towards each other and lower as you move apart, like a passing car. Only changes what you hear. |
-| Doppler deadzone (m/s) | 10 | How fast you and a Boom Box must move towards or away from each other before the pitch starts to change. 10 is just above sprinting speed, so running around leaves it alone; 0 bends it at any speed. |
+| Doppler deadzone (m/s) | 20 | How fast you and a Boom Box must move towards or away from each other before the pitch starts to change. 20 leaves running around alone, even two players sprinting towards each other; 0 bends it at any speed. |
 | Doppler strength | 1 | How strongly the pitch bends past the deadzone. 1 is true to life, 2 twice as much, 0.5 half as much. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 

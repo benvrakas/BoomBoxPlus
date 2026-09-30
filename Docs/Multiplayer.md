@@ -141,8 +141,10 @@ replicated, so each player hears their own Doppler):
   `GetVelocity` wouldn't. A move faster than 200 m/s in one frame is a teleport and resets the velocity.
 - Pitch = (c + listener speed towards the Boom Box) / (c - Boom Box speed towards the listener), c = 343 m/s, clamped
   to 0.5-2 and handed to the wave (`UBBPStreamingSoundWave::SetPitchRatio`, see below). Closing speeds (both combined) under the
-  `DopplerDeadzone` setting (m/s, default 10, 0-50) leave the pitch at 1. The default sits just above the character's
-  sprint speed (`mMaxSprintSpeed`, 9 m/s), so running around doesn't make the music waver. Above it, both speeds are
+  `DopplerDeadzone` setting (m/s, default 20 since 1.3.7, 0-50) leave the pitch at 1. The character sprints at
+  9 m/s (`mMaxSprintSpeed`), so the default covers two players sprinting at each other (18) and running around doesn't
+  make the music waver. (1.3.5-1.3.6 defaulted to 10, which a player carrying a Boom Box towards a sprinting listener
+  exceeded.) Above it, both speeds are
   scaled by (closing speed - deadzone) / closing speed, so the shift grows from nothing at the edge instead of jumping. The `DopplerStrength` setting
   (1.3.6; default 1, true to life; 0-5) multiplies that factor too; the Boom Box's term stays within ±0.5 c so the
   denominator can't reach 0. It's 1 for a Boom Box the listener carries (it moves

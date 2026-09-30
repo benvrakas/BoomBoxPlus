@@ -4,6 +4,8 @@
 
 - **Doppler no longer speeds up or slows down the music.** Passing a Boom Box now only bends its pitch; the song keeps
   its tempo and its place, instead of running a little fast on the way in and slow on the way out.
+- The **Doppler deadzone** now defaults to 20 m/s (was 10), so two players sprinting towards each other don't bend the
+  pitch either. If you already have BoomBoxPlus settings saved, yours stays as it was; set it in **Mods → BoomBoxPlus**.
 
 **Good to know**
 

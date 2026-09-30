@@ -983,7 +983,7 @@ void UBBPPlaybackController::UpdateDoppler(float DeltaSeconds)
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: Doppler effect %s"), bDoppler ? TEXT("on") : TEXT("off"));
 	}
 	// Closing speed (Boom Box and listener combined) below which the pitch doesn't change; the setting is m/s, this cm/s.
-	const float DopplerDeadzone = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::DopplerDeadzoneKey, 10.f), 0.f, 50.f) * 100.f;
+	const float DopplerDeadzone = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::DopplerDeadzoneKey, 20.f), 0.f, 50.f) * 100.f;
 	// Multiplies the speeds past the deadzone; 1 is true to life.
 	const float DopplerStrength = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::DopplerStrengthKey, 1.f), 0.f, 5.f);
 
