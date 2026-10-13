@@ -239,18 +239,32 @@ queue normally alongside it. YouTube live links don't go through `TuneRadio`: th
 included the new `Stream` kind, so pasting a station address always failed with "That's a song or playlist
 link". Only the recent-station buttons, which skip `TuneRadio`, worked. Fixed in 1.2.6.)
 
-**Stations list** (1.3.0; replaced 1.2.5's four "recent stations" buttons). Under the search box, a `UWrapBox`
-(`StationsBox`) holds a "Stations:" label and one `UBBPStationButton` per saved station: the station's name, which
-plays it now (`UBBPMusicPage::PlayStation`), and an "x" that removes it (`ForgetStation`). The box wraps onto more
-lines as stations are added, up to `UBBPNetSubsystem::MaxStations` (12, newest first; the oldest drops off when
-it's full). With none saved, the label says how to add one. Station buttons are made on demand by
-`RefreshRadioStations` and collapsed rather than destroyed, like the track rows, and each knows its own station,
-so there are no per-index handlers (`UBBPGameButton::OnClicked` carries no payload).
+**Radio view** (1.3.8; replaced the station buttons under the search box, which 1.3.0-1.3.7 had). A **Radio**
+button in the title bar swaps the area under Now Playing for `UBBPRadioPage`: `ContentSwitcher` (a `UWidgetSwitcher`)
+holds the music view (search, results, queue, nearby Boom Boxes and the Link panel) at index 0 and the Radio page at
+1. Now Playing and the transport stay visible on both. While the Radio view is shown, the title reads RADIO, the Radio
+button is hidden and **Back** returns to the music view (`HandleBack`); from the music view Back goes to the Boom
+Box's player page as before.
 
-A station is saved when a stream address tunes in, and when a live result (a station or a YouTube live stream) is
-queued or played from the results (`UBBPTrackRow` calls `UBBPMusicPage::NoteQueued`). Playing a saved station doesn't
-move it: `RememberStation` keeps an existing station's place, so the list doesn't reshuffle as it's used. The Link
-panel, freed from sharing a row with Radio, is back to a plain full-width panel.
+The Radio page has:
+
+- **Add a station**: paste a stream address and press Enter or **Add**. It goes through the same
+  `UBBPNetSubsystem::TuneRadio` as the search box (validate, follow `.pls`/`.m3u`, probe the stream for its name),
+  then `RememberStation`; it isn't played. YouTube links get a note that live streams are added by queuing them
+  from the search box (they need yt-dlp's lookup, not `TuneRadio`); anything else that isn't a stream says so. A
+  full list refuses new stations instead of dropping the oldest.
+- **Your stations (N of 50)**: a scrolling list of `UBBPStationRow`s, newest first. Each row's name is a text box:
+  Enter or clicking away renames (`UBBPMusicPage::RenameStation` → `UBBPNetSubsystem::RenameStation`, trimmed, at
+  most 80 characters), Esc or an empty name puts it back. Under it the stream address; then **Play**
+  (`PlayStation`) and **Remove** (`ForgetStation`). The station playing on this Boom Box (current entry, live, not
+  paused; checked twice a second) is highlighted and its button reads Playing. Rows are made on demand and
+  collapsed rather than destroyed, like the track rows.
+
+Stations are still saved automatically when a stream address tunes in from the search box, and when a live result
+(a station or a YouTube live stream) is queued or played from the results (`UBBPTrackRow` calls
+`UBBPMusicPage::NoteQueued`). `RememberStation` keeps an existing station's place and its name, so the list doesn't
+reshuffle as it's used and a renamed station stays renamed. `UBBPNetSubsystem::MaxStations` went from 12 to 50 with
+the scrolling list; automatic saves still drop the oldest when it's full.
 
 The Now Playing panel has three text lines: the title and the "Artist, Source" subtitle (the same as the vanilla
 page and the toast; see "One title and subtitle everywhere" above), the latter with a **Copy Link** button, and a

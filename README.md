@@ -14,7 +14,7 @@ PEAK mod sPEAKer.
 ## Screenshots
 
 The Custom Music page: now playing with its source ("YouTube: Luis Fonsi"), Copy Link, the current lyric,
-the seek bar, recent radio stations, the queue and the link code for sharing a queue.
+the seek bar, the queue and the link code for sharing a queue.
 
 ![The Custom Music page](Docs/Images/music-page.png)
 

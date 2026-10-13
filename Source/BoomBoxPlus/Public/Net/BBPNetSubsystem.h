@@ -113,15 +113,24 @@ public:
 	// Saved stations, newest first.
 	const TArray<FBBPTrack>& GetStations() const { return RadioStations.Stations; }
 
-	// Adds a live track to the front of the saved stations (or updates it where it already is) and saves the list.
-	// When the list is full, the oldest station is dropped.
+	// Adds a live track to the front of the saved stations and saves the list. A station already saved keeps its place
+	// and its name. When the list is full, the oldest station is dropped.
 	void RememberStation(const FBBPTrack& Station);
 
 	// Removes the saved station with this track id and saves the list.
 	void ForgetStation(const FString& StationId);
 
+	// Sets the name of the saved station with this track id and saves the list. Returns false if there's no such station.
+	bool RenameStation(const FString& StationId, const FString& NewName);
+
+	// Returns true if a station with this track id is saved.
+	bool HasStation(const FString& StationId) const;
+
 	// How many stations are kept.
-	static constexpr int32 MaxStations = 12;
+	static constexpr int32 MaxStations = 50;
+
+	// Longest station name kept.
+	static constexpr int32 MaxStationNameLength = 80;
 
 	// Identifies a supported link in the search box text.
 	static EBBPLinkKind ClassifyLink(const FString& Text);

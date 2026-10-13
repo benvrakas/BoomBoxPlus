@@ -42,8 +42,8 @@ Inspired by the PEAK mod sPEAKer.
 - **Internet radio.** Paste a station's stream address into the search box and press Enter, same as any
   other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
   streams**. The station's name is filled in automatically, the song the station announces becomes the title
-  (and updates as the station moves on). Your stations are kept in a list under the search box: up to 12,
-  YouTube live streams included, one click to play and an **x** to remove.
+  (and updates as the station moves on). The **Radio** button opens your station list: add a station by pasting
+  its stream address, and play, rename or remove saved ones (up to 50, YouTube live streams included).
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
@@ -209,8 +209,8 @@ BoomBoxPlus connects to these services. Multiplayer sync between players uses th
   `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\SpotifyLogin.json`.
 - **Internet radio stations**: when a radio station is playing on a Boom Box you can hear, your game
   connects to that station's stream address, including stations other players added. When you press Enter
-  on a stream address, your game briefly connects to check the stream and read its name. Your recent
-  stations are stored locally in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
+  on a stream address or adds a station, your game briefly connects to check the stream and read its name.
+  Your saved stations are stored locally in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
 - **YouTube live streams** (through the bundled yt-dlp): looks up the live stream's address when one plays
   near you, then streams it from YouTube like a radio station.
 - **LRCLIB** (lrclib.net): looks up synced lyrics for each song that plays. Sends the song's title, artist

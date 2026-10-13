@@ -596,7 +596,9 @@ void UBBPNetSubsystem::RememberStation(const FBBPTrack& Station)
 	// A station already in the list keeps its place, so the list doesn't reshuffle every time one is played.
 	if (FBBPTrack* Existing = RadioStations.Stations.FindByPredicate([&Station](const FBBPTrack& Saved) { return Saved.Id == Station.Id; }))
 	{
+		const FString Name = Existing->Title;
 		*Existing = Station;
+		Existing->Title = Name;
 	}
 	else
 	{
@@ -617,6 +619,25 @@ void UBBPNetSubsystem::ForgetStation(const FString& StationId)
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: removed saved station %s (%d left)"), *StationId, RadioStations.Stations.Num());
 		SaveRadioStations();
 	}
+}
+
+bool UBBPNetSubsystem::RenameStation(const FString& StationId, const FString& NewName)
+{
+	const FString Name = NewName.TrimStartAndEnd().Left(MaxStationNameLength);
+	FBBPTrack* Station = RadioStations.Stations.FindByPredicate([&StationId](const FBBPTrack& Saved) { return Saved.Id == StationId; });
+	if (!Station || Name.IsEmpty())
+	{
+		return false;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: renamed station '%s' to '%s'"), *Station->Title, *Name);
+	Station->Title = Name;
+	SaveRadioStations();
+	return true;
+}
+
+bool UBBPNetSubsystem::HasStation(const FString& StationId) const
+{
+	return RadioStations.Stations.ContainsByPredicate([&StationId](const FBBPTrack& Saved) { return Saved.Id == StationId; });
 }
 
 void UBBPNetSubsystem::ResolveSpotifyTrack(const FString& Url, FBBPOnNetText OnDone)

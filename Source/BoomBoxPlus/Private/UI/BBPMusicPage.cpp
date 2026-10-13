@@ -20,7 +20,7 @@
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
 #include "UI/BBPNearbyBoomBoxRow.h"
-#include "UI/BBPStationButton.h"
+#include "UI/BBPRadioPage.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
@@ -127,7 +127,8 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (CopyLinkButton) CopyLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleCopyLink);
 	if (ListenModeButton) ListenModeButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleListenMode);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
-	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowPlayerPage);
+	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleBack);
+	if (RadioButton) RadioButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadio);
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
 	if (OpenFolderButton) OpenFolderButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleOpenFolder);
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
@@ -195,13 +196,17 @@ void UBBPMusicPage::BuildDefaultLayout()
 	UHorizontalBox* Header = AddRow(Column, 0.f);
 	BackButton = MakeButton(WidgetTree, LOCTEXT("Back", "Back"));
 	AddToRow(Header, BackButton, false, 12.f);
-	AddToRow(Header, MakeText(WidgetTree, 22, AccentColor, LOCTEXT("PageTitle", "CUSTOM MUSIC"), EFontWeight::Bold), true);
+	PageTitleText = MakeText(WidgetTree, 22, AccentColor, LOCTEXT("PageTitle", "CUSTOM MUSIC"), EFontWeight::Bold);
+	AddToRow(Header, PageTitleText, true);
 	LibraryStatusText = MakeText(WidgetTree, 11, DimTextColor);
 	AddToRow(Header, LibraryStatusText, false, 12.f);
 	OpenFolderButton = MakeButton(WidgetTree, LOCTEXT("OpenFolder", "Open Folder"));
 	AddToRow(Header, OpenFolderButton, false);
 	RescanButton = MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
 	AddToRow(Header, RescanButton, false);
+	RadioButton = MakeButton(WidgetTree, LOCTEXT("Radio", "Radio"));
+	RadioButton->SetToolTipText(LOCTEXT("RadioTip", "Add radio stations from their stream addresses, and play, rename or remove your saved stations."));
+	AddToRow(Header, RadioButton, false);
 	TapesButton = MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
 	AddToRow(Header, TapesButton, false, 0.f);
 
@@ -271,9 +276,20 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, MyVolumeBoxSize, false, 3.f);
 	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, FText::FromString(TEXT("%")), EFontWeight::SemiBold), false, 0.f);
 
+	// Under Now Playing: the music view, or the Radio view.
+	ContentSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
+	AddFill(Column, ContentSwitcher, 12.f);
+	UVerticalBox* MusicView = WidgetTree->ConstructWidget<UVerticalBox>();
+	ContentSwitcher->AddChild(MusicView);
+	RadioPage = CreateWidget<UBBPRadioPage>(this, UBBPRadioPage::StaticClass());
+	if (RadioPage)
+	{
+		ContentSwitcher->AddChild(RadioPage);
+	}
+
 	// Two columns: search and results on the left, the queue on the right.
 	UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>();
-	AddFill(Column, Columns, 12.f);
+	AddFill(MusicView, Columns, 0.f);
 
 	UVerticalBox* SearchColumn = WidgetTree->ConstructWidget<UVerticalBox>();
 	UHorizontalBoxSlot* SearchSlot = Columns->AddChildToHorizontalBox(SearchColumn);
@@ -291,14 +307,6 @@ void UBBPMusicPage::BuildDefaultLayout()
 	StyleTextBox(SearchBox, 12);
 	SearchBox->SetHintText(LOCTEXT("SearchHint", "Search your music. Press Enter for YouTube / SoundCloud, or paste a link or live stream address."));
 	AddToRow(SearchRow, SearchBox, true, 0.f);
-
-	// Saved stations: one click plays one, its "x" removes it. Station buttons are added by RefreshRadioStations.
-	StationsBox = WidgetTree->ConstructWidget<UWrapBox>();
-	SearchColumn->AddChildToVerticalBox(StationsBox)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
-	StationsLabel = MakeText(WidgetTree, 11, DimTextColor);
-	UWrapBoxSlot* LabelSlot = StationsBox->AddChildToWrapBox(StationsLabel);
-	LabelSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 4.f));
-	LabelSlot->SetVerticalAlignment(VAlign_Center);
 
 	ResultsMessageText = MakeText(WidgetTree, 11, AccentColor);
 	ResultsMessageText->SetAutoWrapText(true);
@@ -361,7 +369,7 @@ void UBBPMusicPage::BuildDefaultLayout()
 
 	// Linking: this Boom Box's code, and a field for another Boom Box's code.
 	UBorder* LinkPanel = MakePanel(WidgetTree, InsetColor, FMargin(14.f, 8.f));
-	Column->AddChildToVerticalBox(LinkPanel)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+	MusicView->AddChildToVerticalBox(LinkPanel)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
 	UVerticalBox* LinkColumn = WidgetTree->ConstructWidget<UVerticalBox>();
 	LinkPanel->SetContent(LinkColumn);
 	UHorizontalBox* LinkRow = AddRow(LinkColumn, 0.f);
@@ -1278,38 +1286,53 @@ void UBBPMusicPage::NoteQueued(const FBBPTrack& Track)
 
 void UBBPMusicPage::RefreshRadioStations()
 {
-	const UGameInstance* GameInstance = GetGameInstance();
-	const UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
-	const TArray<FBBPTrack> Stations = Net ? Net->GetStations() : TArray<FBBPTrack>();
-	if (StationsLabel)
+	if (RadioPage)
 	{
-		StationsLabel->SetText(Stations.Num() > 0 ? LOCTEXT("Stations", "Stations:")
-			: LOCTEXT("NoStations", "Stations: none yet. Tune in to a stream address, or queue a YouTube live stream, to save one here."));
+		RadioPage->Refresh();
 	}
-	if (!StationsBox)
+}
+
+bool UBBPMusicPage::RenameStation(const FString& StationId, const FString& NewName)
+{
+	const UGameInstance* GameInstance = GetGameInstance();
+	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	const bool bRenamed = Net && Net->RenameStation(StationId, NewName);
+	RefreshRadioStations();
+	return bRenamed;
+}
+
+void UBBPMusicPage::ShowRadio(bool bShow)
+{
+	if (!ContentSwitcher)
 	{
 		return;
 	}
-	while (StationButtons.Num() < Stations.Num())
+	ContentSwitcher->SetActiveWidgetIndex(bShow ? 1 : 0);
+	if (PageTitleText)
 	{
-		UBBPStationButton* Button = CreateWidget<UBBPStationButton>(this, UBBPStationButton::StaticClass());
-		if (!Button)
-		{
-			break;
-		}
-		UWrapBoxSlot* ButtonSlot = StationsBox->AddChildToWrapBox(Button);
-		ButtonSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 4.f));
-		StationButtons.Add(Button);
+		PageTitleText->SetText(bShow ? LOCTEXT("RadioTitle", "RADIO") : LOCTEXT("PageTitle", "CUSTOM MUSIC"));
 	}
-	for (int32 i = 0; i < StationButtons.Num(); ++i)
+	BBPWidgetStyle::SetShown(RadioButton, !bShow);
+	if (bShow)
 	{
-		const bool bShow = Stations.IsValidIndex(i);
-		if (bShow)
-		{
-			StationButtons[i]->SetStation(Stations[i]);
-		}
-		BBPWidgetStyle::SetShown(StationButtons[i], bShow);
+		RefreshRadioStations();
 	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: %s view shown"), bShow ? TEXT("Radio") : TEXT("music"));
+}
+
+void UBBPMusicPage::HandleRadio()
+{
+	ShowRadio(true);
+}
+
+void UBBPMusicPage::HandleBack()
+{
+	if (ContentSwitcher && ContentSwitcher->GetActiveWidgetIndex() == 1)
+	{
+		ShowRadio(false);
+		return;
+	}
+	ShowPlayerPage();
 }
 
 void UBBPMusicPage::RunOnlineSearch(const FString& Text)

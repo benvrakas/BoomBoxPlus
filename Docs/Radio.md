@@ -24,8 +24,9 @@ song titles show for it).
 | Piece | Does |
 |---|---|
 | `BBPRadio` (`Private/Net/BBPRadio.*`) | URL checks, `.pls`/`.m3u` parsing, ffmpeg input arguments, ffmpeg log parsing |
-| `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name |
-| `UBBPNetSubsystem` saved stations | Up to 12 stations and YouTube live streams (`GetStations`/`RememberStation`/`ForgetStation`), `Saved/BoomBoxPlus/RadioStations.json` |
+| `UBBPNetSubsystem::TuneRadio` | Called from the search box (`EBBPLinkKind::Stream`) on Enter, and from the Radio view's Add: validates, follows station playlists, **probes** the stream (ffmpeg decodes 1 s) for its name |
+| `UBBPNetSubsystem` saved stations | Up to 50 stations and YouTube live streams (`GetStations`/`RememberStation`/`ForgetStation`/`RenameStation`), `Saved/BoomBoxPlus/RadioStations.json` |
+| `UBBPRadioPage` / `UBBPStationRow` | The music page's Radio view: add, play, rename and remove saved stations (see UI.md) |
 | `FBBPLiveStreamWorker` | Thread per station playing on this machine: runs ffmpeg, hands stdout to `FBBPLiveFanOut`, reads stderr for titles, restarts on drops |
 | `FBBPLiveFanOut` (`Private/Audio/BBPLiveFanOut.h`) | Delivers one station's audio to every wave playing it on this machine and keeps them at the same point (1.3.2) |
 | `FBBPStreamState` (`Private/Audio/BBPStreamState.h`) | Ring buffer shared with file playback; live streams get a 6 s ring and a 2 s prebuffer |
@@ -85,10 +86,10 @@ A YouTube link pasted into the search box goes through the normal yt-dlp listing
 not `TuneRadio`). If the video is broadcasting live, the result is a radio track with a LIVE tag; otherwise it's an
 ordinary video. Either way it queues like any other result.
 
-**No separate Radio panel since 1.2.5.** A stream address is just another link the search box classifies
+**The search box tunes in too.** Since 1.2.5 a stream address is just another link the search box classifies
 (`EBBPLinkKind::Stream`); tuning in shows the station as a single search result with the normal Play Now/
-Play Next/Add buttons. Under the search box, a list of saved stations (1.3.0; up to 12, each with a remove
-button) plays one with a click. See UI.md.
+Play Next/Add buttons. Saved stations live in the Radio view (1.3.8; before that, buttons under the search box),
+where stations can also be added straight from a stream address, played, renamed and removed. See UI.md.
 
 ## Security
 

@@ -59,8 +59,11 @@ public:
 	// Plays a saved station now on this page's Boom Box.
 	void PlayStation(const FBBPTrack& Station);
 
-	// Removes a saved station and updates the station buttons.
+	// Removes a saved station and updates the Radio view.
 	void ForgetStation(const FString& StationId);
+
+	// Renames a saved station and updates the Radio view. Returns false if it couldn't be renamed.
+	bool RenameStation(const FString& StationId, const FString& NewName);
 
 	// Called when a search result is queued or played: a live stream (radio or YouTube live) is saved as a station.
 	void NoteQueued(const FBBPTrack& Track);
@@ -132,6 +135,21 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> TapesButton;
 
+	// "CUSTOM MUSIC", or "RADIO" while the Radio view is shown.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> PageTitleText;
+
+	// Opens the Radio view; hidden while it's shown.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> RadioButton;
+
+	// Switches the area under Now Playing between the music view (index 0) and the Radio view (index 1).
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UWidgetSwitcher> ContentSwitcher;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UBBPRadioPage> RadioPage;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> BackButton;
 
@@ -186,14 +204,6 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkMessageText;
 
-	// "Stations:" in front of the saved stations, or how to add one while there are none.
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> StationsLabel;
-
-	// Holds StationsLabel and one UBBPStationButton per saved station, wrapping onto more lines as needed.
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UWrapBox> StationsBox;
-
 	// "Boom Boxes you can hear": every Custom Music Boom Box in hearing range, each with this player's own volume.
 	// Hidden while there are none.
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -209,10 +219,6 @@ protected:
 	// Nearby rows created so far; extras are collapsed rather than destroyed.
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<class UBBPNearbyBoomBoxRow>> NearbyRows;
-
-	// Station buttons created so far; extras are collapsed rather than destroyed.
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<class UBBPStationButton>> StationButtons;
 
 private:
 	// Builds a plain layout when no Blueprint subclass supplies one.
@@ -443,8 +449,18 @@ private:
 	// Resizes PageSizeBox to the current screen size; cheap when nothing changed.
 	void UpdatePageSize();
 
-	// Rebuilds the station buttons from the saved list.
+	// Rebuilds the Radio view's stations from the saved list.
 	void RefreshRadioStations();
+
+	// Shows the Radio view (true) or the music view (false) under Now Playing.
+	void ShowRadio(bool bShow);
+
+	UFUNCTION()
+	void HandleRadio();
+
+	// Leaves the Radio view, or from the music view goes back to the Boom Box's player page.
+	UFUNCTION()
+	void HandleBack();
 
 	// Updates the "Boom Boxes you can hear" rows; called a few times a second while the page is shown.
 	void RefreshNearby();

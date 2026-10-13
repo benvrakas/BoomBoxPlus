@@ -2,6 +2,10 @@
 
 ## 1.3.8
 
+- **A Radio page.** The new **Radio** button on the Custom Music page opens your station list. Paste a station's
+  stream address to add it, and play, rename or remove your stations there. The list holds up to 50 stations (it was
+  12) and replaces the station buttons under the search box. Stream addresses you tune in from the search box, and
+  YouTube live streams you queue, are still saved to it.
 - The **Doppler deadzone** now defaults to 20 m/s (was 10), so two players sprinting towards each other don't bend the
   pitch either. If you already have BoomBoxPlus settings saved, yours stays as it was; set it in **Mods → BoomBoxPlus**.
 
