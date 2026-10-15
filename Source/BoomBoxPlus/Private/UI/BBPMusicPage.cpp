@@ -20,6 +20,7 @@
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
 #include "UI/BBPNearbyBoomBoxRow.h"
+#include "UI/BBPHistoryPage.h"
 #include "UI/BBPRadioPage.h"
 #include "Engine/GameInstance.h"
 #include "FGBoomBoxPlayer.h"
@@ -130,6 +131,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
 	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleBack);
 	if (RadioButton) RadioButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadio);
+	if (HistoryButton) HistoryButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleHistory);
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
 	if (OpenFolderButton) OpenFolderButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleOpenFolder);
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
@@ -208,6 +210,9 @@ void UBBPMusicPage::BuildDefaultLayout()
 	RadioButton = MakeButton(WidgetTree, LOCTEXT("Radio", "Radio"));
 	RadioButton->SetToolTipText(LOCTEXT("RadioTip", "Add radio stations from their stream addresses, and play, rename or remove your saved stations."));
 	AddToRow(Header, RadioButton, false);
+	HistoryButton = MakeButton(WidgetTree, LOCTEXT("History", "History"));
+	HistoryButton->SetToolTipText(LOCTEXT("HistoryTip", "Songs this Boom Box played, including the songs radio stations announced. Play one again, or copy its link or name."));
+	AddToRow(Header, HistoryButton, false);
 	TapesButton = MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
 	AddToRow(Header, TapesButton, false, 0.f);
 
@@ -286,6 +291,11 @@ void UBBPMusicPage::BuildDefaultLayout()
 	if (RadioPage)
 	{
 		ContentSwitcher->AddChild(RadioPage);
+	}
+	HistoryPage = CreateWidget<UBBPHistoryPage>(this, UBBPHistoryPage::StaticClass());
+	if (HistoryPage)
+	{
+		ContentSwitcher->AddChild(HistoryPage);
 	}
 
 	// Two columns: search and results on the left, the queue on the right.
@@ -1309,38 +1319,68 @@ bool UBBPMusicPage::RenameStation(const FString& StationId, const FString& NewNa
 	return bRenamed;
 }
 
-void UBBPMusicPage::ShowRadio(bool bShow)
+void UBBPMusicPage::ShowView(EBBPView View)
 {
 	if (!ContentSwitcher)
 	{
 		return;
 	}
-	ContentSwitcher->SetActiveWidgetIndex(bShow ? 1 : 0);
+	ContentSwitcher->SetActiveWidgetIndex(static_cast<int32>(View));
 	if (PageTitleText)
 	{
-		PageTitleText->SetText(bShow ? LOCTEXT("RadioTitle", "RADIO") : LOCTEXT("PageTitle", "CUSTOM MUSIC"));
+		PageTitleText->SetText(View == EBBPView::Radio ? LOCTEXT("RadioTitle", "RADIO")
+			: View == EBBPView::History ? LOCTEXT("HistoryTitle", "HISTORY") : LOCTEXT("PageTitle", "CUSTOM MUSIC"));
 	}
-	BBPWidgetStyle::SetShown(RadioButton, !bShow);
-	if (bShow)
+	BBPWidgetStyle::SetShown(RadioButton, View != EBBPView::Radio);
+	BBPWidgetStyle::SetShown(HistoryButton, View != EBBPView::History);
+	if (View == EBBPView::Radio)
 	{
 		RefreshRadioStations();
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: %s view shown"), bShow ? TEXT("Radio") : TEXT("music"));
+	if (View == EBBPView::History && HistoryPage)
+	{
+		HistoryPage->Refresh();
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: %s view shown"),
+		View == EBBPView::Radio ? TEXT("Radio") : View == EBBPView::History ? TEXT("History") : TEXT("music"));
 }
 
 void UBBPMusicPage::HandleRadio()
 {
-	ShowRadio(true);
+	ShowView(EBBPView::Radio);
+}
+
+void UBBPMusicPage::HandleHistory()
+{
+	ShowView(EBBPView::History);
 }
 
 void UBBPMusicPage::HandleBack()
 {
-	if (ContentSwitcher && ContentSwitcher->GetActiveWidgetIndex() == 1)
+	if (ContentSwitcher && ContentSwitcher->GetActiveWidgetIndex() != static_cast<int32>(EBBPView::Music))
 	{
-		ShowRadio(false);
+		ShowView(EBBPView::Music);
 		return;
 	}
 	ShowPlayerPage();
+}
+
+void UBBPMusicPage::PlayFromHistory(const FBBPTrack& Track)
+{
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: playing '%s' again from the history"), *Track.Title);
+	EnsureCustomMusicLoaded();
+	UBBPBlueprintLibrary::RequestPlayTrackNow(GetBoomBox(), Track);
+}
+
+void UBBPMusicPage::SearchFromHistory(const FString& SongName)
+{
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: searching for '%s' from the history"), *SongName);
+	ShowView(EBBPView::Music);
+	if (SearchBox)
+	{
+		SearchBox->SetText(FText::FromString(SongName));
+	}
+	RunOnlineSearch(SongName);
 }
 
 void UBBPMusicPage::RunOnlineSearch(const FString& Text)

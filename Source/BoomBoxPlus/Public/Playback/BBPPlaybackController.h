@@ -142,6 +142,9 @@ public:
 
 	class UBBPAdaEasterEggs* GetAdaEasterEggs() const { return AdaEasterEggs; }
 
+	// The songs each Boom Box played, as seen on this machine.
+	class UBBPSongHistory* GetSongHistory() const { return SongHistory; }
+
 	// Fills how Channel's current entry is shown; false when nothing is queued. A radio entry uses the song the
 	// station announces ("Artist - Title"), which needs Controller (null on a dedicated server).
 	static bool DescribeNowPlaying(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPNowPlaying& Out);
@@ -211,6 +214,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<class UBBPAdaEasterEggs> AdaEasterEggs;
+
+	UPROPERTY()
+	TObjectPtr<class UBBPSongHistory> SongHistory;
 	float GameVolumeTimer = 0.f;
 
 	// What each vanilla page was last told, so song and state are only re-sent on change.

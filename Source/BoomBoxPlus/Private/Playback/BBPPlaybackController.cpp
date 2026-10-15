@@ -1,5 +1,6 @@
 #include "Playback/BBPPlaybackController.h"
 #include "Playback/BBPAdaEasterEggs.h"
+#include "Playback/BBPSongHistory.h"
 #include "Audio/BBPAudioDevice.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "AudioDevice.h"
@@ -109,6 +110,8 @@ void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
 	LoadMyVolumes();
 	AdaEasterEggs = NewObject<UBBPAdaEasterEggs>(this);
 	AdaEasterEggs->Initialize(this);
+	SongHistory = NewObject<UBBPSongHistory>(this);
+	SongHistory->Initialize(this);
 }
 
 void UBBPPlaybackController::Shutdown()
@@ -117,6 +120,11 @@ void UBBPPlaybackController::Shutdown()
 	{
 		AdaEasterEggs->Shutdown();
 		AdaEasterEggs = nullptr;
+	}
+	if (SongHistory)
+	{
+		SongHistory->Shutdown();
+		SongHistory = nullptr;
 	}
 	for (FBBPEmitter& Emitter : Emitters)
 	{
@@ -168,6 +176,10 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 	if (AdaEasterEggs)
 	{
 		AdaEasterEggs->Tick(DeltaSeconds);
+	}
+	if (SongHistory)
+	{
+		SongHistory->Tick(DeltaSeconds);
 	}
 	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);

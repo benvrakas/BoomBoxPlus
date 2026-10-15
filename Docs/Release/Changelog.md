@@ -2,6 +2,11 @@
 
 ## 1.4.0
 
+- **Song history.** The new **History** button on the Custom Music page lists the last 100 songs that Boom Box (and
+  its linked group) played, including the songs radio stations announced, with the time each played. **Play** puts a
+  song back on; for a radio song it searches YouTube and SoundCloud for it instead. **Copy Link** copies a YouTube or
+  SoundCloud song's page (or a station's address), and **Copy Name** copies "Artist - Title" for radio songs and your
+  own files. The history is kept on your own PC between sessions.
 - **ADA sounds like ADA.** Her easter-egg lines now come in her own message box, with her usual jingle first, and
   at the same volume as her other lines (they were louder before, and showed as a line of text instead).
 

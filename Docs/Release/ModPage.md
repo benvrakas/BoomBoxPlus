@@ -61,6 +61,8 @@ Inspired by the PEAK mod sPEAKer.
   Boom Box's 4-digit link code; the other side gets **Accept** and **Decline** buttons (or can enter your code) and
   has 3 minutes to answer. Both queues are merged, alternating songs from each. Queues, the song that was playing and groups are kept in your save. A group stays paired across restarts — press **Leave Group** on any Boom Box to take
   just that one out again.
+- **Song history.** The **History** button lists the last 100 songs each Boom Box played, radio songs included.
+  Play one again (radio songs are searched for on YouTube and SoundCloud), or copy its link or name.
 - **Always know what's playing.** The Custom Music page, the Boom Box's own screen and a short notification
   at the bottom of the screen all show the song, and under it the artist and where it's from, e.g.
   "Koven, YouTube: Monstercat Uncaged". **Copy Link** copies the song's YouTube or SoundCloud page (or the
@@ -163,6 +165,8 @@ next to the transport controls, rather than a setting here.
   link code, and has left any group it was in.
 - Only the current song and the next two are downloaded, so big playlists don't fill your disk.
   Downloads are kept in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\Cache`.
+- The song history is kept on your PC in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\History.json` (delete it to
+  clear it). Each player's game keeps its own.
 - Whole Spotify playlists: only ones you own (copy others into your own, see above). Everyone else's
   playlists give their first 100 songs.
 - Downloading from YouTube and SoundCloud uses the bundled [yt-dlp](https://github.com/yt-dlp/yt-dlp) and

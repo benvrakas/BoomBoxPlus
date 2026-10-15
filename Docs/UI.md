@@ -239,6 +239,26 @@ queue normally alongside it. YouTube live links don't go through `TuneRadio`: th
 included the new `Stream` kind, so pasting a station address always failed with "That's a song or playlist
 link". Only the recent-station buttons, which skip `TuneRadio`, worked. Fixed in 1.2.6.)
 
+**History view** (1.4.0). A **History** button in the title bar (next to Radio) shows `UBBPHistoryPage` as index 2 of
+`ContentSwitcher` (`ShowView` replaced `ShowRadio`; Back from Radio or History returns to the music view). It lists
+this Boom Box's entries from `UBBPSongHistory` (`Private/Playback/BBPSongHistory.cpp`), newest first, rebuilding when
+the history's revision changes (checked twice a second). Each `UBBPHistoryRow`: title (the announced song for a radio
+song), "Artist, Source" or "Radio: <station>", the time it played (date too if older than 20 hours), then:
+
+- **Play** (`UBBPMusicPage::PlayFromHistory`, `RequestPlayTrackNow`) for songs and stations; **Search** for a song a
+  station announced (`SearchFromHistory`: back to the music view, the title in the search box, `RunOnlineSearch`),
+  since a station can't replay it.
+- **Copy Link** (YouTube/SoundCloud page or station address, the track's `SourceRef`) or **Copy Name** ("Artist -
+  Title": the announced title of a radio song, or a local file's tags).
+
+`UBBPSongHistory` is owned by the playback controller and runs on every machine for itself: twice a second, for each
+active Boom Box, a new queue entry on its channel adds an entry, and for a radio entry so does each new song the
+station announces (`GetLiveStatus`; titles equal to the station's own name are skipped, since some stations send
+that). Every Boom Box of a channel gets the entry, so a linked group shares one history. Kept per Boom Box under the
+server's key for it (`FBBPActiveBoomBox::Key`, like My Volume), at most 100 each, in
+`Saved/BoomBoxPlus/History.json`, written at most every 2 s and on shutdown. Repeat-one restarts keep the same entry
+id, so a looped song is listed once.
+
 **Radio view** (1.3.8; replaced the station buttons under the search box, which 1.3.0-1.3.7 had). A **Radio**
 button in the title bar swaps the area under Now Playing for `UBBPRadioPage`: `ContentSwitcher` (a `UWidgetSwitcher`)
 holds the music view (search, results, queue, nearby Boom Boxes and the Link panel) at index 0 and the Radio page at

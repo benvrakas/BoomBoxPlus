@@ -65,6 +65,12 @@ public:
 	// Renames a saved station and updates the Radio view. Returns false if it couldn't be renamed.
 	bool RenameStation(const FString& StationId, const FString& NewName);
 
+	// History view actions: play a track again now, or search online for a radio song's announced title.
+	void PlayFromHistory(const FBBPTrack& Track);
+	void SearchFromHistory(const FString& SongName);
+
+	class UBBPPlaybackController* GetPlaybackController() const;
+
 	// Called when a search result is queued or played: a live stream (radio or YouTube live) is saved as a station.
 	void NoteQueued(const FBBPTrack& Track);
 
@@ -143,12 +149,19 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> RadioButton;
 
-	// Switches the area under Now Playing between the music view (index 0) and the Radio view (index 1).
+	// Opens the History view; hidden while it's shown.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> HistoryButton;
+
+	// Switches the area under Now Playing between the music view (index 0), the Radio view (1) and the History view (2).
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UWidgetSwitcher> ContentSwitcher;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UBBPRadioPage> RadioPage;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UBBPHistoryPage> HistoryPage;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> BackButton;
@@ -364,7 +377,6 @@ private:
 	// there's no playback controller.
 	float GetMyVolume() const;
 	void SetMyVolume(float Value);
-	class UBBPPlaybackController* GetPlaybackController() const;
 
 	// True while the player is dragging the personal volume slider.
 	bool bChangingMyVolume = false;
@@ -452,13 +464,19 @@ private:
 	// Rebuilds the Radio view's stations from the saved list.
 	void RefreshRadioStations();
 
-	// Shows the Radio view (true) or the music view (false) under Now Playing.
-	void ShowRadio(bool bShow);
+	// The views under Now Playing (ContentSwitcher indices).
+	enum class EBBPView : int32 { Music = 0, Radio = 1, History = 2 };
+
+	// Shows one of the views under Now Playing.
+	void ShowView(EBBPView View);
 
 	UFUNCTION()
 	void HandleRadio();
 
-	// Leaves the Radio view, or from the music view goes back to the Boom Box's player page.
+	UFUNCTION()
+	void HandleHistory();
+
+	// Leaves the Radio or History view, or from the music view goes back to the Boom Box's player page.
 	UFUNCTION()
 	void HandleBack();
 
