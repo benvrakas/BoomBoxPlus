@@ -13,6 +13,9 @@
   with the one you're on lit up (the Radio and History buttons used to disappear while you were on them). **Back**
   always goes back to the Boom Box player, and **Open Folder** and **Rescan** moved next to Search, since they're
   about your music folder.
+- **ADA fixes.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since 1.4.0 they
+  quietly fell back to a simpler playback path). The `/ada` test command now plays the line for the player who typed
+  it; before, it always played on the host's game.
 
 ## 1.4.0
 

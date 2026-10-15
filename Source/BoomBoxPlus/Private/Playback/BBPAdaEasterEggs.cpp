@@ -69,6 +69,8 @@ namespace
 	struct FBBPWwiseCalls
 	{
 		int32 (*LoadBankMemoryCopy)(const void*, uint32, uint32&) = nullptr;
+		// The overload that also reports the bank's type; the plain one only accepts User banks, and ours is an Event bank.
+		int32 (*LoadBankMemoryCopyTyped)(const void*, uint32, uint32&, uint32&) = nullptr;
 		uint32 (*PostEvent)(uint32, uint64, uint32, void*, void*, uint32, void*, uint32) = nullptr;
 		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
 		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
@@ -90,11 +92,12 @@ namespace
 					continue;
 				}
 				Found.LoadBankMemoryCopy = reinterpret_cast<decltype(Found.LoadBankMemoryCopy)>(FPlatformProcess::GetDllExport(Module, TEXT("?LoadBankMemoryCopy@SoundEngine@AK@@YA?AW4AKRESULT@@PEBXIAEAI@Z")));
+				Found.LoadBankMemoryCopyTyped = reinterpret_cast<decltype(Found.LoadBankMemoryCopyTyped)>(FPlatformProcess::GetDllExport(Module, TEXT("?LoadBankMemoryCopy@SoundEngine@AK@@YA?AW4AKRESULT@@PEBXIAEAI1@Z")));
 				Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
 				Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
 				Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s, PostEvent %s, RegisterGameObj %s, StopPlayingID %s"), Dll,
-					Found.LoadBankMemoryCopy ? TEXT("found") : TEXT("MISSING"), Found.PostEvent ? TEXT("found") : TEXT("MISSING"),
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s (with bank type %s), PostEvent %s, RegisterGameObj %s, StopPlayingID %s"), Dll,
+					Found.LoadBankMemoryCopy ? TEXT("found") : TEXT("MISSING"), Found.LoadBankMemoryCopyTyped ? TEXT("found") : TEXT("MISSING"), Found.PostEvent ? TEXT("found") : TEXT("MISSING"),
 					Found.RegisterGameObj ? TEXT("found") : TEXT("MISSING"), Found.StopPlayingID ? TEXT("found") : TEXT("MISSING"));
 				break;
 			}
@@ -176,15 +179,17 @@ void UBBPAdaEasterEggs::LoadBank()
 		return;
 	}
 	uint32 BankId = 0;
-	const int32 Result = Wwise.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
+	uint32 BankType = 0;
+	const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Bytes.GetData(), Bytes.Num(), BankId, BankType)
+		: Wwise.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
 	// AK_Success is 1, AK_BankAlreadyLoaded 21.
 	bBankLoaded = Result == 1 || Result == 21;
 	if (bBankLoaded)
 	{
 		Wwise.RegisterGameObj(VoiceGameObject, "BBP_ADA");
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u)"), BankFileName, Bytes.Num(),
-		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), Result, BankId);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u, type %u)"), BankFileName, Bytes.Num(),
+		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), Result, BankId, BankType);
 }
 
 bool UBBPAdaEasterEggs::PostWwiseVoice()

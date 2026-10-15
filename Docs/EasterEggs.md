@@ -94,7 +94,7 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   bus 1690368967, ADA's voice bus, with her mixer's settings (-1 dB). Event names are `BBP_ADA_<line>`, ids their FNV-1
   hash. No game audio is copied.
 - At startup, `LoadBank` reads the file and `AK::SoundEngine::LoadBankMemoryCopy` loads it, once per session (the log
-  says whether, with the result code), and registers the mod's own Wwise game object (default listeners). When the
+  says whether, with the result code and bank type), and registers the mod's own Wwise game object (default listeners). When the
   message box starts the line, `PostWwiseVoice` posts the event on it; a skip calls `StopPlayingID`.
 - The shipped game runs Wwise 2025.1 while the modding kit compiles against 2023.1. So the mod calls the game's plain
   `AK::SoundEngine` functions, found at runtime by their exported (mangled) names in
@@ -103,6 +103,11 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   them). The first try imported `UAkGameObject::GetAkGameObjectID`, which the game's AkAudio doesn't export, and Windows
   refused to load the mod (GetLastError 127). `D:/SFMod/Tools/BuildScripts/check_imports.py` checks a build's imports
   against the installed game.
+- `LoadBankMemoryCopy` is the overload with an `AkBankType&` out parameter (mangled `...PEBXIAEAI1@Z`). The bank's
+  header is copied from the game's event bank, so it says it's an Event bank (type 30), and the plain 3-argument
+  overload only accepts User banks: up to 1.5.0 it returned 100 (`AK_InvalidBankType`) every time, so every line
+  played through Unreal (the fallback below) even though the log printed the cause. The 3-argument one is still used
+  if the other isn't exported.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
@@ -113,8 +118,15 @@ ids lead to her bus. Decoding a line: `.wem` rewrapped as Ogg Opus (the reverse 
 
 `ABBPAdaChatCommand` (registered in `UBBPGameWorldModule::mChatCommands`): `/ada <line>` plays a line now, ignoring
 the once-a-session rule and the 10-minute gap; `/ada list` names them; `/ada volume <0-10>` sets `VoiceGain` for the
-session (default 5), to compare against the game's own voice. SML runs chat commands where they're handled, so they
-work for the host.
+session (default 5), to compare against the game's own voice.
+
+SML runs every chat command on the server. Before 1.5.0, a client's `/ada` therefore played the line on the host's
+game (the host's log showed `fih: /ada copyright` and the host heard it). Now the command checks the sender: the host's
+own command runs locally (`ABBPAdaChatCommand::RunLocally`); a remote player's is sent to their game with
+`UBBPRemoteCallObject::Client_AdaCommand`, which runs it there and puts the reply in their chat through
+`AFGChatManager::AddChatMessageToReceived` (as SML's own replies do). On a dedicated server every command is
+forwarded. The automatic triggers were never host-only: every machine runs its own `UBBPAdaEasterEggs`, and what
+they read (the channel heard, the active Boom Boxes, other players' pawns) is replicated.
 
 ## Triggers
 

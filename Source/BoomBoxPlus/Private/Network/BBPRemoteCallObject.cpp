@@ -2,11 +2,14 @@
 #include "BBPConfig.h"
 #include "BoomBoxPlus.h"
 #include "FGBoomBoxPlayer.h"
+#include "FGChatManager.h"
 #include "FGPlayerController.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
 #include "Algo/AllOf.h"
 #include "Net/BBPRadio.h"
 #include "Net/UnrealNetwork.h"
+#include "Playback/BBPAdaChatCommand.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "UI/BBPMusicPage.h"
@@ -331,6 +334,27 @@ void UBBPRemoteCallObject::Server_UnlinkBoomBox_Implementation(AFGBoomBoxPlayer*
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("RCO: %s unlinking %s: %s"), *GetRequesterName(), *GetNameSafe(BoomBox), *Message);
 	}
 	Client_LinkResult(BoomBox, bSuccess, Message);
+}
+
+void UBBPRemoteCallObject::Client_AdaCommand_Implementation(const TArray<FString>& Arguments)
+{
+	FString Reply;
+	FLinearColor Color;
+	ABBPAdaChatCommand::RunLocally(this, Arguments, Reply, Color);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: /ada %s from the server: %s"), *FString::Join(Arguments, TEXT(" ")), Reply.IsEmpty() ? TEXT("done") : *Reply);
+	AFGChatManager* ChatManager = AFGChatManager::Get(GetWorld());
+	if (Reply.IsEmpty() || !ChatManager)
+	{
+		return;
+	}
+	FChatMessageStruct Message;
+	Message.MessageText = FText::FromString(Reply);
+	Message.MessageType = EFGChatMessageType::CMT_CustomMessage;
+	Message.MessageSender = FText::FromString(TEXT("SYSTEM"));
+	Message.MessageSenderColor = Color;
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	Message.ServerTimeStamp = GameState ? GameState->GetServerWorldTimeSeconds() : 0.f;
+	ChatManager->AddChatMessageToReceived(Message);
 }
 
 void UBBPRemoteCallObject::Client_LinkResult_Implementation(AFGBoomBoxPlayer* BoomBox, bool bSuccess, const FString& Message)

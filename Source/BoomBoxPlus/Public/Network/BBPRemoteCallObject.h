@@ -100,6 +100,11 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_LinkResult(AFGBoomBoxPlayer* BoomBox, bool bSuccess, const FString& Message);
 
+	// Runs this player's /ada chat command on their own game (chat commands are handled on the server) and shows the
+	// reply in their chat.
+	UFUNCTION(Client, Reliable)
+	void Client_AdaCommand(const TArray<FString>& Arguments);
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
