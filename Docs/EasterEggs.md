@@ -16,8 +16,16 @@ spelling and the subtitles):
 
 - Voice: Google Cloud Text-to-Speech, `en-US-Wavenet-C`, the community's usual stand-in for ADA. FICSIT is spelled
   "Fix it" for it, and HUD as "H U D".
-- Effect (the community recipe, done in code): one chorus voice (12 ms ± 2.9 ms at 1.9 Hz, half wet), plus two echoes
-  at 0 s delay, -18.7 dB and -0.12 semitones each; normalized to -1 dB.
+- Effect, done in code, in this order:
+  - tone: 90 Hz low cut, and a presence lift above 5 kHz (+40% of the band), for a crisp dry voice;
+  - a faint chorus (12 ms ± 2.9 ms at 1.9 Hz, 15% wet) and two echoes at 0 s delay, -18.7 dB and -0.12 semitones
+    each (from the community recipe, which used a half-wet chorus);
+  - a ducked reverb, like ADA's own lines (crisp while she speaks, the echo showing in the gaps): a 0.8 s room with
+    30 ms pre-delay and a 6 kHz low-pass, at -2 dB, held down by up to 24 dB by a peak follower on the voice (5 ms
+    attack, 60 ms release). Measured on "idle": the echo sits about 18 dB under the voice while she speaks and about
+    16 dB under her speaking level in the gaps.
+  1.4.0's first build (and 1.3.9) used the recipe's half-wet chorus and no reverb, which always smeared the voice
+  ("softer and more muddy" next to ADA's own lines).
 - `python ada_voice.py google [names]` regenerates lines (needs `GOOGLE_TTS_API_KEY`), `python ada_voice.py install
   google` copies them into `Resources/Audio/ADA`, each brought to -23 LUFS (EBU R128 dialogue level; measured with
   ffmpeg's `ebur128`). Straight out of the effect they were -15.6 to -20.2 LUFS, louder than the game's voice lines
