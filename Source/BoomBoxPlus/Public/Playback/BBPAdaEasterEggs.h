@@ -64,7 +64,7 @@ private:
 	// voice through Unreal).
 	void StartVoice(bool bOwnSubtitle, bool bJingle);
 
-	// Posts the line's event from BBP_ADA.bnk on the player's Wwise game object. False if it can't.
+	// Posts the line's event from BBP_ADA.bnk on the mod's Wwise game object. False if it can't.
 	bool PostWwiseVoice();
 
 	// Loads BBP_ADA.bnk into Wwise, once per game session.

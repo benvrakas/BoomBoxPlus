@@ -1,7 +1,10 @@
 #include "Playback/BBPAdaEasterEggs.h"
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <Windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
 #include "AkAudioEvent.h"
-#include "AkComponent.h"
-#include "AkGameplayStatics.h"
 #include "Audio/BBPDecoder.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "BBPConfig.h"
@@ -27,7 +30,6 @@
 #include "UI/FGGameUI.h"
 #include "UI/Message/FGAudioMessage.h"
 #include "UI/Message/FGMessageSender.h"
-#include "Wwise/API/WwiseSoundEngineAPI.h"
 
 float UBBPAdaEasterEggs::VoiceGain = 5.f;
 TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> UBBPAdaEasterEggs::Instances;
@@ -57,6 +59,50 @@ namespace
 	// The mod's Wwise bank (made by D:/SFMod/Tools/ADA/make_bank.py) and its event names, BBP_ADA_<line>.
 	const TCHAR* BankFileName = TEXT("BBP_ADA.bnk");
 	const TCHAR* EventPrefix = TEXT("BBP_ADA_");
+
+	// The Wwise game object ADA's voice plays on (registered with the bank; uses the default listeners).
+	constexpr uint64 VoiceGameObject = 0x4242504144414441ull;
+
+	// The game's own AK::SoundEngine functions, found by their exported names in its Wwise DLL. The modding kit's
+	// Wwise (2023.1) doesn't export them and the game's (2025.1) virtual API may be laid out differently, while these
+	// plain functions are matched by exact signature.
+	struct FBBPWwiseCalls
+	{
+		int32 (*LoadBankMemoryCopy)(const void*, uint32, uint32&) = nullptr;
+		uint32 (*PostEvent)(uint32, uint64, uint32, void*, void*, uint32, void*, uint32) = nullptr;
+		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
+		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
+
+		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
+	};
+
+	const FBBPWwiseCalls& GetWwiseCalls()
+	{
+		static const FBBPWwiseCalls Calls = []
+		{
+			FBBPWwiseCalls Found;
+#if PLATFORM_WINDOWS
+			for (const TCHAR* Dll : { TEXT("FactoryGameSteam-WwiseSoundEngine-Win64-Shipping.dll"), TEXT("FactoryGameEGS-WwiseSoundEngine-Win64-Shipping.dll") })
+			{
+				void* Module = GetModuleHandleW(Dll);
+				if (!Module)
+				{
+					continue;
+				}
+				Found.LoadBankMemoryCopy = reinterpret_cast<decltype(Found.LoadBankMemoryCopy)>(FPlatformProcess::GetDllExport(Module, TEXT("?LoadBankMemoryCopy@SoundEngine@AK@@YA?AW4AKRESULT@@PEBXIAEAI@Z")));
+				Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
+				Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
+				Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s, PostEvent %s, RegisterGameObj %s, StopPlayingID %s"), Dll,
+					Found.LoadBankMemoryCopy ? TEXT("found") : TEXT("MISSING"), Found.PostEvent ? TEXT("found") : TEXT("MISSING"),
+					Found.RegisterGameObj ? TEXT("found") : TEXT("MISSING"), Found.StopPlayingID ? TEXT("found") : TEXT("MISSING"));
+				break;
+			}
+#endif
+			return Found;
+		}();
+		return Calls;
+	}
 
 	// Wwise's id for a name: FNV-1 of the lowercase name (as AK::SoundEngine::GetIDFromString).
 	uint32 WwiseId(const FString& Name)
@@ -120,38 +166,36 @@ void UBBPAdaEasterEggs::LoadBank()
 		return;
 	}
 	bBankTried = true;
+	const FBBPWwiseCalls& Wwise = GetWwiseCalls();
 	const FString Path = AudioDir / BankFileName;
 	TArray<uint8> Bytes;
-	IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get();
-	if (!Wwise || !FFileHelper::LoadFileToArray(Bytes, *Path))
+	if (!Wwise.IsComplete() || !FFileHelper::LoadFileToArray(Bytes, *Path))
 	{
-		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: no Wwise bank at '%s' (or no Wwise); lines play through Unreal"), *Path);
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: %s; lines play through Unreal"),
+			Wwise.IsComplete() ? *FString::Printf(TEXT("no Wwise bank at '%s'"), *Path) : TEXT("the game's Wwise functions weren't found"));
 		return;
 	}
-	AkBankID BankId = 0;
-	const AKRESULT Result = Wwise->LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
-	bBankLoaded = Result == AK_Success || Result == AK_BankAlreadyLoaded;
+	uint32 BankId = 0;
+	const int32 Result = Wwise.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
+	// AK_Success is 1, AK_BankAlreadyLoaded 21.
+	bBankLoaded = Result == 1 || Result == 21;
+	if (bBankLoaded)
+	{
+		Wwise.RegisterGameObj(VoiceGameObject, "BBP_ADA");
+	}
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u)"), BankFileName, Bytes.Num(),
-		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), (int32)Result, BankId);
+		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), Result, BankId);
 }
 
 bool UBBPAdaEasterEggs::PostWwiseVoice()
 {
-	IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get();
-	APawn* Pawn = UGameplayStatics::GetPlayerPawn(Controller, 0);
-	if (!bBankLoaded || !Wwise || !Pawn || !Pawn->GetRootComponent())
-	{
-		return false;
-	}
-	bool bCreated = false;
-	UAkComponent* AkComponent = UAkGameplayStatics::GetAkComponent(Pawn->GetRootComponent(), bCreated);
-	if (!AkComponent)
+	if (!bBankLoaded)
 	{
 		return false;
 	}
 	const FString EventName = EventPrefix + LineName;
-	const AkPlayingID PlayingId = Wwise->PostEvent(WwiseId(EventName), AkComponent->GetAkGameObjectID());
-	if (PlayingId == AK_INVALID_PLAYING_ID)
+	const uint32 PlayingId = GetWwiseCalls().PostEvent(WwiseId(EventName), VoiceGameObject, 0, nullptr, nullptr, 0, nullptr, 0);
+	if (PlayingId == 0)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: Wwise wouldn't play '%s'; playing it through Unreal"), *EventName);
 		return false;
@@ -446,10 +490,8 @@ void UBBPAdaEasterEggs::StopLine()
 	PendingMessage = nullptr;
 	if (WwisePlayingId != 0)
 	{
-		if (IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get())
-		{
-			Wwise->StopPlayingID(WwisePlayingId);
-		}
+		// AkCurveInterpolation_Linear is 4.
+		GetWwiseCalls().StopPlayingID(WwisePlayingId, 200, 4);
 		WwisePlayingId = 0;
 	}
 	if (Component)

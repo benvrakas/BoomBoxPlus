@@ -85,9 +85,16 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   Event per line) copy the layout of the game's `Play_VO_ADA_MILESTONE_2_1_0.bnk` with new ids; the mixer routes to
   bus 1690368967, ADA's voice bus, with her mixer's settings (-1 dB). Event names are `BBP_ADA_<line>`, ids their FNV-1
   hash. No game audio is copied.
-- At startup, `LoadBank` reads the file and `IWwiseSoundEngineAPI::LoadBankMemoryCopy` loads it, once per session (the
-  log says whether, with the result code). When the message box starts the line, `PostWwiseVoice` posts the event on
-  the player pawn's `UAkComponent`; a skip calls `StopPlayingID`.
+- At startup, `LoadBank` reads the file and `AK::SoundEngine::LoadBankMemoryCopy` loads it, once per session (the log
+  says whether, with the result code), and registers the mod's own Wwise game object (default listeners). When the
+  message box starts the line, `PostWwiseVoice` posts the event on it; a skip calls `StopPlayingID`.
+- The shipped game runs Wwise 2025.1 while the modding kit compiles against 2023.1. So the mod calls the game's plain
+  `AK::SoundEngine` functions, found at runtime by their exported (mangled) names in
+  `FactoryGame*-WwiseSoundEngine-Win64-Shipping.dll` (`FPlatformProcess::GetDllExport`), rather than the virtual
+  `IWwiseSoundEngineAPI` (whose layout may differ between versions) or imports (the kit's library doesn't export
+  them). The first try imported `UAkGameObject::GetAkGameObjectID`, which the game's AkAudio doesn't export, and Windows
+  refused to load the mod (GetLastError 127). `D:/SFMod/Tools/BuildScripts/check_imports.py` checks a build's imports
+  against the installed game.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
