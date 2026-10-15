@@ -42,7 +42,7 @@ Inspired by the PEAK mod sPEAKer.
 - **Internet radio.** Paste a station's stream address into the search box and press Enter, same as any
   other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
   streams**. The station's name is filled in automatically, the song the station announces becomes the title
-  (and updates as the station moves on). The **Radio** button opens your station list: add a station by pasting
+  (and updates as the station moves on). The **Radio** tab opens your station list: add a station by pasting
   its stream address, and play, rename or remove saved ones (up to 50, YouTube live streams included).
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
@@ -61,7 +61,7 @@ Inspired by the PEAK mod sPEAKer.
   Boom Box's 4-digit link code; the other side gets **Accept** and **Decline** buttons (or can enter your code) and
   has 3 minutes to answer. Both queues are merged, alternating songs from each. Queues, the song that was playing and groups are kept in your save. A group stays paired across restarts — press **Leave Group** on any Boom Box to take
   just that one out again.
-- **Song history.** The **History** button lists the last 100 songs each Boom Box played, radio songs included.
+- **Song history.** The **History** tab lists the last 100 songs each Boom Box played, radio songs included.
   Play one again (radio songs are searched for on YouTube and SoundCloud), or copy its link or name.
 - **Always know what's playing.** The Custom Music page, the Boom Box's own screen and a short notification
   at the bottom of the screen all show the song, and under it the artist and where it's from, e.g.
@@ -95,7 +95,7 @@ For YouTube, paste the link of a video that is live right now.
 %LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\Music
 ```
 
-Press **Open Folder** on the Custom Music page to open it, and **Rescan** after adding files. Subfolders
+Press **Open Folder** (next to Search on the Custom Music page) to open it, and **Rescan** after adding files. Subfolders
 work. A demo track is put in the folder the first time, so there's something to play right away; delete it
 if you don't want it.
 

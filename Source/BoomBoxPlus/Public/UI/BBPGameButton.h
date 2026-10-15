@@ -37,16 +37,8 @@ protected:
 	// True to draw with the game's button widget; false for a light flat button (used for list rows).
 	virtual bool UsesGameWidget() const { return true; }
 
-private:
 	UFUNCTION()
 	void HandleClicked();
-
-	// Hides the arrow icon the game's button draws beside its label.
-	void HideGameButtonIcon();
-
-	// The game's button widget, or null when using the fallback.
-	UPROPERTY()
-	TObjectPtr<UUserWidget> GameButton;
 
 	// The clickable button: the game widget's inner button, or the fallback.
 	UPROPERTY()
@@ -55,6 +47,14 @@ private:
 	// Label of the fallback button.
 	UPROPERTY()
 	TObjectPtr<UTextBlock> FallbackLabel;
+
+private:
+	// Hides the arrow icon the game's button draws beside its label.
+	void HideGameButtonIcon();
+
+	// The game's button widget, or null when using the fallback.
+	UPROPERTY()
+	TObjectPtr<UUserWidget> GameButton;
 };
 
 // A flat, lightweight button in the game's colours, for places with many buttons such as list rows.
@@ -65,4 +65,23 @@ class BOOMBOXPLUS_API UBBPCompactButton : public UBBPGameButton
 
 protected:
 	virtual bool UsesGameWidget() const override { return false; }
+};
+
+// A tab: upper-case label on no background, orange with an orange underline while selected.
+UCLASS()
+class BOOMBOXPLUS_API UBBPTabButton : public UBBPGameButton
+{
+	GENERATED_BODY()
+
+public:
+	// Shows the tab as the selected one (true) or as a plain tab (false).
+	void SetSelected(bool bSelected);
+
+protected:
+	virtual void NativeOnInitialized() override;
+
+private:
+	// Bar under the label, orange while selected.
+	UPROPERTY()
+	TObjectPtr<class UBorder> Underline;
 };

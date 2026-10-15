@@ -1,9 +1,12 @@
 #include "UI/BBPGameButton.h"
 #include "BoomBoxPlus.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/Border.h"
 #include "Components/ButtonSlot.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "UI/BBPWidgetStyle.h"
 
 const TCHAR* UBBPGameButton::GameButtonClassPath = TEXT("/Game/FactoryGame/Interface/UI/InGame/-Shared/BPW_TileableButton.BPW_TileableButton_C");
@@ -138,5 +141,48 @@ void UBBPGameButton::SetGameButtonText(UUserWidget* Game, const FText& Text)
 			bLogged = true;
 			UE_LOG(LogBoomBoxPlus, Warning, TEXT("UI: game button SetText has an unexpected signature; label set through mText only"));
 		}
+	}
+}
+
+void UBBPTabButton::NativeOnInitialized()
+{
+	if (!WidgetTree->RootWidget)
+	{
+		using namespace BBPWidgetStyle;
+		InnerButton = WidgetTree->ConstructWidget<UButton>();
+		FButtonStyle Style = InnerButton->GetStyle();
+		Style.SetNormal(FSlateNoResource());
+		Style.SetHovered(FSlateColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.05f)));
+		Style.SetPressed(FSlateColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
+		Style.SetNormalPadding(FMargin(0.f));
+		Style.SetPressedPadding(FMargin(0.f));
+		InnerButton->SetStyle(Style);
+
+		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>();
+		if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(InnerButton->AddChild(Content)))
+		{
+			ContentSlot->SetPadding(FMargin(0.f));
+		}
+		FallbackLabel = MakeText(WidgetTree, 13, DimTextColor, FText::GetEmpty(), EFontWeight::Bold);
+		UVerticalBoxSlot* LabelSlot = Content->AddChildToVerticalBox(FallbackLabel);
+		LabelSlot->SetPadding(FMargin(14.f, 6.f, 14.f, 6.f));
+		LabelSlot->SetHorizontalAlignment(HAlign_Center);
+		Underline = MakePanel(WidgetTree, FLinearColor::White, FMargin(0.f, 1.f));
+		Content->AddChildToVerticalBox(Underline);
+		WidgetTree->RootWidget = InnerButton;
+		InnerButton->OnClicked.AddDynamic(this, &UBBPTabButton::HandleClicked);
+	}
+	Super::NativeOnInitialized();
+}
+
+void UBBPTabButton::SetSelected(bool bSelected)
+{
+	if (FallbackLabel)
+	{
+		FallbackLabel->SetColorAndOpacity(FSlateColor(bSelected ? BBPWidgetStyle::AccentColor : BBPWidgetStyle::DimTextColor));
+	}
+	if (Underline)
+	{
+		Underline->SetBrushColor(bSelected ? BBPWidgetStyle::AccentColor : FLinearColor::Transparent);
 	}
 }

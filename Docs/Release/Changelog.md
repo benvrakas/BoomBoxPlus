@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1
+
+- **Tidier Custom Music page.** Music, Radio and History are now tabs under Now Playing, always in the same place,
+  with the one you're on lit up (the Radio and History buttons used to disappear while you were on them). **Back**
+  always goes back to the Boom Box player, and **Open Folder** and **Rescan** moved next to Search, since they're
+  about your music folder.
+
 ## 1.4.0
 
 - **Song history.** The new **History** button on the Custom Music page lists the last 100 songs that Boom Box (and

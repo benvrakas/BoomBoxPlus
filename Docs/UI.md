@@ -40,7 +40,7 @@ to be a variable, switch `ParentWidgetType` to `Direct_Any`.
   insert-tape animation, and `LoadTapeNow` fires from its anim notify ~1 s later. Reopen to see the page.
 - The first (player) page gets a **Custom Music** button beside Change Tape (`UBBPOpenMusicButton`, hooked
   into `BPW_BoomBox_Player` with `Indirect_Child` on `mChangeTape`, i.e. inserted into whichever panel holds
-  that button). The music page has **< Back** (player page) and **Tapes**. If the Boom Box doesn't have
+  that button). The music page has **Back** (player page) and **Tapes**. If the Boom Box doesn't have
   Custom Music loaded, the page says so and offers **Play through this Boom Box**, which calls
   `BeginChangeTapeSequence` with the Custom Music tape.
 - `< Tapes` returns to whichever switcher page's class name contains `TapeSelect` (not a hard-coded index).
@@ -69,9 +69,17 @@ moves an asset degrades the style instead of breaking the page.
 and sets the label through the widget's `mText` property plus its `SetText` Blueprint function
 (`ProcessEvent`, checked to take exactly one `FText`).
 
-Page layout: title bar (Back, CUSTOM MUSIC, library status, Open Folder, Rescan, Tapes), an orange rule, a
-now-playing panel (track, lyric line, seek slider + time, transport), then two columns — search and results
-on the left, the queue on the right — and the link panel at the bottom.
+Page layout: title bar (Back, CUSTOM MUSIC, Tapes), an orange rule, a now-playing panel (track, lyric line, seek
+slider + time, transport), a tab strip (Music, Radio, History) on a thin rule, then the chosen view. The Music view
+has two columns — search and results on the left (its header row carries the library status, Open Folder and
+Rescan), the queue on the right — and the link panel at the bottom.
+
+**Tabs** (1.4.1). `UBBPTabButton` (in `BBPGameButton.h`, made by `BBPWidgetStyle::MakeTab`): an upper-case label on
+no background with a 2 px bar under it; `SetSelected` turns the label and bar orange. `ShowView` selects the shown
+view's tab. They replaced the Radio and History title-bar buttons, which hid while their view was shown, and Back,
+which went to the music view from Radio or History: Back now always goes to the player page, and the title always
+reads CUSTOM MUSIC. Open Folder and Rescan moved from the title bar to the Search header, since they belong to the
+music folder the search covers.
 
 ## List performance (the 400-song crash)
 
@@ -239,8 +247,8 @@ queue normally alongside it. YouTube live links don't go through `TuneRadio`: th
 included the new `Stream` kind, so pasting a station address always failed with "That's a song or playlist
 link". Only the recent-station buttons, which skip `TuneRadio`, worked. Fixed in 1.2.6.)
 
-**History view** (1.4.0). A **History** button in the title bar (next to Radio) shows `UBBPHistoryPage` as index 2 of
-`ContentSwitcher` (`ShowView` replaced `ShowRadio`; Back from Radio or History returns to the music view). It lists
+**History view** (1.4.0). The **History** tab shows `UBBPHistoryPage` as index 2 of `ContentSwitcher` (`ShowView`
+replaced `ShowRadio`). It lists
 this Boom Box's entries from `UBBPSongHistory` (`Private/Playback/BBPSongHistory.cpp`), newest first, rebuilding when
 the history's revision changes (checked twice a second). Each `UBBPHistoryRow`: title (the announced song for a radio
 song), "Artist, Source" or "Radio: <station>", the time it played (date too if older than 20 hours), then:
@@ -259,12 +267,10 @@ server's key for it (`FBBPActiveBoomBox::Key`, like My Volume), at most 100 each
 `Saved/BoomBoxPlus/History.json`, written at most every 2 s and on shutdown. Repeat-one restarts keep the same entry
 id, so a looped song is listed once.
 
-**Radio view** (1.3.8; replaced the station buttons under the search box, which 1.3.0-1.3.7 had). A **Radio**
-button in the title bar swaps the area under Now Playing for `UBBPRadioPage`: `ContentSwitcher` (a `UWidgetSwitcher`)
-holds the music view (search, results, queue, nearby Boom Boxes and the Link panel) at index 0 and the Radio page at
-1. Now Playing and the transport stay visible on both. While the Radio view is shown, the title reads RADIO, the Radio
-button is hidden and **Back** returns to the music view (`HandleBack`); from the music view Back goes to the Boom
-Box's player page as before.
+**Radio view** (1.3.8; replaced the station buttons under the search box, which 1.3.0-1.3.7 had). The **Radio**
+tab swaps the area under Now Playing for `UBBPRadioPage`: `ContentSwitcher` (a `UWidgetSwitcher`) holds the music view
+(search, results, queue, nearby Boom Boxes and the Link panel) at index 0 and the Radio page at 1. Now Playing and the
+transport stay visible on both. (1.3.8-1.4.0 used a title-bar button instead; see Tabs above.)
 
 The Radio page has:
 

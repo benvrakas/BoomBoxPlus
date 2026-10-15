@@ -114,6 +114,14 @@ UBBPGameButton* BBPWidgetStyle::MakeButton(UWidgetTree* Tree, const FText& Label
 	return Button;
 }
 
+UBBPTabButton* BBPWidgetStyle::MakeTab(UWidgetTree* Tree, const FText& Label)
+{
+	UBBPTabButton* Tab = Tree->ConstructWidget<UBBPTabButton>(UBBPTabButton::StaticClass());
+	Tab->SetLabel(Label.ToUpper());
+	Tab->SetSelected(false);
+	return Tab;
+}
+
 void BBPWidgetStyle::SetButtonLabel(UBBPGameButton* Button, const FText& Label)
 {
 	if (Button)

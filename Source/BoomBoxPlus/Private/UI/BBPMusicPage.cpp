@@ -130,8 +130,9 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (ListenModeButton) ListenModeButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleListenMode);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
 	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleBack);
-	if (RadioButton) RadioButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadio);
-	if (HistoryButton) HistoryButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleHistory);
+	if (MusicTab) MusicTab->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleMusicTab);
+	if (RadioTab) RadioTab->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRadioTab);
+	if (HistoryTab) HistoryTab->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleHistoryTab);
 	if (UseBoomBoxButton) UseBoomBoxButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleUseBoomBox);
 	if (OpenFolderButton) OpenFolderButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleOpenFolder);
 	if (RescanButton) RescanButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRescan);
@@ -195,25 +196,15 @@ void UBBPMusicPage::BuildDefaultLayout()
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	};
 
-	// Title bar: back, title, library status and folder buttons.
+	// Title bar: back, title, tapes.
 	UHorizontalBox* Header = AddRow(Column, 0.f);
 	BackButton = MakeButton(WidgetTree, LOCTEXT("Back", "Back"));
-	AddToRow(Header, BackButton, false, 12.f);
+	BackButton->SetToolTipText(LOCTEXT("BackTip", "Back to the Boom Box player."));
+	AddToRow(Header, BackButton, false, 14.f);
 	PageTitleText = MakeText(WidgetTree, 22, AccentColor, LOCTEXT("PageTitle", "CUSTOM MUSIC"), EFontWeight::Bold);
-	AddToRow(Header, PageTitleText, true);
-	LibraryStatusText = MakeText(WidgetTree, 11, DimTextColor);
-	AddToRow(Header, LibraryStatusText, false, 12.f);
-	OpenFolderButton = MakeButton(WidgetTree, LOCTEXT("OpenFolder", "Open Folder"));
-	AddToRow(Header, OpenFolderButton, false);
-	RescanButton = MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
-	AddToRow(Header, RescanButton, false);
-	RadioButton = MakeButton(WidgetTree, LOCTEXT("Radio", "Radio"));
-	RadioButton->SetToolTipText(LOCTEXT("RadioTip", "Add radio stations from their stream addresses, and play, rename or remove your saved stations."));
-	AddToRow(Header, RadioButton, false);
-	HistoryButton = MakeButton(WidgetTree, LOCTEXT("History", "History"));
-	HistoryButton->SetToolTipText(LOCTEXT("HistoryTip", "Songs this Boom Box played, including the songs radio stations announced. Play one again, or copy its link or name."));
-	AddToRow(Header, HistoryButton, false);
+	AddToRow(Header, PageTitleText, true, 14.f);
 	TapesButton = MakeButton(WidgetTree, LOCTEXT("Tapes", "Tapes"));
+	TapesButton->SetToolTipText(LOCTEXT("TapesTip", "Choose another tape."));
 	AddToRow(Header, TapesButton, false, 0.f);
 
 	UBorder* HeaderRule = MakePanel(WidgetTree, AccentColor, FMargin(0.f, 1.f));
@@ -282,9 +273,23 @@ void UBBPMusicPage::BuildDefaultLayout()
 	AddToRow(Transport, MyVolumeBoxSize, false, 3.f);
 	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, FText::FromString(TEXT("%")), EFontWeight::SemiBold), false, 0.f);
 
-	// Under Now Playing: the music view, or the Radio view.
+	// Tabs for the views under Now Playing, on a thin rule.
+	UHorizontalBox* Tabs = AddRow(Column, 12.f);
+	MusicTab = MakeTab(WidgetTree, LOCTEXT("MusicTab", "Music"));
+	MusicTab->SetToolTipText(LOCTEXT("MusicTabTip", "Search your music, YouTube and SoundCloud, and manage the queue."));
+	AddToRow(Tabs, MusicTab, false, 2.f);
+	RadioTab = MakeTab(WidgetTree, LOCTEXT("RadioTab", "Radio"));
+	RadioTab->SetToolTipText(LOCTEXT("RadioTip", "Add radio stations from their stream addresses, and play, rename or remove your saved stations."));
+	AddToRow(Tabs, RadioTab, false, 2.f);
+	HistoryTab = MakeTab(WidgetTree, LOCTEXT("HistoryTab", "History"));
+	HistoryTab->SetToolTipText(LOCTEXT("HistoryTip", "Songs this Boom Box played, including the songs radio stations announced. Play one again, or copy its link or name."));
+	AddToRow(Tabs, HistoryTab, false, 0.f);
+	MusicTab->SetSelected(true);
+	Column->AddChildToVerticalBox(MakePanel(WidgetTree, OutlineColor, FMargin(0.f, 0.5f)));
+
+	// Under the tabs: the music view, the Radio view or the History view.
 	ContentSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>();
-	AddFill(Column, ContentSwitcher, 12.f);
+	AddFill(Column, ContentSwitcher, 10.f);
 	UVerticalBox* MusicView = WidgetTree->ConstructWidget<UVerticalBox>();
 	ContentSwitcher->AddChild(MusicView);
 	RadioPage = CreateWidget<UBBPRadioPage>(this, UBBPRadioPage::StaticClass());
@@ -307,8 +312,18 @@ void UBBPMusicPage::BuildDefaultLayout()
 	SearchSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	SearchSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 
+	// Search header, with the music folder's track count and folder buttons.
+	UHorizontalBox* SearchHeader = AddRow(SearchColumn, 0.f);
 	UTextBlock* ResultsTitle = nullptr;
-	SearchColumn->AddChildToVerticalBox(MakeSectionHeader(WidgetTree, LOCTEXT("Results", "Search"), ResultsTitle));
+	AddToRow(SearchHeader, MakeSectionHeader(WidgetTree, LOCTEXT("Results", "Search"), ResultsTitle), true, 10.f);
+	LibraryStatusText = MakeText(WidgetTree, 11, DimTextColor);
+	AddToRow(SearchHeader, LibraryStatusText, false, 10.f);
+	OpenFolderButton = MakeButton(WidgetTree, LOCTEXT("OpenFolder", "Open Folder"));
+	OpenFolderButton->SetToolTipText(LOCTEXT("OpenFolderTip", "Open your music folder. Put music files in it, then press Rescan."));
+	AddToRow(SearchHeader, OpenFolderButton, false);
+	RescanButton = MakeButton(WidgetTree, LOCTEXT("Rescan", "Rescan"));
+	RescanButton->SetToolTipText(LOCTEXT("RescanTip", "Look for new or removed files in your music folder."));
+	AddToRow(SearchHeader, RescanButton, false, 0.f);
 	UHorizontalBox* SearchRow = AddRow(SearchColumn, 0.f);
 	if (UImage* Icon = MakeSearchIcon(WidgetTree))
 	{
@@ -1326,13 +1341,9 @@ void UBBPMusicPage::ShowView(EBBPView View)
 		return;
 	}
 	ContentSwitcher->SetActiveWidgetIndex(static_cast<int32>(View));
-	if (PageTitleText)
-	{
-		PageTitleText->SetText(View == EBBPView::Radio ? LOCTEXT("RadioTitle", "RADIO")
-			: View == EBBPView::History ? LOCTEXT("HistoryTitle", "HISTORY") : LOCTEXT("PageTitle", "CUSTOM MUSIC"));
-	}
-	BBPWidgetStyle::SetShown(RadioButton, View != EBBPView::Radio);
-	BBPWidgetStyle::SetShown(HistoryButton, View != EBBPView::History);
+	if (MusicTab) MusicTab->SetSelected(View == EBBPView::Music);
+	if (RadioTab) RadioTab->SetSelected(View == EBBPView::Radio);
+	if (HistoryTab) HistoryTab->SetSelected(View == EBBPView::History);
 	if (View == EBBPView::Radio)
 	{
 		RefreshRadioStations();
@@ -1345,23 +1356,23 @@ void UBBPMusicPage::ShowView(EBBPView View)
 		View == EBBPView::Radio ? TEXT("Radio") : View == EBBPView::History ? TEXT("History") : TEXT("music"));
 }
 
-void UBBPMusicPage::HandleRadio()
+void UBBPMusicPage::HandleMusicTab()
+{
+	ShowView(EBBPView::Music);
+}
+
+void UBBPMusicPage::HandleRadioTab()
 {
 	ShowView(EBBPView::Radio);
 }
 
-void UBBPMusicPage::HandleHistory()
+void UBBPMusicPage::HandleHistoryTab()
 {
 	ShowView(EBBPView::History);
 }
 
 void UBBPMusicPage::HandleBack()
 {
-	if (ContentSwitcher && ContentSwitcher->GetActiveWidgetIndex() != static_cast<int32>(EBBPView::Music))
-	{
-		ShowView(EBBPView::Music);
-		return;
-	}
 	ShowPlayerPage();
 }
 

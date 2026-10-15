@@ -10,6 +10,7 @@ class ABBPMusicChannel;
 class AFGBoomBoxPlayer;
 class USlider;
 class UBBPGameButton;
+class UBBPTabButton;
 class UScrollBox;
 class UEditableTextBox;
 class UFGTapeData;
@@ -138,20 +139,22 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> ClearQueueButton;
 
+	// Opens the vanilla tape list.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> TapesButton;
 
-	// "CUSTOM MUSIC", or "RADIO" while the Radio view is shown.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> PageTitleText;
 
-	// Opens the Radio view; hidden while it's shown.
+	// Tabs above the area under Now Playing; the shown view's tab is selected.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBBPGameButton> RadioButton;
+	TObjectPtr<UBBPTabButton> MusicTab;
 
-	// Opens the History view; hidden while it's shown.
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBBPGameButton> HistoryButton;
+	TObjectPtr<UBBPTabButton> RadioTab;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPTabButton> HistoryTab;
 
 	// Switches the area under Now Playing between the music view (index 0), the Radio view (1) and the History view (2).
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -163,6 +166,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UBBPHistoryPage> HistoryPage;
 
+	// Goes back to the Boom Box's player page.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> BackButton;
 
@@ -471,12 +475,14 @@ private:
 	void ShowView(EBBPView View);
 
 	UFUNCTION()
-	void HandleRadio();
+	void HandleMusicTab();
 
 	UFUNCTION()
-	void HandleHistory();
+	void HandleRadioTab();
 
-	// Leaves the Radio or History view, or from the music view goes back to the Boom Box's player page.
+	UFUNCTION()
+	void HandleHistoryTab();
+
 	UFUNCTION()
 	void HandleBack();
 

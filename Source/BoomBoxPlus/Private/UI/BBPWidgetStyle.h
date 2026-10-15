@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class UBBPGameButton;
+class UBBPTabButton;
 class UBorder;
 class UEditableTextBox;
 class UImage;
@@ -52,6 +53,9 @@ namespace BBPWidgetStyle
 
 	// Creates a button drawn with the game's own button widget, or a light flat one when bCompact (for list rows).
 	UBBPGameButton* MakeButton(UWidgetTree* Tree, const FText& Label, bool bCompact = false);
+
+	// Creates a tab for a tab strip; the label is shown upper-case.
+	UBBPTabButton* MakeTab(UWidgetTree* Tree, const FText& Label);
 
 	// Replaces the text of a button made by MakeButton.
 	void SetButtonLabel(UBBPGameButton* Button, const FText& Label);
