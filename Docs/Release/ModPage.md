@@ -147,6 +147,7 @@ next to the transport controls, rather than a setting here.
 | Doppler effect | On | A Boom Box sounds higher while you and it move towards each other and lower as you move apart, like a passing car. Only changes what you hear. |
 | Doppler deadzone (m/s) | 20 | How fast you and a Boom Box must move towards or away from each other before the pitch starts to change. 20 leaves running around alone, even two players sprinting towards each other; 0 bends it at any speed. |
 | Doppler strength | 1 | How strongly the pitch bends past the deadzone. 1 is true to life, 2 twice as much, 0.5 half as much. |
+| ADA easter eggs | On | Now and then ADA has something to say about what you're listening to. Only you hear her. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 
 ### Good to know
@@ -228,7 +229,7 @@ This mod was built with the help of an AI coding assistant (Anthropic's Claude):
   in game by the author.
 - **Mod page text:** this description was drafted by the AI and edited by the author.
 - **Developer documentation** in the source repository was written by the AI.
-- **Art and audio:** no AI-generated assets. The UI uses the game's own widgets, fonts and icons. The mod
-  icon is a render of the "Satisfactory Boombox" 3D model by Laxity (CC BY 4.0), and the demo track is by
-  Kevin MacLeod.
+- **Art and audio:** ADA's easter-egg voice lines are AI-generated speech (Google Cloud Text-to-Speech), written
+  by the author. No other AI-generated assets: the UI uses the game's own widgets, fonts and icons, the mod icon
+  is a render of the "Satisfactory Boombox" 3D model by Laxity (CC BY 4.0), and the demo track is by Kevin MacLeod.
 - **In game:** the mod doesn't use or give access to generative AI.

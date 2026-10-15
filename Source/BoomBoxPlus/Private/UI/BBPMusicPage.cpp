@@ -30,6 +30,7 @@
 #include "Net/BBPNetSubsystem.h"
 #include "Net/BBPRadio.h"
 #include "Playback/BBPPlaybackController.h"
+#include "Playback/BBPAdaEasterEggs.h"
 #include "Net/BBPSpotifyAuth.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
@@ -640,6 +641,13 @@ void UBBPMusicPage::ShowPage()
 		FocusTarget->SetFocus();
 	}
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: music page shown"));
+	if (UBBPPlaybackController* ShownController = GetPlaybackController())
+	{
+		if (UBBPAdaEasterEggs* Ada = ShownController->GetAdaEasterEggs())
+		{
+			Ada->NotifyMusicPageOpened();
+		}
+	}
 }
 
 void UBBPMusicPage::ShowTapeList()

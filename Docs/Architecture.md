@@ -123,6 +123,7 @@ carry migration code for old config layouts.
 | `ListenMode` | 0 (All) | Playback controller: which Boom Boxes this player hears (`EBBPListenMode`: All, NearestPerGroup, OnlyCarried). A dropdown in the Mods menu: `UseSMLEditorClasses` sets the converted `UCP_Integer`'s `WidgetType` to `CPI_Enum` with `EnumClass`, and gives the enum an `EnumDisplayNameFn`, because a packaged game has no `UMETA(DisplayName)` data and SML labels entries with `GetDisplayNameTextByIndex`. Also cycled by the music page's **Hear:** button (`UBBPConfig::SetInt`) |
 | `DopplerDeadzone` | 20 | Playback controller: closing speed in m/s (0-50) under which Doppler leaves the pitch alone |
 | `DopplerStrength` | 1 | Playback controller: multiplies the speeds past the deadzone (0-5; 1 is true to life) |
+| `AdaEasterEggs` | on | `UBBPAdaEasterEggs`: ADA's occasional comments on the music (see EasterEggs.md) |
 | `Doppler` | on | Playback controller: pitches each emitter by its relative motion to the listener (see Multiplayer.md, Doppler effect) |
 | `MuteInBackground` | on | Playback controller: zeroes every emitter's volume while `FPlatformApplicationMisc::IsThisApplicationForeground()` is false. Unreal's own unfocused-volume setting doesn't reach it, since the game mixes in Wwise |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |

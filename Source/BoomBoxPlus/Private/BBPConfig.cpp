@@ -24,6 +24,7 @@ const FString UBBPConfig::MuteInBackgroundKey = TEXT("MuteInBackground");
 const FString UBBPConfig::DopplerKey = TEXT("Doppler");
 const FString UBBPConfig::DopplerDeadzoneKey = TEXT("DopplerDeadzone");
 const FString UBBPConfig::DopplerStrengthKey = TEXT("DopplerStrength");
+const FString UBBPConfig::AdaEasterEggsKey = TEXT("AdaEasterEggs");
 const FString UBBPConfig::ListenModeKey = TEXT("ListenMode");
 const FString UBBPConfig::SpotifyClientIdKey = TEXT("SpotifyClientId");
 const FString UBBPConfig::SpotifyClientSecretKey = TEXT("SpotifyClientSecret");
@@ -132,6 +133,13 @@ UBBPConfig::UBBPConfig()
 	DopplerStrength->DefaultValue = 1.f;
 	DopplerStrength->Value = 1.f;
 	AddSetting(DopplerStrengthKey, DopplerStrength);
+
+	UConfigPropertyBool* AdaEasterEggs = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("AdaEasterEggs"));
+	AdaEasterEggs->DisplayName = LOCTEXT("AdaEasterEggs", "ADA easter eggs");
+	AdaEasterEggs->Tooltip = LOCTEXT("AdaEasterEggsTip", "Now and then ADA has something to say about what you're listening to. Only you hear her.");
+	AdaEasterEggs->DefaultValue = true;
+	AdaEasterEggs->Value = true;
+	AddSetting(AdaEasterEggsKey, AdaEasterEggs);
 
 	// Shown as a dropdown once UseSMLEditorClasses makes it SML's editor class (see there).
 	UConfigPropertyInteger* ListenMode = CreateDefaultSubobject<UConfigPropertyInteger>(TEXT("ListenMode"));

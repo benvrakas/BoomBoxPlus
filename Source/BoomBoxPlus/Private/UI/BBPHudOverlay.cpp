@@ -1,4 +1,5 @@
 #include "UI/BBPHudOverlay.h"
+#include "Playback/BBPAdaEasterEggs.h"
 #include "BBPBlueprintLibrary.h"
 #include "BBPConfig.h"
 #include "Blueprint/WidgetTree.h"
@@ -65,6 +66,7 @@ void UBBPHudOverlay::BuildDefaultLayout()
 
 	LyricText = BBPWidgetStyle::MakeText(WidgetTree, 20, BBPWidgetStyle::TextColor);
 	LyricText->SetJustification(ETextJustify::Center);
+	LyricText->SetWrapTextAt(1000.f);
 	LyricText->SetShadowOffset(FVector2D(1.f, 1.f));
 	LyricText->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
 	Stack->AddChildToVerticalBox(LyricText)->SetHorizontalAlignment(HAlign_Center);
@@ -87,10 +89,23 @@ void UBBPHudOverlay::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	bShowLyrics = UBBPConfig::GetBool(this, UBBPConfig::ShowLyricsKey, true);
 	bShowNowPlaying = UBBPConfig::GetBool(this, UBBPConfig::ShowNowPlayingKey, true);
 
+	// ADA's subtitle takes the lyric line while she speaks, whether or not lyrics are shown.
+	const ABBPPlaylistSubsystem* OverlayPlaylist = ABBPPlaylistSubsystem::Get(this);
+	const UBBPPlaybackController* OverlayController = OverlayPlaylist ? OverlayPlaylist->GetPlaybackController() : nullptr;
+	const UBBPAdaEasterEggs* Ada = OverlayController ? OverlayController->GetAdaEasterEggs() : nullptr;
 	if (LyricText)
 	{
-		const FString Line = (bPlaying && bShowLyrics) ? UBBPBlueprintLibrary::GetCurrentLyricLine(Channel) : FString();
-		LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
+		if (Ada && !Ada->GetSubtitle().IsEmpty())
+		{
+			LyricText->SetText(FText::FromString(TEXT("ADA: ") + Ada->GetSubtitle()));
+			LyricText->SetColorAndOpacity(FSlateColor(BBPWidgetStyle::AccentColor));
+		}
+		else
+		{
+			const FString Line = (bPlaying && bShowLyrics) ? UBBPBlueprintLibrary::GetCurrentLyricLine(Channel) : FString();
+			LyricText->SetText(BBPWidgetStyle::ToDisplayText(Line));
+			LyricText->SetColorAndOpacity(FSlateColor(BBPWidgetStyle::TextColor));
+		}
 	}
 
 	// Shown for a new track, and again when a radio station announces a new song (its title changes). Entry ids are

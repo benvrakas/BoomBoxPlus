@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.9
+
+- **ADA has opinions.** Now and then she has something to say about what you're listening to, and how. Only you hear
+  her. Turn her off with **ADA easter eggs** in **Mods → BoomBoxPlus**.
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.3.9, as usual.
+
 ## 1.3.8
 
 - **A Radio page.** The new **Radio** button on the Custom Music page opens your station list. Paste a station's

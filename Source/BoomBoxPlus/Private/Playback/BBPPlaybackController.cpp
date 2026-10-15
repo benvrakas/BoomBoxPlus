@@ -1,4 +1,5 @@
 #include "Playback/BBPPlaybackController.h"
+#include "Playback/BBPAdaEasterEggs.h"
 #include "Audio/BBPAudioDevice.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "AudioDevice.h"
@@ -106,10 +107,17 @@ void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
 	const bool bHasAudio = BBPAudioDevice::EnsureAvailable();
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback controller ready (Unreal audio device %s)"), bHasAudio ? TEXT("available") : TEXT("MISSING"));
 	LoadMyVolumes();
+	AdaEasterEggs = NewObject<UBBPAdaEasterEggs>(this);
+	AdaEasterEggs->Initialize(this);
 }
 
 void UBBPPlaybackController::Shutdown()
 {
+	if (AdaEasterEggs)
+	{
+		AdaEasterEggs->Shutdown();
+		AdaEasterEggs = nullptr;
+	}
 	for (FBBPEmitter& Emitter : Emitters)
 	{
 		StopTrack(Emitter);
@@ -157,6 +165,10 @@ void UBBPPlaybackController::Tick(float DeltaSeconds)
 		UpdateEmitter(Emitter, DeltaSeconds);
 	}
 	UpdateDoppler(DeltaSeconds);
+	if (AdaEasterEggs)
+	{
+		AdaEasterEggs->Tick(DeltaSeconds);
+	}
 	ReportLoadedTracks();
 	UpdateGameMusic(DeltaSeconds);
 	UpdateVanillaPages();
@@ -276,6 +288,7 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
 	const float Music = ReadVolumeOption(*Settings, TEXT("RTPC.Music_Bus_Volume"));
 	const float Scale = Master * BoomBox * Music;
+	VoiceVolumeScale = Master * ReadVolumeOption(*Settings, TEXT("RTPC.VO_Bus_Volume"));
 	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
 	{
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f x Music %.2f"), Master, BoomBox, Music);
@@ -623,7 +636,8 @@ void UBBPPlaybackController::SyncEmitters()
 		// Muting only zeroes the component: the stream keeps playing in time (the wave plays when silent), and
 		// AppliedVolume still says the music is audible, so the game's own music doesn't fade back in meanwhile.
 		Emitter->bMutedByMode = IsValid(BoomBox) && !IsHeardInMode(BoomBox);
-		const float Output = bMutedInBackground || Emitter->bMutedByMode ? 0.f : Volume;
+		const float Duck = AdaEasterEggs ? AdaEasterEggs->GetMusicDuck() : 1.f;
+		const float Output = bMutedInBackground || Emitter->bMutedByMode ? 0.f : Volume * Duck;
 		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
 		{
 			Emitter->AppliedOutput = Output;

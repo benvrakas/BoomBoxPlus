@@ -132,6 +132,16 @@ public:
 	// station announces (may be empty) and whether it is still waiting for audio.
 	bool GetLiveStatus(const ABBPMusicChannel* Channel, FString& OutSongTitle, bool& bOutBuffering) const;
 
+	ABBPPlaylistSubsystem* GetPlaylist() const { return Playlist; }
+
+	// True while Custom Music is muted because the game window isn't in front.
+	bool IsMutedInBackground() const { return bMutedInBackground; }
+
+	// The game's Master x Dialogue volume sliders, for ADA's lines.
+	float GetVoiceVolumeScale() const { return VoiceVolumeScale; }
+
+	class UBBPAdaEasterEggs* GetAdaEasterEggs() const { return AdaEasterEggs; }
+
 	// Fills how Channel's current entry is shown; false when nothing is queued. A radio entry uses the song the
 	// station announces ("Artist - Title"), which needs Controller (null on a dedicated server).
 	static bool DescribeNowPlaying(const ABBPMusicChannel* Channel, const UBBPPlaybackController* Controller, FBBPNowPlaying& Out);
@@ -195,6 +205,12 @@ private:
 
 	// Game volume sliders (Master x Boom Box), 0..1.
 	float GameVolumeScale = 1.f;
+
+	// Master x Dialogue sliders (see GetVoiceVolumeScale).
+	float VoiceVolumeScale = 1.f;
+
+	UPROPERTY()
+	TObjectPtr<class UBBPAdaEasterEggs> AdaEasterEggs;
 	float GameVolumeTimer = 0.f;
 
 	// What each vanilla page was last told, so song and state are only re-sent on change.

@@ -36,6 +36,7 @@ public:
 	static const FString DopplerKey;
 	static const FString DopplerDeadzoneKey;
 	static const FString DopplerStrengthKey;
+	static const FString AdaEasterEggsKey;
 	static const FString ListenModeKey;
 	static const FString SpotifyClientIdKey;
 	static const FString SpotifyClientSecretKey;

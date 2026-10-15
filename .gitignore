@@ -74,3 +74,5 @@ Plugins/*/Intermediate/*
 DerivedDataCache/*
 # Third-party tools fetched by Tools/FetchTools.ps1 (not committed)
 Resources/Tools/
+# ADA easter-egg lines, made by D:/SFMod/Tools/ADA/ada_voice.py install (not committed, so the repo does not spoil them)
+Resources/Audio/ADA/
