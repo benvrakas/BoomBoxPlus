@@ -213,7 +213,7 @@ BoomBoxPlus connects to these services. Multiplayer sync between players uses th
   `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\SpotifyLogin.json`.
 - **Internet radio stations**: when a radio station is playing on a Boom Box you can hear, your game
   connects to that station's stream address, including stations other players added. When you press Enter
-  on a stream address or adds a station, your game briefly connects to check the stream and read its name.
+  on a stream address or add a station, your game briefly connects to check the stream and read its name.
   Your saved stations are stored locally in `%LOCALAPPDATA%\FactoryGame\Saved\BoomBoxPlus\RadioStations.json`.
 - **YouTube live streams** (through the bundled yt-dlp): looks up the live stream's address when one plays
   near you, then streams it from YouTube like a radio station.
