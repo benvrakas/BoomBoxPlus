@@ -288,10 +288,11 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
 	const float Music = ReadVolumeOption(*Settings, TEXT("RTPC.Music_Bus_Volume"));
 	const float Scale = Master * BoomBox * Music;
-	VoiceVolumeScale = Master * ReadVolumeOption(*Settings, TEXT("RTPC.VO_Bus_Volume"));
+	const float Dialogue = ReadVolumeOption(*Settings, TEXT("RTPC.VO_Bus_Volume"));
+	VoiceVolumeScale = Master * Dialogue;
 	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
 	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f x Music %.2f"), Master, BoomBox, Music);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: game volume sliders Master %.2f x Boom Box %.2f x Music %.2f (Dialogue %.2f, for ADA)"), Master, BoomBox, Music, Dialogue);
 		GameVolumeScale = Scale;
 	}
 }

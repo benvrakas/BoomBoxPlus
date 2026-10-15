@@ -46,15 +46,22 @@ without audio and the clip plays alongside it:
 - The log says `ADA: queued`, `message box started ... after queuing`, `playing`, and `message box closed after X s
   (voice clip Y s)`, to check the box's timing against the clip.
 
+- The box keeps the text up 1 s longer than the clip (without it, it closed 0.9 s before the voice ended). If the box
+  closes with more than 2 s of the clip left, the player skipped the message, and the voice stops too, as ADA's own
+  messages do.
+
 The clip streams through a `UBBPStreamingSoundWave` on a 2D `UAudioComponent`, at the game's Master x Dialogue
-sliders (`RTPC.VO_Bus_Volume`, like ADA's own messages) times `VoiceGain`. While it plays, Custom Music fades to 20%
-(`GetMusicDuck`, applied in `SyncEmitters`).
+sliders (`RTPC.VO_Bus_Volume`, like ADA's own messages) times `VoiceGain`. The Music and Boom Box sliders don't affect
+it. `VoiceGain` defaults to 5, matched by ear against the game's own ADA lines in game (Master slider at 0.25; 4 was a
+little too quiet). That the match needs about 1/Master suggests the game's Master slider lowers its voice lines far less
+than a straight multiply does; checking the match at other Master settings is still to do. While a line plays, Custom
+Music fades to 20% (`GetMusicDuck`, applied in `SyncEmitters`).
 
 ## Testing: the /ada chat command
 
 `ABBPAdaChatCommand` (registered in `UBBPGameWorldModule::mChatCommands`): `/ada <line>` plays a line now, ignoring
-the once-a-session rule and the 10-minute gap; `/ada list` names them; `/ada volume <0-4>` sets `VoiceGain` for the
-session (default 1), to compare against the game's own voice. SML runs chat commands where they're handled, so they
+the once-a-session rule and the 10-minute gap; `/ada list` names them; `/ada volume <0-10>` sets `VoiceGain` for the
+session (default 5), to compare against the game's own voice. SML runs chat commands where they're handled, so they
 work for the host.
 
 ## Triggers

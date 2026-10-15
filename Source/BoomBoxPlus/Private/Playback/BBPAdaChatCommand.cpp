@@ -10,7 +10,7 @@ ABBPAdaChatCommand::ABBPAdaChatCommand()
 	CommandName = TEXT("ada");
 	MinNumberOfArguments = 1;
 	bOnlyUsableByPlayer = true;
-	Usage = NSLOCTEXT("BoomBoxPlus", "AdaCommandUsage", "/ada <line> | /ada list | /ada volume <0-4>");
+	Usage = NSLOCTEXT("BoomBoxPlus", "AdaCommandUsage", "/ada <line> | /ada list | /ada volume <0-10>");
 }
 
 EExecutionStatus ABBPAdaChatCommand::ExecuteCommand_Implementation(UCommandSender* Sender, const TArray<FString>& Arguments, const FString& Label)
@@ -33,10 +33,10 @@ EExecutionStatus ABBPAdaChatCommand::ExecuteCommand_Implementation(UCommandSende
 	{
 		if (Arguments.Num() < 2 || !Arguments[1].IsNumeric())
 		{
-			Sender->SendChatMessage(FString::Printf(TEXT("ADA voice volume is %.2f. Use /ada volume <0-4>."), UBBPAdaEasterEggs::VoiceGain));
+			Sender->SendChatMessage(FString::Printf(TEXT("ADA voice volume is %.2f. Use /ada volume <0-10>."), UBBPAdaEasterEggs::VoiceGain));
 			return EExecutionStatus::COMPLETED;
 		}
-		UBBPAdaEasterEggs::VoiceGain = FMath::Clamp(FCString::Atof(*Arguments[1]), 0.f, 4.f);
+		UBBPAdaEasterEggs::VoiceGain = FMath::Clamp(FCString::Atof(*Arguments[1]), 0.f, 10.f);
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: voice volume set to %.2f by command"), UBBPAdaEasterEggs::VoiceGain);
 		Sender->SendChatMessage(FString::Printf(TEXT("ADA voice volume set to %.2f for this session."), UBBPAdaEasterEggs::VoiceGain));
 		return EExecutionStatus::COMPLETED;

@@ -26,7 +26,7 @@
 #include "UI/Message/FGAudioMessage.h"
 #include "UI/Message/FGMessageSender.h"
 
-float UBBPAdaEasterEggs::VoiceGain = 1.f;
+float UBBPAdaEasterEggs::VoiceGain = 5.f;
 TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> UBBPAdaEasterEggs::Instances;
 
 namespace
@@ -37,6 +37,12 @@ namespace
 
 	// A line queued in the game's message box that hasn't started by then plays without the box.
 	constexpr double BoxTimeoutSeconds = 8.0;
+
+	// Extra time the message box keeps the text up after the clip ends (it closed 0.9 s early without it).
+	constexpr float BoxExtraSeconds = 1.f;
+
+	// The box closing with more than this left of the clip means the player skipped the message: the voice stops too.
+	constexpr float SkipDetectSeconds = 2.f;
 
 	// Fallback only: how long ADA's jingle plays before the voice starts.
 	constexpr float JingleSeconds = 1.2f;
@@ -164,6 +170,11 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message box closed after %.1f s (voice clip %.1f s)"), Now - ShownBoxSince, LineDuration);
 			ShownBox = nullptr;
 			ShownBoxSince = 0.0;
+			if (Wave && LineTimeLeft > SkipDetectSeconds)
+			{
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message skipped; stopping '%s'"), *LineName);
+				StopLine();
+			}
 		}
 	}
 	if (Wave)
@@ -287,7 +298,7 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 	// A legacy-style message: its dialogue has no Wwise audio, and the subtitle stays up for the clip's length.
 	const FText Line = FText::FromString(LineText);
 	FMessageSubtitle MessageSubtitle(Line, Sender, 0.f, nullptr);
-	MessageSubtitle.TimeOnScreen = LineDuration;
+	MessageSubtitle.TimeOnScreen = LineDuration + BoxExtraSeconds;
 	FMessageDialogue Dialogue;
 	Dialogue.MessageSubtitles = { MessageSubtitle };
 	UFGMessage* Message = NewObject<UFGMessage>(this);
@@ -303,7 +314,7 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 	Message->mIsLegacyMessage = true;
 	Message->mSenderClass = Sender.Get();
 	Message->mDialogueData = { Dialogue };
-	Message->mSubtitleTimeMultiplier = LineDuration / FMath::Max(1, LineText.Len());
+	Message->mSubtitleTimeMultiplier = (LineDuration + BoxExtraSeconds) / FMath::Max(1, LineText.Len());
 	PendingMessage = Message;
 	PendingSince = Now;
 	GameUI->AddPendingMessages({ Message });

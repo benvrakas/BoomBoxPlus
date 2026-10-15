@@ -42,7 +42,8 @@ public:
 	// Names of the loaded lines.
 	TArray<FString> GetLineNames() const;
 
-	// Multiplier on ADA's voice volume, on top of the game's Master x Dialogue sliders.
+	// Multiplier on ADA's voice volume, on top of the game's Master x Dialogue sliders. Default 5: matched by ear against
+	// the game's own ADA lines (with the clips at -23 LUFS and Master at 0.25; 4 was a little too quiet).
 	static float VoiceGain;
 
 	// What the mod's own subtitle shows (only when the game's message box couldn't show the line); empty otherwise.
