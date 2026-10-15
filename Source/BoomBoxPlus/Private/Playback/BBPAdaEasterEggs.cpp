@@ -1,5 +1,7 @@
 #include "Playback/BBPAdaEasterEggs.h"
 #include "AkAudioEvent.h"
+#include "AkComponent.h"
+#include "AkGameplayStatics.h"
 #include "Audio/BBPDecoder.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "BBPConfig.h"
@@ -25,9 +27,12 @@
 #include "UI/FGGameUI.h"
 #include "UI/Message/FGAudioMessage.h"
 #include "UI/Message/FGMessageSender.h"
+#include "Wwise/API/WwiseSoundEngineAPI.h"
 
 float UBBPAdaEasterEggs::VoiceGain = 5.f;
 TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> UBBPAdaEasterEggs::Instances;
+bool UBBPAdaEasterEggs::bBankTried = false;
+bool UBBPAdaEasterEggs::bBankLoaded = false;
 
 namespace
 {
@@ -48,6 +53,21 @@ namespace
 	constexpr float JingleSeconds = 1.2f;
 
 	const TCHAR* AdaSenderPath = TEXT("/Game/FactoryGame/Interface/UI/Message/Sender/Sender_ADA.Sender_ADA_C");
+
+	// The mod's Wwise bank (made by D:/SFMod/Tools/ADA/make_bank.py) and its event names, BBP_ADA_<line>.
+	const TCHAR* BankFileName = TEXT("BBP_ADA.bnk");
+	const TCHAR* EventPrefix = TEXT("BBP_ADA_");
+
+	// Wwise's id for a name: FNV-1 of the lowercase name (as AK::SoundEngine::GetIDFromString).
+	uint32 WwiseId(const FString& Name)
+	{
+		uint32 Hash = 2166136261u;
+		for (const TCHAR Char : Name.ToLower())
+		{
+			Hash = (Hash * 16777619u) ^ static_cast<uint8>(Char);
+		}
+		return Hash;
+	}
 
 	constexpr float IdleSeconds1 = 300.f;
 	constexpr float IdleSeconds2 = 900.f;
@@ -90,6 +110,54 @@ void UBBPAdaEasterEggs::Initialize(UBBPPlaybackController* InController)
 	Instances.RemoveAll([](const TWeakObjectPtr<UBBPAdaEasterEggs>& Instance) { return !Instance.IsValid(); });
 	Instances.Add(this);
 	LoadLines();
+	LoadBank();
+}
+
+void UBBPAdaEasterEggs::LoadBank()
+{
+	if (bBankTried || AudioDir.IsEmpty())
+	{
+		return;
+	}
+	bBankTried = true;
+	const FString Path = AudioDir / BankFileName;
+	TArray<uint8> Bytes;
+	IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get();
+	if (!Wwise || !FFileHelper::LoadFileToArray(Bytes, *Path))
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: no Wwise bank at '%s' (or no Wwise); lines play through Unreal"), *Path);
+		return;
+	}
+	AkBankID BankId = 0;
+	const AKRESULT Result = Wwise->LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
+	bBankLoaded = Result == AK_Success || Result == AK_BankAlreadyLoaded;
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u)"), BankFileName, Bytes.Num(),
+		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), (int32)Result, BankId);
+}
+
+bool UBBPAdaEasterEggs::PostWwiseVoice()
+{
+	IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get();
+	APawn* Pawn = UGameplayStatics::GetPlayerPawn(Controller, 0);
+	if (!bBankLoaded || !Wwise || !Pawn || !Pawn->GetRootComponent())
+	{
+		return false;
+	}
+	bool bCreated = false;
+	UAkComponent* AkComponent = UAkGameplayStatics::GetAkComponent(Pawn->GetRootComponent(), bCreated);
+	if (!AkComponent)
+	{
+		return false;
+	}
+	const FString EventName = EventPrefix + LineName;
+	const AkPlayingID PlayingId = Wwise->PostEvent(WwiseId(EventName), AkComponent->GetAkGameObjectID());
+	if (PlayingId == AK_INVALID_PLAYING_ID)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: Wwise wouldn't play '%s'; playing it through Unreal"), *EventName);
+		return false;
+	}
+	WwisePlayingId = PlayingId;
+	return true;
 }
 
 void UBBPAdaEasterEggs::Shutdown()
@@ -170,7 +238,7 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message box closed after %.1f s (voice clip %.1f s)"), Now - ShownBoxSince, LineDuration);
 			ShownBox = nullptr;
 			ShownBoxSince = 0.0;
-			if (Wave && LineTimeLeft > SkipDetectSeconds)
+			if (IsSpeaking() && LineTimeLeft > SkipDetectSeconds)
 			{
 				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message skipped; stopping '%s'"), *LineName);
 				StopLine();
@@ -200,7 +268,16 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 			StopLine();
 		}
 	}
-	const float DuckTarget = Wave ? DuckLevel : 1.f;
+	if (WwisePlayingId != 0)
+	{
+		LineTimeLeft -= DeltaSeconds;
+		if (LineTimeLeft <= 0.f)
+		{
+			WwisePlayingId = 0;
+			Subtitle.Reset();
+		}
+	}
+	const float DuckTarget = IsSpeaking() ? DuckLevel : 1.f;
 	MusicDuck = FMath::FInterpConstantTo(MusicDuck, DuckTarget, DeltaSeconds, (1.f - DuckLevel) / DuckFadeSeconds);
 
 	if (!Controller || Subtitles.Num() == 0)
@@ -256,7 +333,7 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 {
 	const double Now = FPlatformTime::Seconds();
 	const FString* Text = Subtitles.Find(Name);
-	if (!Controller || !Text || Wave || PendingMessage || (!bForce && Played.Contains(Name))
+	if (!Controller || !Text || IsSpeaking() || PendingMessage || (!bForce && Played.Contains(Name))
 		|| (!bForce && !bIgnoreGap && Now - LastLineTime < MinGapSeconds)
 		|| Controller->IsMutedInBackground() || !UBBPConfig::GetBool(Controller, UBBPConfig::AdaEasterEggsKey, true))
 	{
@@ -325,6 +402,13 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 void UBBPAdaEasterEggs::StartVoice(bool bOwnSubtitle, bool bJingle)
 {
 	PendingMessage = nullptr;
+	if (!bJingle && PostWwiseVoice())
+	{
+		LineTimeLeft = LineDuration + 0.5f;
+		Subtitle = bOwnSubtitle ? LineText : FString();
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: playing '%s' on ADA's Wwise voice bus (%.1f s)"), *LineName, LineDuration);
+		return;
+	}
 	Wave = NewObject<UBBPStreamingSoundWave>(this);
 	if (!Wave->StartStream(LinePath, LineSampleRate, LineChannels, 0.f))
 	{
@@ -360,6 +444,14 @@ void UBBPAdaEasterEggs::StartVoice(bool bOwnSubtitle, bool bJingle)
 void UBBPAdaEasterEggs::StopLine()
 {
 	PendingMessage = nullptr;
+	if (WwisePlayingId != 0)
+	{
+		if (IWwiseSoundEngineAPI* Wwise = IWwiseSoundEngineAPI::Get())
+		{
+			Wwise->StopPlayingID(WwisePlayingId);
+		}
+		WwisePlayingId = 0;
+	}
 	if (Component)
 	{
 		Component->Stop();

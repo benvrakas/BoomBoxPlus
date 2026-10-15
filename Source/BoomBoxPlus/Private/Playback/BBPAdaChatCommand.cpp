@@ -33,7 +33,7 @@ EExecutionStatus ABBPAdaChatCommand::ExecuteCommand_Implementation(UCommandSende
 	{
 		if (Arguments.Num() < 2 || !Arguments[1].IsNumeric())
 		{
-			Sender->SendChatMessage(FString::Printf(TEXT("ADA voice volume is %.2f. Use /ada volume <0-10>."), UBBPAdaEasterEggs::VoiceGain));
+			Sender->SendChatMessage(FString::Printf(TEXT("ADA voice volume is %.2f (only used when her lines can't play through Wwise). Use /ada volume <0-10>."), UBBPAdaEasterEggs::VoiceGain));
 			return EExecutionStatus::COMPLETED;
 		}
 		UBBPAdaEasterEggs::VoiceGain = FMath::Clamp(FCString::Atof(*Arguments[1]), 0.f, 10.f);

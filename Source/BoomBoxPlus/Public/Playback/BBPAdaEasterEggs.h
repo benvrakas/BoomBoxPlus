@@ -17,9 +17,10 @@ class UFGMessageSender;
 // MinGapSeconds of another, only on this machine.
 //
 // A line is shown like ADA's own messages: queued in the game's message box as a runtime UFGMessage from ADA's sender
-// (which shows her box and plays her jingle), with the voice clip started when the box starts playback
-// (NotifyAudioMessageStarted). If the box doesn't show it in time, the clip plays with ADA's jingle and the mod's own
-// subtitle instead.
+// (which shows her box and plays her jingle), with the voice started when the box starts playback
+// (NotifyAudioMessageStarted). The voice is a Wwise event from the mod's own bank (BBP_ADA.bnk), routed to ADA's voice
+// bus, so the game processes and mixes it like her own lines. Without the bank, the .ogg clip plays through Unreal. If
+// the box doesn't show the line in time, it plays with ADA's jingle and the mod's own subtitle instead.
 UCLASS()
 class BOOMBOXPLUS_API UBBPAdaEasterEggs : public UObject
 {
@@ -42,8 +43,9 @@ public:
 	// Names of the loaded lines.
 	TArray<FString> GetLineNames() const;
 
-	// Multiplier on ADA's voice volume, on top of the game's Master x Dialogue sliders. Default 5: matched by ear against
-	// the game's own ADA lines (with the clips at -23 LUFS and Master at 0.25; 4 was a little too quiet).
+	// Multiplier on ADA's voice volume when it plays through Unreal (no bank, or the fallback), on top of the game's
+	// Master x Dialogue sliders. Default 5: matched by ear against the game's own ADA lines (clips at -23 LUFS). Through
+	// Wwise the game's own bus sets the volume.
 	static float VoiceGain;
 
 	// What the mod's own subtitle shows (only when the game's message box couldn't show the line); empty otherwise.
@@ -58,8 +60,18 @@ private:
 	// a line or a game message is already playing, or the game window is in the background.
 	bool TryPlay(const FString& Name, const FString& SubtitleText = FString(), bool bIgnoreGap = false, bool bForce = false);
 
-	// Starts the queued line's voice clip. bOwnSubtitle shows the mod's subtitle, bJingle plays ADA's jingle first.
+	// Starts the queued line's voice. bOwnSubtitle shows the mod's subtitle, bJingle plays ADA's jingle first (and the
+	// voice through Unreal).
 	void StartVoice(bool bOwnSubtitle, bool bJingle);
+
+	// Posts the line's event from BBP_ADA.bnk on the player's Wwise game object. False if it can't.
+	bool PostWwiseVoice();
+
+	// Loads BBP_ADA.bnk into Wwise, once per game session.
+	void LoadBank();
+
+	// True while a line's voice plays, through either path.
+	bool IsSpeaking() const { return Wave != nullptr || WwisePlayingId != 0; }
 	void StopLine();
 	void LoadLines();
 
@@ -135,6 +147,12 @@ private:
 	int32 ConsecutivePlays = 0;
 
 	float VolumeCheckTimer = 0.f;
+
+	// Wwise playing id of the voice posted from the bank, or 0.
+	uint32 WwisePlayingId = 0;
+
+	static bool bBankTried;
+	static bool bBankLoaded;
 
 	// Every live instance, for NotifyAudioMessageStarted.
 	static TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> Instances;

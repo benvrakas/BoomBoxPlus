@@ -28,6 +28,7 @@ public class BoomBoxPlus : ModuleRules
 			//"ChaosVehiclesCore", "ChaosVehicles", "ChaosSolverEngine",
 			"AnimGraphRuntime",
 			"AkAudio",
+			"WwiseSoundEngine",
 			"AssetRegistry",
 			"NavigationSystem",
 			//"ReplicationGraph",

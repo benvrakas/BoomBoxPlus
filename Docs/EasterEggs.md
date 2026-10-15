@@ -72,6 +72,28 @@ Wwise Opus (codec 0x140001, streamed `.wem`), which neither our decoders nor the
 wasn't measured directly. While a line plays, Custom
 Music fades to 20% (`GetMusicDuck`, applied in `SyncEmitters`).
 
+## Through ADA's own Wwise bus (BBP_ADA.bnk)
+
+The voice normally plays through Wwise, on ADA's own voice bus, so it gets her processing (compressors, a Harmonizer,
+a third-party radio/lo-fi effect, Meter-driven ducking, reverb sends) and her volume, exactly like her own lines. Her
+recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each phrase): all of that is added live.
+
+- `D:/SFMod/Tools/ADA/make_bank.py <engine>` builds `Resources/Audio/ADA/BBP_ADA.bnk` (bank version 172, the game's)
+  from the dry speech in `raw/<engine>`: each line leveled to -20.7 LUFS (the loudness of the decoded ADA line),
+  encoded to Opus with ffmpeg and repacked as a Wwise Opus `.wem` (fmt 0x3041, a `seek` chunk of u16 packet sizes, a
+  `data` chunk of the packets), embedded in the bank. Its objects (one ActorMixer, then a Sound, a Play action and an
+  Event per line) copy the layout of the game's `Play_VO_ADA_MILESTONE_2_1_0.bnk` with new ids; the mixer routes to
+  bus 1690368967, ADA's voice bus, with her mixer's settings (-1 dB). Event names are `BBP_ADA_<line>`, ids their FNV-1
+  hash. No game audio is copied.
+- At startup, `LoadBank` reads the file and `IWwiseSoundEngineAPI::LoadBankMemoryCopy` loads it, once per session (the
+  log says whether, with the result code). When the message box starts the line, `PostWwiseVoice` posts the event on
+  the player pawn's `UAkComponent`; a skip calls `StopPlayingID`.
+- Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
+
+How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
+encrypted); `Init.bnk` holds the buses, effects and RTPC curves; ADA's event bank holds her Sound and ActorMixer, whose
+ids lead to her bus. Decoding a line: `.wem` rewrapped as Ogg Opus (the reverse of the builder) and decoded with ffmpeg.
+
 ## Testing: the /ada chat command
 
 `ABBPAdaChatCommand` (registered in `UBBPGameWorldModule::mChatCommands`): `/ada <line>` plays a line now, ignoring
