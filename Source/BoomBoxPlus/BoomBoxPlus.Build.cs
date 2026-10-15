@@ -84,6 +84,12 @@ public class BoomBoxPlus : ModuleRules
 			"HTTPServer",
 		});
 		
+		// The Open dialog for importing station and song lists.
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			PublicSystemLibraries.Add("comdlg32.lib");
+		}
+
 		DynamicallyLoadedModuleNames.AddRange(new string[] {
 			// ... add any modules that your module loads dynamically here ...
 		});

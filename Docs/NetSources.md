@@ -142,7 +142,8 @@ Order of attempts for a pasted link:
   (not signed in, no app key, or the HTTP code Spotify returned). Nothing fails outright any more just
   because the API refused.
 
-**Spotify playlists are matched as a background job** (`UBBPNetSubsystem::StartSpotifyCollection`). After
+**Spotify playlists are matched as a background job** (`UBBPNetSubsystem::StartSpotifyCollection`; imported song
+lists use the same job through `StartSongList`, see UI.md). After
 the track list is read, three worker threads search
 YouTube in parallel (`MatchWorkers`), taking tracks in playlist order so the first ones finish first. Each
 result goes back to the game thread with its index; the job publishes the **settled prefix** only (track N

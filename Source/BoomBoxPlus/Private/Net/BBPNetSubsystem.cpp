@@ -26,6 +26,7 @@
 #include "GenericPlatform/GenericPlatformHttp.h"
 #include "Misc/Base64.h"
 #include "Net/BBPHttp.h"
+#include "Net/BBPImport.h"
 #include "Net/BBPSpotifyAuth.h"
 
 namespace
@@ -322,13 +323,6 @@ namespace
 		return true;
 	}
 }
-
-// One Spotify track to find on YouTube.
-struct FBBPWantedTrack
-{
-	FString Query;
-	float Duration = 0.f;
-};
 
 // State shared between a match job's worker threads.
 struct FBBPMatchWork
@@ -957,6 +951,132 @@ int32 UBBPNetSubsystem::StartSpotifyCollection(const FString& Url, FBBPOnMatchPr
 	return JobId;
 }
 
+int32 UBBPNetSubsystem::StartSongList(TArray<FBBPWantedTrack>&& Songs, FBBPOnMatchProgress OnProgress)
+{
+	const int32 JobId = NextJobId++;
+	if (!bToolsAvailable)
+	{
+		FBBPMatchProgress Failed;
+		Failed.JobId = JobId;
+		Failed.bFinished = true;
+		Failed.Error = TEXT("YouTube/SoundCloud unavailable (tools missing)");
+		OnProgress.ExecuteIfBound(Failed);
+		return JobId;
+	}
+	TSharedPtr<FBBPMatchJob> Job = MakeShared<FBBPMatchJob>();
+	Job->Work = MakeShared<FBBPMatchWork, ESPMode::ThreadSafe>();
+	Job->OnProgress = OnProgress;
+	Job->Progress.JobId = JobId;
+	MatchJobs.Add(JobId, Job);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: song list of %d"), JobId, Songs.Num());
+	BeginMatching(JobId, MoveTemp(Songs), FString());
+	return JobId;
+}
+
+void UBBPNetSubsystem::ImportStations(const TArray<BBPImport::FStation>& Stations, FBBPOnStationsImported OnDone)
+{
+	// Stream address per list entry, filled in as station playlists are read; empty when unusable.
+	struct FImport
+	{
+		TArray<FString> Names;
+		TArray<FString> Urls;
+		int32 Pending = 0;
+		int32 Unusable = 0;
+		FBBPOnStationsImported OnDone;
+	};
+	TSharedRef<FImport> Import = MakeShared<FImport>();
+	Import->OnDone = OnDone;
+	for (const BBPImport::FStation& Station : Stations)
+	{
+		const FString Url = BBPRadio::NormalizeUrl(Station.Url);
+		if (Url.IsEmpty() || ClassifyLink(Url) != EBBPLinkKind::Stream)
+		{
+			++Import->Unusable;
+			continue;
+		}
+		Import->Names.Add(Station.Name);
+		Import->Urls.Add(Url);
+	}
+
+	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
+	auto Finish = [WeakThis, Import]()
+	{
+		UBBPNetSubsystem* This = WeakThis.Get();
+		if (!This)
+		{
+			return;
+		}
+		FBBPStationImportResult Result;
+		Result.Unusable = Import->Unusable;
+		TArray<FBBPTrack> NewStations;
+		TSet<FString> NewIds;
+		for (int32 i = 0; i < Import->Urls.Num(); ++i)
+		{
+			const FString& Url = Import->Urls[i];
+			if (Url.IsEmpty() || !BBPRadio::IsStreamUrl(Url))
+			{
+				++Result.Unusable;
+				continue;
+			}
+			FBBPTrack Station;
+			Station.Id = BBPRadio::MakeTrackId(Url);
+			if (This->HasStation(Station.Id) || NewIds.Contains(Station.Id))
+			{
+				++Result.AlreadySaved;
+				continue;
+			}
+			if (This->RadioStations.Stations.Num() + NewStations.Num() >= MaxStations)
+			{
+				++Result.NoRoom;
+				continue;
+			}
+			Station.Source = EBBPTrackSource::Radio;
+			Station.SourceRef = Url;
+			Station.Artist = GetHost(Url);
+			Station.Title = Import->Names[i].IsEmpty() ? Station.Artist : Import->Names[i].Left(MaxStationNameLength);
+			NewIds.Add(Station.Id);
+			NewStations.Add(Station);
+		}
+		Result.Added = NewStations.Num();
+		This->RadioStations.Stations.Insert(NewStations, 0);
+		if (Result.Added > 0)
+		{
+			This->SaveRadioStations();
+		}
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: imported stations: %d added, %d already saved, %d without room, %d unusable (%d saved)"),
+			Result.Added, Result.AlreadySaved, Result.NoRoom, Result.Unusable, This->RadioStations.Stations.Num());
+		Import->OnDone.ExecuteIfBound(Result);
+	};
+
+	// Held at one until every playlist read has started, so an immediate answer can't finish the import early.
+	Import->Pending = 1;
+	for (int32 i = 0; i < Import->Urls.Num(); ++i)
+	{
+		if (!BBPRadio::IsPlaylistUrl(Import->Urls[i]))
+		{
+			continue;
+		}
+		++Import->Pending;
+		const FString PlaylistUrl = Import->Urls[i];
+		HttpGet(PlaylistUrl, [Import, i, PlaylistUrl, Finish](const FString& Body, const FString& Error)
+		{
+			Import->Urls[i] = Error.IsEmpty() ? BBPRadio::ParsePlaylist(Body) : FString();
+			if (Import->Urls[i].IsEmpty())
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Net: imported station playlist '%s' gave no stream (%s)"), *PlaylistUrl, Error.IsEmpty() ? TEXT("no stream URL in it") : *Error);
+			}
+			if (--Import->Pending == 0)
+			{
+				Finish();
+			}
+		});
+	}
+	if (--Import->Pending == 0)
+	{
+		Finish();
+	}
+}
+
 void UBBPNetSubsystem::FailJob(int32 JobId, const FString& Error)
 {
 	TSharedPtr<FBBPMatchJob> Job;
@@ -992,7 +1112,7 @@ void UBBPNetSubsystem::BeginMatching(int32 JobId, TArray<FBBPWantedTrack>&& Want
 	}
 
 	const int32 Workers = FMath::Min(MatchWorkers, Total);
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: %d Spotify tracks; matching on YouTube with %d workers"), JobId, Total, Workers);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d: %d songs; matching on YouTube with %d workers"), JobId, Total, Workers);
 	TWeakObjectPtr<UBBPNetSubsystem> WeakThis(this);
 	TSharedPtr<FBBPMatchWork, ESPMode::ThreadSafe> Work = Job.Work;
 	Work->WorkersLeft = Workers;
@@ -1005,7 +1125,9 @@ void UBBPNetSubsystem::BeginMatching(int32 JobId, TArray<FBBPWantedTrack>&& Want
 			{
 				const FBBPWantedTrack& Item = Work->Wanted[Index];
 				FString MatchError;
-				const TArray<FBBPTrack> Candidates = RunListing(YtDlp, FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
+				const bool bLink = Item.Query.StartsWith(TEXT("https://")) || Item.Query.StartsWith(TEXT("http://"));
+				const TArray<FBBPTrack> Candidates = RunListing(YtDlp,
+					bLink ? Item.Query : FString::Printf(TEXT("ytsearch%d:%s"), SpotifyMatchCandidates, *Item.Query), MatchError);
 				TOptional<FBBPTrack> Match;
 				if (Candidates.Num() > 0)
 				{
@@ -1088,7 +1210,7 @@ void UBBPNetSubsystem::HandleMatchFinished(int32 JobId)
 		Job->Progress.Error = TEXT("No matches found");
 	}
 	QueueNewMatches(*Job);
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d finished: matched %d of %d Spotify tracks%s"), JobId, Job->Progress.Matched.Num(), Job->Progress.Total,
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Net: job %d finished: matched %d of %d songs%s"), JobId, Job->Progress.Matched.Num(), Job->Progress.Total,
 		Job->QueueInto.IsValid() ? TEXT(" (all queued)") : TEXT(""));
 	Job->OnProgress.ExecuteIfBound(Job->Progress);
 }

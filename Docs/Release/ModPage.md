@@ -43,7 +43,11 @@ Inspired by the PEAK mod sPEAKer.
   other link. MP3, AAC, OGG and HLS streams work, and so do `.pls`/`.m3u` station links and **YouTube live
   streams**. The station's name is filled in automatically, the song the station announces becomes the title
   (and updates as the station moves on). The **Radio** tab opens your station list: add a station by pasting
-  its stream address, and play, rename or remove saved ones (up to 50, YouTube live streams included).
+  its stream address, or a whole list of them from a file with **Import List**, and play, rename or remove saved
+  ones (up to 200, YouTube live streams included).
+- **Import playlists from a file.** **Import Playlist** queues every song in a text file (one "Artist - Title" or
+  YouTube/SoundCloud link per line), an `.m3u` playlist or a CSV export (e.g. Spotify via Exportify). Each song is
+  found on YouTube.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you

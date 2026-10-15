@@ -7,8 +7,12 @@
 
 class AFGBoomBoxPlayer;
 class UBBPLibrarySubsystem;
+
+namespace BBPImport
+{
+	struct FStation;
+}
 struct FBBPMatchJob;
-struct FBBPWantedTrack;
 
 // Kinds of links the search box understands.
 enum class EBBPLinkKind : uint8
@@ -27,6 +31,28 @@ enum class EBBPLinkKind : uint8
 DECLARE_DELEGATE_TwoParams(FBBPOnNetTracks, const TArray<FBBPTrack>& /*Tracks*/, const FString& /*Error*/);
 DECLARE_DELEGATE_TwoParams(FBBPOnNetText, const FString& /*Text*/, const FString& /*Error*/);
 DECLARE_DELEGATE_TwoParams(FBBPOnRadioTuned, const FBBPTrack& /*Station*/, const FString& /*Error*/);
+
+// One song to find on YouTube: search text (or a YouTube/SoundCloud link) and its length in seconds, 0 if unknown.
+struct FBBPWantedTrack
+{
+	FString Query;
+	float Duration = 0.f;
+};
+
+// Outcome of importing a station list.
+struct FBBPStationImportResult
+{
+	int32 Added = 0;
+	int32 AlreadySaved = 0;
+
+	// Stations left out because the list was full.
+	int32 NoRoom = 0;
+
+	// Lines that weren't usable stream addresses (including YouTube/SoundCloud/Spotify links and unreadable playlists).
+	int32 Unusable = 0;
+};
+
+DECLARE_DELEGATE_OneParam(FBBPOnStationsImported, const FBBPStationImportResult&);
 
 // Progress of matching a Spotify playlist or album on YouTube.
 struct FBBPMatchProgress
@@ -126,8 +152,13 @@ public:
 	// Returns true if a station with this track id is saved.
 	bool HasStation(const FString& StationId) const;
 
+	// Adds stations read from an imported list, in list order, to the front of the saved stations, without checking that
+	// they play. Station playlist (.pls/.m3u) addresses are read first to find their stream. Stations already saved keep
+	// their place and name; stations that don't fit are left out. Calls back on the game thread when done.
+	void ImportStations(const TArray<BBPImport::FStation>& Stations, FBBPOnStationsImported OnDone);
+
 	// How many stations are kept.
-	static constexpr int32 MaxStations = 50;
+	static constexpr int32 MaxStations = 200;
 
 	// Longest station name kept.
 	static constexpr int32 MaxStationNameLength = 80;
@@ -148,6 +179,9 @@ public:
 	// OnProgress is called on the game thread as matches arrive (in playlist order) and once more when finished.
 	// Returns the job id.
 	int32 StartSpotifyCollection(const FString& Url, FBBPOnMatchProgress OnProgress);
+
+	// Starts matching a list of songs on YouTube in the background, like StartSpotifyCollection. Returns the job id.
+	int32 StartSongList(TArray<FBBPWantedTrack>&& Songs, FBBPOnMatchProgress OnProgress);
 
 	// Queues every match of a running job into BoomBox's queue now, and each later match as it arrives, in playlist order.
 	// Keeps going after the caller goes away. Returns false if the job has already finished.

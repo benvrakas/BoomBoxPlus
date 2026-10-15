@@ -322,6 +322,17 @@ private:
 	void HandleClearQueue();
 
 	UFUNCTION()
+	void HandleImportPlaylist();
+
+	// Reads a song list file and starts finding and queueing its songs.
+	void ImportPlaylistFile(const FString& Path);
+
+	// Shows the progress of a playlist import; Skipped counts lines of the file that weren't songs.
+	void HandleImportProgress(const FBBPMatchProgress& Progress, const FString& FileName, int32 Skipped);
+
+	void SetImportStatus(const FText& Status, bool bError);
+
+	UFUNCTION()
 	void HandleCopyLink();
 
 	// When the link was last copied, so the button reads "Copied!" for LinkCopiedSeconds; -1 if never.
@@ -424,6 +435,14 @@ private:
 	// Note under the queue (empty queue, or how much of a long queue is shown).
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> QueueMessageText;
+
+	// Queues the songs in a list file the player picks.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> ImportPlaylistButton;
+
+	// Progress or result of the last playlist import.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ImportStatusText;
 
 	// Row widgets reused between rebuilds.
 	UPROPERTY(Transient)

@@ -31,6 +31,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBBPGameButton> AddButton;
 
+	// Adds every station in a list file the player picks.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBBPGameButton> ImportButton;
+
 	// Progress or result of the last Add.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> AddStatusText;
@@ -59,6 +63,12 @@ private:
 
 	UFUNCTION()
 	void HandleAddressCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleImport();
+
+	// Reads a station list file and adds its stations.
+	void ImportFile(const FString& Path);
 
 	void SetAddStatus(const FText& Status, bool bError);
 

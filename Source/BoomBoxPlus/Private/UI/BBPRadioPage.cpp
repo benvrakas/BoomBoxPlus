@@ -11,10 +11,13 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/GameInstance.h"
+#include "Misc/Paths.h"
+#include "Net/BBPImport.h"
 #include "Net/BBPNetSubsystem.h"
 #include "Net/BBPRadio.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistTypes.h"
+#include "UI/BBPFileDialog.h"
 #include "UI/BBPGameButton.h"
 #include "UI/BBPMusicPage.h"
 #include "UI/BBPStationRow.h"
@@ -43,6 +46,7 @@ void UBBPRadioPage::NativeOnInitialized()
 	}
 	if (AddButton) AddButton->OnClicked.AddDynamic(this, &UBBPRadioPage::HandleAdd);
 	if (AddressBox) AddressBox->OnTextCommitted.AddDynamic(this, &UBBPRadioPage::HandleAddressCommitted);
+	if (ImportButton) ImportButton->OnClicked.AddDynamic(this, &UBBPRadioPage::HandleImport);
 }
 
 void UBBPRadioPage::BuildDefaultLayout()
@@ -64,7 +68,12 @@ void UBBPRadioPage::BuildDefaultLayout()
 	AddressSlot->SetVerticalAlignment(VAlign_Center);
 	AddressSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	AddButton = MakeButton(WidgetTree, LOCTEXT("AddStationButton", "Add"));
-	AddRow->AddChildToHorizontalBox(AddButton)->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* AddButtonSlot = AddRow->AddChildToHorizontalBox(AddButton);
+	AddButtonSlot->SetVerticalAlignment(VAlign_Center);
+	AddButtonSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+	ImportButton = MakeButton(WidgetTree, LOCTEXT("ImportStations", "Import List"));
+	ImportButton->SetToolTipText(LOCTEXT("ImportStationsTip", "Add every station in a file: a .pls or .m3u playlist, or a text file with one station per line (a name and its stream address, e.g. separated by a tab)."));
+	AddRow->AddChildToHorizontalBox(ImportButton)->SetVerticalAlignment(VAlign_Center);
 	AddStatusText = MakeText(WidgetTree, 11, DimTextColor,
 		LOCTEXT("AddStationHelp", "A stream address is the link the station's own player plays, often ending in .mp3, .aac, .pls or .m3u. The station is checked, then saved to your list."));
 	AddStatusText->SetAutoWrapText(true);
@@ -210,6 +219,75 @@ void UBBPRadioPage::HandleAdd()
 		const FText Name = BBPWidgetStyle::ToDisplayText(Station.Title);
 		This->SetAddStatus(bAlreadySaved ? FText::Format(LOCTEXT("StationAlreadySaved", "{0} is already in your list."), Name)
 			: FText::Format(LOCTEXT("StationAdded", "Added {0}. Click its name to rename it."), Name), false);
+		This->Refresh();
+	}));
+}
+
+void UBBPRadioPage::HandleImport()
+{
+	TWeakObjectPtr<UBBPRadioPage> WeakThis(this);
+	const bool bShown = BBPFileDialog::OpenListFile(TEXT("Import radio stations"), [WeakThis](const FString& Path)
+	{
+		UBBPRadioPage* This = WeakThis.Get();
+		if (This && !Path.IsEmpty())
+		{
+			This->ImportFile(Path);
+		}
+	});
+	if (bShown)
+	{
+		SetAddStatus(LOCTEXT("ImportPicking", "Choose a station list in the window that opened (it may be behind the game)."), false);
+	}
+}
+
+void UBBPRadioPage::ImportFile(const FString& Path)
+{
+	UBBPNetSubsystem* Net = GetNet(this);
+	FString Text, Error;
+	if (!Net || !BBPImport::LoadListFile(Path, Text, Error))
+	{
+		SetAddStatus(FText::FromString(Error), true);
+		return;
+	}
+	const TArray<BBPImport::FStation> Stations = BBPImport::ParseStations(Text);
+	const FString FileName = FPaths::GetCleanFilename(Path);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: importing %d stations from '%s'"), Stations.Num(), *Path);
+	if (Stations.Num() == 0)
+	{
+		SetAddStatus(FText::Format(LOCTEXT("ImportNoStations", "No stream addresses found in {0}. Put one station per line: a name, then its http:// address."), FText::FromString(FileName)), true);
+		return;
+	}
+	SetAddStatus(FText::Format(LOCTEXT("ImportingStations", "Importing {0} stations from {1}..."), Stations.Num(), FText::FromString(FileName)), false);
+	if (ImportButton)
+	{
+		ImportButton->SetIsEnabled(false);
+	}
+	TWeakObjectPtr<UBBPRadioPage> WeakThis(this);
+	Net->ImportStations(Stations, FBBPOnStationsImported::CreateLambda([WeakThis, FileName](const FBBPStationImportResult& Result)
+	{
+		UBBPRadioPage* This = WeakThis.Get();
+		if (!This)
+		{
+			return;
+		}
+		if (This->ImportButton)
+		{
+			This->ImportButton->SetIsEnabled(true);
+		}
+		FString Message = FString::Printf(TEXT("Added %d station%s from %s."), Result.Added, Result.Added == 1 ? TEXT("") : TEXT("s"), *FileName);
+		if (Result.AlreadySaved > 0)
+		{
+			Message += FString::Printf(TEXT(" %d %s already in your list."), Result.AlreadySaved, Result.AlreadySaved == 1 ? TEXT("was") : TEXT("were"));
+		}
+		if (Result.NoRoom > 0)
+		{
+			Message += FString::Printf(TEXT(" %d didn't fit (the list holds %d)."), Result.NoRoom, UBBPNetSubsystem::MaxStations);
+		}
+		if (Result.Unusable > 0)
+		{
+			Message += FString::Printf(TEXT(" %d %s skipped (not a stream address, or its playlist couldn't be read)."), Result.Unusable, Result.Unusable == 1 ? TEXT("was") : TEXT("were"));
+		}
+		This->SetAddStatus(FText::FromString(Message), Result.Added == 0);
 		This->Refresh();
 	}));
 }

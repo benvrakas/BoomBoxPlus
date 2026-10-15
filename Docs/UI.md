@@ -74,7 +74,7 @@ slider + time, transport), a tab strip (Music, Radio, History) on a thin rule, t
 has two columns — search and results on the left (its header row carries the library status, Open Folder and
 Rescan), the queue on the right — and the link panel at the bottom.
 
-**Tabs** (1.4.1). `UBBPTabButton` (in `BBPGameButton.h`, made by `BBPWidgetStyle::MakeTab`): an upper-case label on
+**Tabs** (1.5.0). `UBBPTabButton` (in `BBPGameButton.h`, made by `BBPWidgetStyle::MakeTab`): an upper-case label on
 no background with a 2 px bar under it; `SetSelected` turns the label and bar orange. `ShowView` selects the shown
 view's tab. They replaced the Radio and History title-bar buttons, which hid while their view was shown, and Back,
 which went to the music view from Radio or History: Back now always goes to the player page, and the title always
@@ -279,7 +279,16 @@ The Radio page has:
   then `RememberStation`; it isn't played. YouTube links get a note that live streams are added by queuing them
   from the search box (they need yt-dlp's lookup, not `TuneRadio`); anything else that isn't a stream says so. A
   full list refuses new stations instead of dropping the oldest.
-- **Your stations (N of 50)**: a scrolling list of `UBBPStationRow`s, newest first. Each row's name is a text box:
+- **Import List** (1.5.0): opens the Windows Open dialog (`BBPFileDialog::OpenListFile`, see Playlist import
+  below) and adds every station in the chosen file with `UBBPNetSubsystem::ImportStations`: in file order, at the
+  front of the list, without probing each stream (a list of 50 would take minutes). `.pls`/`.m3u` station-playlist
+  addresses in the file are fetched to find their stream first. Stations already saved keep their place and name;
+  ones that don't fit are left out (unlike automatic saves, an import never drops saved stations). The status line
+  reports added / already saved / didn't fit / skipped. Parsing is `BBPImport::ParseStations`
+  (`Private/Net/BBPImport.cpp`): a `.pls` (`FileN=`, `TitleN=`), an `.m3u` (`#EXTINF:...,Name` above the address),
+  or one station per line, where the first http(s) address on the line is the stream and the rest of the line
+  (trimmed of tabs, commas, `|`, `-`, `=`, `:` and quotes) is the name. Repeated addresses count once.
+- **Your stations (N of 200)**: a scrolling list of `UBBPStationRow`s, newest first. Each row's name is a text box:
   Enter or clicking away renames (`UBBPMusicPage::RenameStation` → `UBBPNetSubsystem::RenameStation`, trimmed, at
   most 80 characters), Esc or an empty name puts it back. Under it the stream address; then **Play**
   (`PlayStation`) and **Remove** (`ForgetStation`). The station playing on this Boom Box (current entry, live, not
@@ -290,7 +299,29 @@ Stations are still saved automatically when a stream address tunes in from the s
 (a station or a YouTube live stream) is queued or played from the results (`UBBPTrackRow` calls
 `UBBPMusicPage::NoteQueued`). `RememberStation` keeps an existing station's place and its name, so the list doesn't
 reshuffle as it's used and a renamed station stays renamed. `UBBPNetSubsystem::MaxStations` went from 12 to 50 with
-the scrolling list; automatic saves still drop the oldest when it's full.
+the scrolling list, and to 200 with Import List (1.5.0); automatic saves still drop the oldest when it's full.
+
+**Playlist import** (1.5.0). **Import Playlist** in the Queue header opens the Open dialog and queues every song in
+the chosen file. `BBPImport::ParseSongs` reads:
+
+- a CSV or TSV whose first row names a title column (`Track Name`, `Title`, `Track`, `Song`, `Name`...), with an
+  optional artist column (any header containing "artist"; the first of a comma/semicolon list is used) and duration
+  column (`Duration (ms)` in ms, otherwise seconds or m:ss). This is Exportify's Spotify export.
+- an `.m3u`: the `#EXTINF` title (and length) of each entry, or the file name of a local path without one.
+- anything else, one song per line. List numbering (`1.`, `01 -`, `3)`) and bullets are dropped, as is a trailing
+  m:ss length, which is kept as the song's length. YouTube video and SoundCloud track links are used as they are;
+  other links and `#` / `//` comment lines are skipped.
+
+At most 1000 songs (the queue's limit) are taken. The songs go to `UBBPNetSubsystem::StartSongList`, the same
+background matching as a Spotify playlist (`BeginMatching`; a link is listed directly instead of searched), and
+`QueueJobInto` this Boom Box at once, so matches are queued in file order as they're found and the job carries on
+if the window is closed. A status line under the Queue header shows progress and then how many were queued, not
+found, or not songs.
+
+**The Open dialog** (`Private/UI/BBPFileDialog.cpp`) is the Win32 `GetOpenFileNameW` (links `comdlg32.lib`), owned by
+the game window so it opens on top of it. It runs on a thread of its own (COM initialized there) so the game, and
+the multiplayer session, keep running while it's open; the chosen path comes back on the game thread. Only one can be
+open at a time. In exclusive fullscreen Windows may minimise the game to show it, hence the hint in the status line.
 
 The Now Playing panel has three text lines: the title and the "Artist, Source" subtitle (the same as the vanilla
 page and the toast; see "One title and subtitle everywhere" above), the latter with a **Copy Link** button, and a

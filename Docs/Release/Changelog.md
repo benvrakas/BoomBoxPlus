@@ -1,7 +1,14 @@
 # Changelog
 
-## 1.4.1
+## 1.5.0
 
+- **Import a station list.** **Import List** on the Radio tab adds every station in a file at once: a `.pls` or
+  `.m3u` playlist, or a text file with one station per line (a name and its stream address, separated by a tab,
+  comma or " - "). Stations you already have are skipped. Your list now holds 200 stations (was 50).
+- **Import a playlist.** **Import Playlist** above the queue reads a file of songs and queues them all: a text file
+  with one song per line ("Artist - Title", or a YouTube or SoundCloud link), an `.m3u` playlist, or a CSV export
+  with title and artist columns (such as a Spotify playlist exported with Exportify). Each song is found on YouTube
+  and queued in order, and the first ones start playing while the rest are still being looked up.
 - **Tidier Custom Music page.** Music, Radio and History are now tabs under Now Playing, always in the same place,
   with the one you're on lit up (the Radio and History buttons used to disappear while you were on them). **Back**
   always goes back to the Boom Box player, and **Open Folder** and **Rescan** moved next to Search, since they're

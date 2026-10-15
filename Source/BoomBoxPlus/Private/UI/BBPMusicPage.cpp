@@ -20,6 +20,7 @@
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
 #include "UI/BBPNearbyBoomBoxRow.h"
+#include "UI/BBPFileDialog.h"
 #include "UI/BBPHistoryPage.h"
 #include "UI/BBPRadioPage.h"
 #include "Engine/GameInstance.h"
@@ -29,6 +30,7 @@
 #include "Misc/ScopeExit.h"
 #include "Library/BBPLibrarySubsystem.h"
 #include "Net/BBPNetSubsystem.h"
+#include "Net/BBPImport.h"
 #include "Net/BBPRadio.h"
 #include "Playback/BBPPlaybackController.h"
 #include "Playback/BBPAdaEasterEggs.h"
@@ -126,6 +128,7 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (ShuffleButton) ShuffleButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleShuffle);
 	if (RepeatButton) RepeatButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleRepeat);
 	if (ClearQueueButton) ClearQueueButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleClearQueue);
+	if (ImportPlaylistButton) ImportPlaylistButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleImportPlaylist);
 	if (CopyLinkButton) CopyLinkButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleCopyLink);
 	if (ListenModeButton) ListenModeButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleListenMode);
 	if (TapesButton) TapesButton->OnClicked.AddDynamic(this, &UBBPMusicPage::ShowTapeList);
@@ -364,8 +367,16 @@ void UBBPMusicPage::BuildDefaultLayout()
 	UTextBlock* QueueTitle = nullptr;
 	AddToRow(QueueHeader, MakeSectionHeader(WidgetTree, LOCTEXT("Queue", "Queue"), QueueTitle), true);
 	QueueHeaderText = QueueTitle;
+	ImportPlaylistButton = MakeButton(WidgetTree, LOCTEXT("ImportPlaylist", "Import Playlist"));
+	ImportPlaylistButton->SetToolTipText(LOCTEXT("ImportPlaylistTip", "Queue every song in a file: a text file with one song per line (\"Artist - Title\" or a YouTube/SoundCloud link), an .m3u playlist, or a CSV export with title and artist columns. Each song is found on YouTube."));
+	AddToRow(QueueHeader, ImportPlaylistButton, false);
 	ClearQueueButton = MakeButton(WidgetTree, LOCTEXT("ClearQueue", "Clear Queue"));
 	AddToRow(QueueHeader, ClearQueueButton, false, 0.f);
+
+	ImportStatusText = MakeText(WidgetTree, 11, TextColor);
+	ImportStatusText->SetAutoWrapText(true);
+	ImportStatusText->SetVisibility(ESlateVisibility::Collapsed);
+	QueueColumn->AddChildToVerticalBox(ImportStatusText)->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
 
 	QueueMessageText = MakeText(WidgetTree, 11, DimTextColor);
 	QueueMessageText->SetAutoWrapText(true);
@@ -1722,6 +1733,89 @@ void UBBPMusicPage::HandleCopyLink()
 void UBBPMusicPage::HandleClearQueue()
 {
 	UBBPBlueprintLibrary::RequestClearQueue(GetBoomBox());
+}
+
+void UBBPMusicPage::HandleImportPlaylist()
+{
+	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
+	const bool bShown = BBPFileDialog::OpenListFile(TEXT("Import a playlist"), [WeakThis](const FString& Path)
+	{
+		UBBPMusicPage* This = WeakThis.Get();
+		if (This && !Path.IsEmpty())
+		{
+			This->ImportPlaylistFile(Path);
+		}
+	});
+	if (bShown)
+	{
+		SetImportStatus(LOCTEXT("ImportPlaylistPicking", "Choose a playlist file in the window that opened (it may be behind the game)."), false);
+	}
+}
+
+void UBBPMusicPage::ImportPlaylistFile(const FString& Path)
+{
+	const UGameInstance* GameInstance = GetGameInstance();
+	UBBPNetSubsystem* Net = GameInstance ? GameInstance->GetSubsystem<UBBPNetSubsystem>() : nullptr;
+	FString Text, Error;
+	if (!Net || !BBPImport::LoadListFile(Path, Text, Error))
+	{
+		SetImportStatus(FText::FromString(Error), true);
+		return;
+	}
+	int32 Skipped = 0;
+	TArray<FBBPWantedTrack> Songs = BBPImport::ParseSongs(Text, Skipped);
+	const FString FileName = FPaths::GetCleanFilename(Path);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: importing playlist '%s': %d songs, %d lines skipped"), *Path, Songs.Num(), Skipped);
+	if (Songs.Num() == 0)
+	{
+		SetImportStatus(FText::Format(LOCTEXT("ImportNoSongs", "No songs found in {0}. Put one song per line, like \"Artist - Title\"."), FText::FromString(FileName)), true);
+		return;
+	}
+	EnsureCustomMusicLoaded();
+	TWeakObjectPtr<UBBPMusicPage> WeakThis(this);
+	const int32 JobId = Net->StartSongList(MoveTemp(Songs), FBBPOnMatchProgress::CreateLambda([WeakThis, FileName, Skipped](const FBBPMatchProgress& Progress)
+	{
+		if (UBBPMusicPage* This = WeakThis.Get())
+		{
+			This->HandleImportProgress(Progress, FileName, Skipped);
+		}
+	}));
+	Net->QueueJobInto(JobId, GetBoomBox());
+}
+
+void UBBPMusicPage::HandleImportProgress(const FBBPMatchProgress& Progress, const FString& FileName, int32 Skipped)
+{
+	if (!Progress.bFinished)
+	{
+		SetImportStatus(FText::FromString(FString::Printf(TEXT("Importing %s: looked up %d of %d songs, %d queued so far."),
+			*FileName, Progress.Processed, Progress.Total, Progress.Matched.Num())), false);
+		return;
+	}
+	if (Progress.Matched.Num() == 0)
+	{
+		SetImportStatus(FText::FromString(FString::Printf(TEXT("Couldn't import %s: %s."), *FileName, *Progress.Error)), true);
+		return;
+	}
+	FString Message = FString::Printf(TEXT("Imported %s: queued %d of %d songs."), *FileName, Progress.Matched.Num(), Progress.Total);
+	if (Progress.Matched.Num() < Progress.Total)
+	{
+		Message += FString::Printf(TEXT(" %d weren't found on YouTube."), Progress.Total - Progress.Matched.Num());
+	}
+	if (Skipped > 0)
+	{
+		Message += FString::Printf(TEXT(" Skipped %d line%s that %s songs."), Skipped, Skipped == 1 ? TEXT("") : TEXT("s"), Skipped == 1 ? TEXT("wasn't") : TEXT("weren't"));
+	}
+	SetImportStatus(FText::FromString(Message), false);
+}
+
+void UBBPMusicPage::SetImportStatus(const FText& Status, bool bError)
+{
+	if (ImportStatusText)
+	{
+		ImportStatusText->SetText(Status);
+		ImportStatusText->SetColorAndOpacity(FSlateColor(bError ? BBPWidgetStyle::AccentColor : BBPWidgetStyle::TextColor));
+		BBPWidgetStyle::SetShown(ImportStatusText, !Status.IsEmpty());
+	}
 }
 
 void UBBPMusicPage::HandleOpenFolder()
