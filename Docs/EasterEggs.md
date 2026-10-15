@@ -79,7 +79,13 @@ a third-party radio/lo-fi effect, Meter-driven ducking, reverb sends) and her vo
 recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each phrase): all of that is added live.
 
 - `D:/SFMod/Tools/ADA/make_bank.py <engine>` builds `Resources/Audio/ADA/BBP_ADA.bnk` (bank version 172, the game's)
-  from the dry speech in `raw/<engine>`: each line leveled to -20.7 LUFS (the loudness of the decoded ADA line),
+  from the dry speech in `raw/<engine>`: each line toned to match ADA's own recording and leveled to -20.7 LUFS (the
+  loudness of the decoded ADA line). The tone match: a linear-phase EQ from the measured third-octave difference
+  between a decoded game line and our raw TTS (her recordings have about 3 dB less at 200-250 Hz and far more air
+  above 9 kHz, which WaveNet's 24 kHz output lacks), an exciter that makes 9-13 kHz harmonics from the 3-9 kHz band,
+  and a 14 kHz low-pass (her recordings stop there). Afterwards ours is within about 2 dB of hers from 160 Hz to
+  11 kHz (it was up to 13 dB off). Only one line could be decoded for this: the others are streamed from the game's
+  IoStore archive (`.ucas`), which UnrealPak doesn't extract; their banks only hold a ~3 KB prefetch. Each line is then
   encoded to Opus with ffmpeg and repacked as a Wwise Opus `.wem` (fmt 0x3041, a `seek` chunk of u16 packet sizes, a
   `data` chunk of the packets), embedded in the bank. Its objects (one ActorMixer, then a Sound, a Play action and an
   Event per line) copy the layout of the game's `Play_VO_ADA_MILESTONE_2_1_0.bnk` with new ids; the mixer routes to
