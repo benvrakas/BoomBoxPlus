@@ -11,7 +11,7 @@ The GameFeature template additionally needs a `UGameFeatureData` asset created i
 is fully hand-authorable. It can be converted later if GameFeature actions become useful.
 
 `.uplugin` fields mirror what Alpakit's mod wizard writes (`ModWizardDefinition.cpp`): `SemVersion`,
-`GameVersion` (`>=` the CL in `Source/FactoryGame/currentVersion.txt`, currently 502094), and an SML
+`GameVersion` (`>=` the CL in `Source/FactoryGame/currentVersion.txt`, currently 513885), and an SML
 dependency `^3.12.0`.
 
 UE natively treats plugins under `<Project>/Mods/` as mod plugins, so no `.uproject` entry is needed.

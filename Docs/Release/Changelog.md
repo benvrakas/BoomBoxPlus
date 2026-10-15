@@ -12,6 +12,7 @@
 
 **Good to know**
 
+- Needs the October 2026 game update (build 513885) or newer.
 - Everyone in a multiplayer session needs 1.4.0, as usual.
 
 ## 1.3.9
