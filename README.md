@@ -52,7 +52,8 @@ The settings in **Mods → BoomBoxPlus**.
 ## Building
 
 1. Run `Tools/FetchTools.ps1` to download the pinned yt-dlp and FFmpeg into `Resources/Tools/` (not
-   committed).
+   committed). The ADA easter-egg voice lines (`Resources/Audio/ADA/`) aren't committed either, so a build from
+   this repository has no easter eggs; see [`Docs/EasterEggs.md`](Docs/EasterEggs.md).
 2. Build and package with Alpakit (or the `PackagePlugin` UAT command) for the `FactoryGameSteam` target.
    See [`Docs/Packaging.md`](Docs/Packaging.md).
 

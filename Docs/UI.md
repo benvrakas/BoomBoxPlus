@@ -294,7 +294,8 @@ native `UFGInteractWidget::SetDefaultFocusWidget` with the play/pause button and
 `UBBPHudOverlay` is added to the viewport (Z-order -10, hit-test invisible) by the playback controller on
 every non-dedicated machine. It shows:
 
-- the current lyric line, and
+- the current lyric line, or while ADA speaks, "ADA: <subtitle>" in orange instead (wrapped at 1000 px; see
+  EasterEggs.md), and
 - a "NOW PLAYING" card 4 px above it, for 4 s when the track changes (fading out over the last 0.5 s),
 
 stacked in one vertical box whose bottom edge is anchored at (0.5, 0.84), so the gap between them is the same

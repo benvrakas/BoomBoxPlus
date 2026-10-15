@@ -5,6 +5,9 @@
 - Engine `D:\SFMod\UnrealEngine-CSS` (5.6.1-CSS), starter project `D:\SFMod\SatisfactoryModLoader`, Wwise
   integration `2023.1.14.3555` (see the plan for the pinning story).
 - Tools: `powershell -ExecutionPolicy Bypass -File Tools\FetchTools.ps1` (fills `Resources/Tools/`).
+- ADA lines: `Resources/Audio/ADA/` isn't committed. Fill it with `python ada_voice.py install google` from
+  `D:\SFMod\Tools\ADA` before packaging a release; without it the mod builds and runs, just without the easter
+  eggs (see EasterEggs.md).
 - Run build commands from `.bat` files: Git Bash rewrites `/`-prefixed arguments (e.g. `/E` → `E:/`).
 
 ## Compile-check (editor target, ~30 s incremental)

@@ -47,7 +47,8 @@ Inspired by the PEAK mod sPEAKer.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
 - **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
-  carry it or place it.
+  carry it or place it. Drive or fly past one and its pitch bends like a passing car (the **Doppler effect**, with a
+  deadzone so walking and running around don't change it; adjustable or off in the settings).
 - **Your own volume for each Boom Box.** A "My Volume" slider sits next to the transport controls, from 0 to 200%
   (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type an exact
   value. It's yours alone and set per Boom Box: two players with Boom Boxes side by side can each turn the other's
@@ -70,6 +71,8 @@ Inspired by the PEAK mod sPEAKer.
   when it stops.
 - **Looks like Satisfactory.** Built from the game's own buttons, fonts and colours. The Boom Box's own
   screen follows along too, with the song, its source and a working progress bar.
+- **ADA is listening.** Now and then she has something to say about your music. Only you hear her, and she can
+  be turned off.
 
 ### Getting started
 

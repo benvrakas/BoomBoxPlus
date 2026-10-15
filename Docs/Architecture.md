@@ -1,7 +1,8 @@
 # Architecture
 
 Detailed notes per area: [Decoders.md](Decoders.md), [Streaming.md](Streaming.md), [Library.md](Library.md),
-[Multiplayer.md](Multiplayer.md), [UI.md](UI.md), [NetSources.md](NetSources.md), [Radio.md](Radio.md), [Debugging.md](Debugging.md).
+[Multiplayer.md](Multiplayer.md), [UI.md](UI.md), [NetSources.md](NetSources.md), [Radio.md](Radio.md),
+[EasterEggs.md](EasterEggs.md), [Packaging.md](Packaging.md), [Debugging.md](Debugging.md).
 
 ## Plugin type
 
