@@ -8,10 +8,18 @@ class ABBPMusicChannel;
 class UAudioComponent;
 class UBBPPlaybackController;
 class UBBPStreamingSoundWave;
+class UFGAudioMessage;
+class UFGMessage;
+class UFGMessageSender;
 
 // Now and then ADA comments on what the local player is listening to (the AdaEasterEggs setting). Lines and subtitles
 // come from Resources/Audio/ADA (lines.json and <name>.ogg). Each line plays at most once a session, never within
 // MinGapSeconds of another, only on this machine.
+//
+// A line is shown like ADA's own messages: queued in the game's message box as a runtime UFGMessage from ADA's sender
+// (which shows her box and plays her jingle), with the voice clip started when the box starts playback
+// (NotifyAudioMessageStarted). If the box doesn't show it in time, the clip plays with ADA's jingle and the mod's own
+// subtitle instead.
 UCLASS()
 class BOOMBOXPLUS_API UBBPAdaEasterEggs : public UObject
 {
@@ -25,7 +33,19 @@ public:
 	// Called when this player opens a Custom Music page.
 	void NotifyMusicPageOpened();
 
-	// What ADA is saying, for the subtitle; empty when she isn't speaking.
+	// Called (from a hook) whenever the game's message box starts playing a message.
+	static void NotifyAudioMessageStarted(UFGAudioMessage* AudioMessage);
+
+	// Plays Name now, ignoring the once-a-session rule and the gap between lines (the /ada chat command).
+	bool PlayNow(const FString& Name);
+
+	// Names of the loaded lines.
+	TArray<FString> GetLineNames() const;
+
+	// Multiplier on ADA's voice volume, on top of the game's Master x Dialogue sliders.
+	static float VoiceGain;
+
+	// What the mod's own subtitle shows (only when the game's message box couldn't show the line); empty otherwise.
 	const FString& GetSubtitle() const { return Subtitle; }
 
 	// Multiplier on Custom Music while ADA speaks (1 when she doesn't).
@@ -33,10 +53,20 @@ public:
 
 private:
 	// Plays the line called Name, with SubtitleText if given instead of its own. Returns false if eggs are off, the line
-	// already played this session, is missing, or another line is too recent (unless bIgnoreGap) or still speaking.
-	bool TryPlay(const FString& Name, const FString& SubtitleText = FString(), bool bIgnoreGap = false);
+	// already played this session (unless bForce), is missing, another line is too recent (unless bIgnoreGap or bForce),
+	// a line or a game message is already playing, or the game window is in the background.
+	bool TryPlay(const FString& Name, const FString& SubtitleText = FString(), bool bIgnoreGap = false, bool bForce = false);
+
+	// Starts the queued line's voice clip. bOwnSubtitle shows the mod's subtitle, bJingle plays ADA's jingle first.
+	void StartVoice(bool bOwnSubtitle, bool bJingle);
 	void StopLine();
 	void LoadLines();
+
+	// The game's message box, or null (no HUD yet, or a dedicated server).
+	class UFGGameUI* GetGameUI() const;
+
+	// ADA's message sender class, loaded on first use.
+	TSubclassOf<UFGMessageSender> GetAdaSender();
 
 	// Idle while listening (idle, then idle2 if still idle).
 	void CheckIdle(float DeltaSeconds, const ABBPMusicChannel* Channel);
@@ -56,16 +86,38 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBBPStreamingSoundWave> Wave;
 
+	// The message queued in the game's message box for the line about to play, until its voice starts.
+	UPROPERTY()
+	TObjectPtr<UFGMessage> PendingMessage;
+
+	UPROPERTY()
+	TSubclassOf<UFGMessageSender> AdaSender;
+
+	// The message box widget showing our line, to log when it closes.
+	TWeakObjectPtr<UFGAudioMessage> ShownBox;
+	double ShownBoxSince = 0.0;
+
 	// Line name -> subtitle, from lines.json.
 	TMap<FString, FString> Subtitles;
 	FString AudioDir;
 	TSet<FString> Played;
 
-	// FPlatformTime::Seconds() when the last line started.
+	// The line queued or playing: its name, subtitle, clip and clip format.
+	FString LineName;
+	FString LineText;
+	FString LinePath;
+	int32 LineSampleRate = 0;
+	int32 LineChannels = 0;
+	float LineDuration = 0.f;
+	double PendingSince = 0.0;
+
+	// FPlatformTime::Seconds() when the last line was queued or started.
 	double LastLineTime = 0.0;
 
 	FString Subtitle;
 	float LineTimeLeft = 0.f;
+	// Seconds before the voice starts after the jingle (fallback only).
+	float VoiceDelay = 0.f;
 	float MusicDuck = 1.f;
 
 	FVector IdleLocation = FVector::ZeroVector;
@@ -82,4 +134,7 @@ private:
 	int32 ConsecutivePlays = 0;
 
 	float VolumeCheckTimer = 0.f;
+
+	// Every live instance, for NotifyAudioMessageStarted.
+	static TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> Instances;
 };

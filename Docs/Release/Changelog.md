@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0
+
+- **ADA sounds like ADA.** Her easter-egg lines now come in her own message box, with her usual jingle first, and
+  at the same volume as her other lines (they were louder before, and showed as a line of text instead).
+
+**Good to know**
+
+- Everyone in a multiplayer session needs 1.4.0, as usual.
+
 ## 1.3.9
 
 - **ADA has opinions.** Now and then she has something to say about what you're listening to, and how. Only you hear

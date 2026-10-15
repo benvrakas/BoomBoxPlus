@@ -5,11 +5,13 @@
 #include "FGBoomboxListenerInterface.h"
 #include "FGUnlockSubsystem.h"
 #include "Patching/NativeHookManager.h"
+#include "Playback/BBPAdaEasterEggs.h"
 #include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Tape/BBPCustomMusicTape.h"
 #include "UI/BBPMusicPage.h"
+#include "UI/Message/FGAudioMessage.h"
 
 namespace
 {
@@ -215,5 +217,11 @@ void InstallBBPHooks()
 			Self->HasAuthority() ? TEXT("server") : TEXT("client"), *GetNameSafe(Self->GetCurrentTape().Get()));
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, LoadTapeNow"));
+	// The game's message box starting a message: an ADA easter-egg line waiting for it starts its voice clip.
+	SUBSCRIBE_METHOD_AFTER(UFGAudioMessage::StartPlayback, [](UFGAudioMessage* Self)
+	{
+		UBBPAdaEasterEggs::NotifyAudioMessageStarted(Self);
+	});
+
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, LoadTapeNow, UFGAudioMessage::StartPlayback"));
 }

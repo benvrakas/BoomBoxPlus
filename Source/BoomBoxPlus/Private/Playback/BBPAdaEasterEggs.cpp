@@ -1,4 +1,5 @@
 #include "Playback/BBPAdaEasterEggs.h"
+#include "AkAudioEvent.h"
 #include "Audio/BBPDecoder.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "BBPConfig.h"
@@ -6,6 +7,7 @@
 #include "Components/AudioComponent.h"
 #include "Dom/JsonObject.h"
 #include "FGBoomBoxPlayer.h"
+#include "FGHUD.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -13,18 +15,33 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Narrative/FGMessage.h"
 #include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Playlist/BBPPlaylistTypes.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "UI/FGGameUI.h"
+#include "UI/Message/FGAudioMessage.h"
+#include "UI/Message/FGMessageSender.h"
+
+float UBBPAdaEasterEggs::VoiceGain = 1.f;
+TArray<TWeakObjectPtr<UBBPAdaEasterEggs>> UBBPAdaEasterEggs::Instances;
 
 namespace
 {
 	// Shortest time between two lines, and before the first one after loading.
 	constexpr double MinGapSeconds = 600.0;
 	constexpr double FirstLineDelaySeconds = 60.0;
+
+	// A line queued in the game's message box that hasn't started by then plays without the box.
+	constexpr double BoxTimeoutSeconds = 8.0;
+
+	// Fallback only: how long ADA's jingle plays before the voice starts.
+	constexpr float JingleSeconds = 1.2f;
+
+	const TCHAR* AdaSenderPath = TEXT("/Game/FactoryGame/Interface/UI/Message/Sender/Sender_ADA.Sender_ADA_C");
 
 	constexpr float IdleSeconds1 = 300.f;
 	constexpr float IdleSeconds2 = 900.f;
@@ -64,12 +81,15 @@ void UBBPAdaEasterEggs::Initialize(UBBPPlaybackController* InController)
 {
 	Controller = InController;
 	LastLineTime = FPlatformTime::Seconds() - MinGapSeconds + FirstLineDelaySeconds;
+	Instances.RemoveAll([](const TWeakObjectPtr<UBBPAdaEasterEggs>& Instance) { return !Instance.IsValid(); });
+	Instances.Add(this);
 	LoadLines();
 }
 
 void UBBPAdaEasterEggs::Shutdown()
 {
 	StopLine();
+	Instances.RemoveAll([this](const TWeakObjectPtr<UBBPAdaEasterEggs>& Instance) { return !Instance.IsValid() || Instance.Get() == this; });
 }
 
 void UBBPAdaEasterEggs::LoadLines()
@@ -100,16 +120,71 @@ void UBBPAdaEasterEggs::LoadLines()
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: %d easter-egg lines"), Subtitles.Num());
 }
 
+TArray<FString> UBBPAdaEasterEggs::GetLineNames() const
+{
+	TArray<FString> Names;
+	Subtitles.GetKeys(Names);
+	Names.Sort();
+	return Names;
+}
+
+UFGGameUI* UBBPAdaEasterEggs::GetGameUI() const
+{
+	const APlayerController* PlayerController = Controller ? UGameplayStatics::GetPlayerController(Controller, 0) : nullptr;
+	const AFGHUD* Hud = PlayerController ? Cast<AFGHUD>(PlayerController->GetHUD()) : nullptr;
+	return Hud ? Hud->GetGameUI() : nullptr;
+}
+
+TSubclassOf<UFGMessageSender> UBBPAdaEasterEggs::GetAdaSender()
+{
+	if (!AdaSender)
+	{
+		AdaSender = TSoftClassPtr<UFGMessageSender>(FSoftObjectPath(AdaSenderPath)).LoadSynchronous();
+		if (!AdaSender)
+		{
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: can't load ADA's message sender '%s'"), AdaSenderPath);
+		}
+	}
+	return AdaSender;
+}
+
 void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 {
+	const double Now = FPlatformTime::Seconds();
+	if (PendingMessage && Now - PendingSince > BoxTimeoutSeconds)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: the message box didn't start '%s' within %.0f s; playing it with the mod's own subtitle"), *LineName, BoxTimeoutSeconds);
+		StartVoice(true, true);
+	}
+	if (ShownBox.IsValid() || ShownBoxSince > 0.0)
+	{
+		UFGGameUI* GameUI = GetGameUI();
+		if (!ShownBox.IsValid() || !GameUI || GameUI->GetActiveAudioMessage() != ShownBox.Get())
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message box closed after %.1f s (voice clip %.1f s)"), Now - ShownBoxSince, LineDuration);
+			ShownBox = nullptr;
+			ShownBoxSince = 0.0;
+		}
+	}
 	if (Wave)
 	{
-		LineTimeLeft -= DeltaSeconds;
+		if (VoiceDelay > 0.f)
+		{
+			VoiceDelay -= DeltaSeconds;
+			if (VoiceDelay <= 0.f && Component)
+			{
+				Component->Play();
+			}
+		}
+		else
+		{
+			LineTimeLeft -= DeltaSeconds;
+		}
 		if (Component)
 		{
-			Component->SetVolumeMultiplier(Controller && !Controller->IsMutedInBackground() ? Controller->GetVoiceVolumeScale() : 0.f);
+			Component->SetVolumeMultiplier(Controller && !Controller->IsMutedInBackground() ? Controller->GetVoiceVolumeScale() * VoiceGain : 0.f);
 		}
-		if (LineTimeLeft <= 0.f || Wave->IsFinished() || Wave->HasFailed())
+		if (VoiceDelay <= 0.f && (LineTimeLeft <= 0.f || Wave->IsFinished() || Wave->HasFailed()))
 		{
 			StopLine();
 		}
@@ -140,12 +215,45 @@ void UBBPAdaEasterEggs::NotifyMusicPageOpened()
 	}
 }
 
-bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText, bool bIgnoreGap)
+bool UBBPAdaEasterEggs::PlayNow(const FString& Name)
+{
+	return TryPlay(Name, FString(), true, true);
+}
+
+void UBBPAdaEasterEggs::NotifyAudioMessageStarted(UFGAudioMessage* AudioMessage)
+{
+	const UFGMessage* Message = AudioMessage ? AudioMessage->GetMessage() : nullptr;
+	if (!Message)
+	{
+		return;
+	}
+	for (const TWeakObjectPtr<UBBPAdaEasterEggs>& Instance : Instances)
+	{
+		UBBPAdaEasterEggs* Eggs = Instance.Get();
+		if (Eggs && Eggs->PendingMessage == Message)
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: message box started '%s' %.1f s after queuing; starting the voice"), *Eggs->LineName, FPlatformTime::Seconds() - Eggs->PendingSince);
+			Eggs->ShownBox = AudioMessage;
+			Eggs->ShownBoxSince = FPlatformTime::Seconds();
+			Eggs->StartVoice(false, false);
+			return;
+		}
+	}
+}
+
+bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText, bool bIgnoreGap, bool bForce)
 {
 	const double Now = FPlatformTime::Seconds();
 	const FString* Text = Subtitles.Find(Name);
-	if (!Controller || !Text || Wave || Played.Contains(Name) || (!bIgnoreGap && Now - LastLineTime < MinGapSeconds)
+	if (!Controller || !Text || Wave || PendingMessage || (!bForce && Played.Contains(Name))
+		|| (!bForce && !bIgnoreGap && Now - LastLineTime < MinGapSeconds)
 		|| Controller->IsMutedInBackground() || !UBBPConfig::GetBool(Controller, UBBPConfig::AdaEasterEggsKey, true))
+	{
+		return false;
+	}
+	UFGGameUI* GameUI = GetGameUI();
+	// ADA is already talking (one of the game's own messages): this line waits for another chance.
+	if (GameUI && GameUI->GetActiveAudioMessage())
 	{
 		return false;
 	}
@@ -158,35 +266,89 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 		Played.Add(Name);
 		return false;
 	}
-	const int32 SampleRate = Probe.GetSampleRate();
-	const int32 Channels = Probe.GetChannels();
-	const float Duration = Probe.GetDurationSeconds();
+	LineName = Name;
+	LineText = SubtitleText.IsEmpty() ? *Text : SubtitleText;
+	LinePath = Path;
+	LineSampleRate = Probe.GetSampleRate();
+	LineChannels = Probe.GetChannels();
+	LineDuration = Probe.GetDurationSeconds();
 	Probe.Close();
+	Played.Add(Name);
+	LastLineTime = Now;
 
+	const TSubclassOf<UFGMessageSender> Sender = GetAdaSender();
+	if (!GameUI || !Sender)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: no game message box; playing '%s' with the mod's own subtitle"), *Name);
+		StartVoice(true, Sender != nullptr);
+		return true;
+	}
+
+	// A legacy-style message: its dialogue has no Wwise audio, and the subtitle stays up for the clip's length.
+	const FText Line = FText::FromString(LineText);
+	FMessageSubtitle MessageSubtitle(Line, Sender, 0.f, nullptr);
+	MessageSubtitle.TimeOnScreen = LineDuration;
+	FMessageDialogue Dialogue;
+	Dialogue.MessageSubtitles = { MessageSubtitle };
+	UFGMessage* Message = NewObject<UFGMessage>(this);
+	Message->mTitle = FText::FromString(TEXT("ADA"));
+	Message->mMessage = Line;
+	Message->mSubtitles = { MessageSubtitle };
+	Message->mMessageSharing = EMessageSharing::EMS_NeverShare;
+	Message->mCanBeQueued = true;
+	Message->mCanBeRepeated = true;
+	Message->mCanInterrupt = false;
+	Message->mPlayInterruptMessage = false;
+	Message->mBlockedByCooldown = false;
+	Message->mIsLegacyMessage = true;
+	Message->mSenderClass = Sender.Get();
+	Message->mDialogueData = { Dialogue };
+	Message->mSubtitleTimeMultiplier = LineDuration / FMath::Max(1, LineText.Len());
+	PendingMessage = Message;
+	PendingSince = Now;
+	GameUI->AddPendingMessages({ Message });
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: queued '%s' (%.1f s) in the game's message box"), *Name, LineDuration);
+	return true;
+}
+
+void UBBPAdaEasterEggs::StartVoice(bool bOwnSubtitle, bool bJingle)
+{
+	PendingMessage = nullptr;
 	Wave = NewObject<UBBPStreamingSoundWave>(this);
-	if (!Wave->StartStream(Path, SampleRate, Channels, 0.f))
+	if (!Wave->StartStream(LinePath, LineSampleRate, LineChannels, 0.f))
 	{
 		Wave = nullptr;
-		Played.Add(Name);
-		return false;
+		return;
 	}
-	Component = UGameplayStatics::CreateSound2D(Controller, Wave, Controller->GetVoiceVolumeScale(), 1.f, 0.f, nullptr, false, false);
+	Component = UGameplayStatics::CreateSound2D(Controller, Wave, Controller->GetVoiceVolumeScale() * VoiceGain, 1.f, 0.f, nullptr, false, false);
 	if (!Component)
 	{
 		StopLine();
-		return false;
+		return;
 	}
-	Component->Play();
-	Played.Add(Name);
-	LastLineTime = Now;
-	LineTimeLeft = Duration + 0.5f;
-	Subtitle = SubtitleText.IsEmpty() ? *Text : SubtitleText;
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: playing '%s' (%.1f s)"), *Name, Duration);
-	return true;
+	VoiceDelay = 0.f;
+	if (bJingle)
+	{
+		const UFGMessageSender* SenderDefaults = AdaSender ? AdaSender->GetDefaultObject<UFGMessageSender>() : nullptr;
+		if (SenderDefaults && SenderDefaults->mMessageJingle)
+		{
+			const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Controller, 0);
+			SenderDefaults->mMessageJingle->PostOnActor(Pawn, FOnAkPostEventCallback(), 0, false);
+			VoiceDelay = JingleSeconds;
+		}
+	}
+	if (VoiceDelay <= 0.f)
+	{
+		Component->Play();
+	}
+	LineTimeLeft = LineDuration + 0.5f;
+	Subtitle = bOwnSubtitle ? LineText : FString();
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: playing '%s' (%.1f s%s)"), *LineName, LineDuration, bOwnSubtitle ? TEXT(", own subtitle") : TEXT(""));
 }
 
 void UBBPAdaEasterEggs::StopLine()
 {
+	PendingMessage = nullptr;
 	if (Component)
 	{
 		Component->Stop();
@@ -200,6 +362,7 @@ void UBBPAdaEasterEggs::StopLine()
 	}
 	Subtitle.Reset();
 	LineTimeLeft = 0.f;
+	VoiceDelay = 0.f;
 }
 
 void UBBPAdaEasterEggs::CheckIdle(float DeltaSeconds, const ABBPMusicChannel* Channel)
