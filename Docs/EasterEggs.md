@@ -60,9 +60,16 @@ without audio and the clip plays alongside it:
 
 The clip streams through a `UBBPStreamingSoundWave` on a 2D `UAudioComponent`, at the game's Master x Dialogue
 sliders (`RTPC.VO_Bus_Volume`, like ADA's own messages) times `VoiceGain`. The Music and Boom Box sliders don't affect
-it. `VoiceGain` defaults to 5, matched by ear against the game's own ADA lines in game (Master slider at 0.25; 4 was a
-little too quiet). That the match needs about 1/Master suggests the game's Master slider lowers its voice lines far less
-than a straight multiply does; checking the match at other Master settings is still to do. While a line plays, Custom
+it. `VoiceGain` defaults to 5, matched by ear against the game's own ADA lines in game (4 was a little too quiet).
+
+How the game sets its voice volume, from its `Init.bnk` (Wwise bank version 172, extracted with UnrealPak from
+`FactoryGame-Windows.pak`; RTPC ids are FNV-1 hashes of the lowercase names): `Menu_Volume_Master` and
+`VO_Bus_Volume` (the Dialogue slider) both map to bus volume through linear curves with dB scaling, stored as
+(0, -1) to (1, 0), i.e. a gain equal to the slider value, the same straight multiply the mod uses. So the two paths
+differ only by a constant (how loud ADA's recordings are mastered, the voice bus level, and Unreal's output level
+against Wwise's), which `VoiceGain` absorbs, and a match at one slider setting holds at all of them. ADA's own media is
+Wwise Opus (codec 0x140001, streamed `.wem`), which neither our decoders nor the bundled ffmpeg read, so its loudness
+wasn't measured directly. While a line plays, Custom
 Music fades to 20% (`GetMusicDuck`, applied in `SyncEmitters`).
 
 ## Testing: the /ada chat command
