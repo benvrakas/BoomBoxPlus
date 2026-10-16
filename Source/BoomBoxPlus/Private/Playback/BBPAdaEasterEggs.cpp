@@ -13,6 +13,8 @@
 #include "Dom/JsonObject.h"
 #include "FGBoomBoxPlayer.h"
 #include "FGHUD.h"
+#include "FGPlayerState.h"
+#include "FGStorySubsystem.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
@@ -135,6 +137,38 @@ namespace
 	// Another player this close to a full-volume Boom Box (cm).
 	constexpr float VolumeNeighbourDistance = 3000.f;
 	constexpr float VolumeCheckInterval = 1.f;
+
+	// Seconds between removals of the mod's lines from the game's saved lists of played messages.
+	constexpr float PlayedCleanupInterval = 5.f;
+
+	// Removes messages made by UBBPAdaEasterEggs from Owner's array property PropertyName; returns how many.
+	int32 RemoveEasterEggMessages(UObject* Owner, const TCHAR* PropertyName)
+	{
+		FArrayProperty* Property = Owner ? FindFProperty<FArrayProperty>(Owner->GetClass(), PropertyName) : nullptr;
+		FObjectPropertyBase* Inner = Property ? CastField<FObjectPropertyBase>(Property->Inner) : nullptr;
+		if (!Inner)
+		{
+			static TSet<FString> Reported;
+			if (Owner && !Reported.Contains(PropertyName))
+			{
+				Reported.Add(PropertyName);
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: %s has no message list '%s'; its lines may stay in the save"), *Owner->GetClass()->GetName(), PropertyName);
+			}
+			return 0;
+		}
+		FScriptArrayHelper Array(Property, Property->ContainerPtrToValuePtr<void>(Owner));
+		int32 Removed = 0;
+		for (int32 i = Array.Num() - 1; i >= 0; --i)
+		{
+			const UObject* Message = Inner->GetObjectPropertyValue(Array.GetRawPtr(i));
+			if (Message && Message->GetTypedOuter<UBBPAdaEasterEggs>())
+			{
+				Array.RemoveValues(i, 1);
+				++Removed;
+			}
+		}
+		return Removed;
+	}
 
 	constexpr float DuckLevel = 0.2f;
 	constexpr float DuckFadeSeconds = 0.3f;
@@ -329,6 +363,13 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 	const float DuckTarget = IsSpeaking() ? DuckLevel : 1.f;
 	MusicDuck = FMath::FInterpConstantTo(MusicDuck, DuckTarget, DeltaSeconds, (1.f - DuckLevel) / DuckFadeSeconds);
 
+	PlayedCleanupTimer -= DeltaSeconds;
+	if (PlayedCleanupTimer <= 0.f)
+	{
+		PlayedCleanupTimer = PlayedCleanupInterval;
+		RemoveFromPlayedMessages();
+	}
+
 	if (!Controller || Subtitles.Num() == 0)
 	{
 		return;
@@ -341,6 +382,24 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 	{
 		VolumeCheckTimer = VolumeCheckInterval;
 		CheckVolume();
+	}
+}
+
+void UBBPAdaEasterEggs::RemoveFromPlayedMessages()
+{
+	if (!Controller)
+	{
+		return;
+	}
+	const APlayerController* PlayerController = UGameplayStatics::GetPlayerController(Controller, 0);
+	int32 Removed = RemoveEasterEggMessages(PlayerController ? PlayerController->GetPlayerState<AFGPlayerState>() : nullptr, TEXT("mPlayedMessages"));
+	if (Controller->GetWorld() && Controller->GetWorld()->GetNetMode() != NM_Client)
+	{
+		Removed += RemoveEasterEggMessages(AFGStorySubsystem::Get(Controller->GetWorld()), TEXT("mAllPlayedMessages"));
+	}
+	if (Removed > 0)
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: took %d easter-egg line(s) out of the game's saved played messages"), Removed);
 	}
 }
 

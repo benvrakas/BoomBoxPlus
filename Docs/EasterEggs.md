@@ -114,6 +114,17 @@ How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (Un
 encrypted); `Init.bnk` holds the buses, effects and RTPC curves; ADA's event bank holds her Sound and ActorMixer, whose
 ids lead to her bus. Decoding a line: `.wem` rewrapped as Ogg Opus (the reverse of the builder) and decoded with ffmpeg.
 
+## Keeping the lines out of the save (1.5.1)
+
+When the message box plays a message, the game records it in two saved arrays: the player's
+`AFGPlayerState::mPlayedMessages` (the message codex) and, on the server, `AFGStorySubsystem::mAllPlayedMessages`.
+Our messages are runtime `UFGMessage` objects (outer: `UBBPAdaEasterEggs`), so the save stored their object paths and
+every later load listed them under "Unknown Objects" (a save with 9 lines played gave 9 warnings). Every 5 s,
+`RemoveFromPlayedMessages` removes any entry whose outer chain includes a `UBBPAdaEasterEggs` from both arrays,
+found by reflection (`FindFProperty<FArrayProperty>`, so no access transformer), the story subsystem's only on the
+server. Saves made before 1.5.1 still hold the old entries; whether the game drops them when it saves again hasn't
+been checked.
+
 ## Testing: the /ada chat command
 
 `ABBPAdaChatCommand` (registered in `UBBPGameWorldModule::mChatCommands`): `/ada <line>` plays a line now, ignoring

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1
+
+- **No more ADA leftovers in your save.** The game keeps a saved list of every message ADA has played, and the mod's
+  easter-egg lines ended up in it. Because those lines only exist while the game runs, every load afterwards logged
+  a warning for each one. The mod now takes its lines back out of that list, so saves stay clean.
+
 ## 1.5.0
 
 - **Import a station list.** **Import List** on the Radio tab adds every station in a file at once: a `.pls` or

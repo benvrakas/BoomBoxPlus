@@ -70,6 +70,10 @@ private:
 	// Loads BBP_ADA.bnk into Wwise, once per game session.
 	void LoadBank();
 
+	// Takes the mod's lines out of the game's lists of played messages, which are saved: the lines are made at runtime,
+	// so a save holding them warns about unknown objects on every load.
+	void RemoveFromPlayedMessages();
+
 	// True while a line's voice plays, through either path.
 	bool IsSpeaking() const { return Wave != nullptr || WwisePlayingId != 0; }
 	void StopLine();
@@ -147,6 +151,7 @@ private:
 	int32 ConsecutivePlays = 0;
 
 	float VolumeCheckTimer = 0.f;
+	float PlayedCleanupTimer = 0.f;
 
 	// Wwise playing id of the voice posted from the bank, or 0.
 	uint32 WwisePlayingId = 0;
