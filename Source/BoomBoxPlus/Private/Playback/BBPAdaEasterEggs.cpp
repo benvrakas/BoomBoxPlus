@@ -374,14 +374,21 @@ void UBBPAdaEasterEggs::Tick(float DeltaSeconds)
 	{
 		return;
 	}
-	const ABBPMusicChannel* Channel = Controller->GetAudibleChannel(true);
+	// Every line is about the Boom Box the local player is holding; linked Boom Boxes share a channel, so each player
+	// holding one of them hears the line on their own game.
+	const AFGBoomBoxPlayer* Held = GetHeldBoomBox();
+	const ABBPMusicChannel* Channel = Held ? Controller->GetPlaylist()->FindChannel(Held) : nullptr;
+	if (Channel && !Channel->IsPlaying())
+	{
+		Channel = nullptr;
+	}
 	CheckIdle(DeltaSeconds, Channel);
 	CheckTrack(Channel);
 	VolumeCheckTimer -= DeltaSeconds;
 	if (VolumeCheckTimer <= 0.f)
 	{
 		VolumeCheckTimer = VolumeCheckInterval;
-		CheckVolume();
+		CheckVolume(Held);
 	}
 }
 
@@ -441,18 +448,29 @@ bool UBBPAdaEasterEggs::TryPlay(const FString& Name, const FString& SubtitleText
 {
 	const double Now = FPlatformTime::Seconds();
 	const FString* Text = Subtitles.Find(Name);
-	if (!Controller || !Text || IsSpeaking() || PendingMessage || (!bForce && Played.Contains(Name))
-		|| (!bForce && !bIgnoreGap && Now - LastLineTime < MinGapSeconds)
-		|| Controller->IsMutedInBackground() || !UBBPConfig::GetBool(Controller, UBBPConfig::AdaEasterEggsKey, true))
-	{
-		return false;
-	}
 	UFGGameUI* GameUI = GetGameUI();
-	// ADA is already talking (one of the game's own messages): this line waits for another chance.
-	if (GameUI && GameUI->GetActiveAudioMessage())
+	const TCHAR* Refusal = !Controller ? TEXT("no playback controller")
+		: !Text ? TEXT("no such line")
+		: !UBBPConfig::GetBool(Controller, UBBPConfig::AdaEasterEggsKey, true) ? TEXT("ADA easter eggs are off")
+		: (!bForce && Played.Contains(Name)) ? TEXT("already played this session")
+		: (IsSpeaking() || PendingMessage) ? TEXT("another easter-egg line is playing")
+		: Controller->IsMutedInBackground() ? TEXT("the game is in the background")
+		: (!bForce && !bIgnoreGap && Now - LastLineTime < MinGapSeconds) ? TEXT("too soon after the last line")
+		// ADA is already talking (one of the game's own messages): this line waits for another chance.
+		: (GameUI && GameUI->GetActiveAudioMessage()) ? TEXT("one of the game's own messages is playing")
+		: nullptr;
+	if (Refusal)
 	{
+		// Triggers such as idle ask every tick while they hold; each refusal is logged once until it changes.
+		const FString Reason = Name + TEXT(": ") + Refusal;
+		if (Reason != LastRefusal)
+		{
+			LastRefusal = Reason;
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: '%s' triggered but not played (%s)"), *Name, Refusal);
+		}
 		return false;
 	}
+	LastRefusal.Reset();
 	const FString Path = AudioDir / (Name + TEXT(".ogg"));
 	TArray<uint8> Bytes;
 	FBBPDecoder Probe;
@@ -615,10 +633,9 @@ void UBBPAdaEasterEggs::CheckIdle(float DeltaSeconds, const ABBPMusicChannel* Ch
 void UBBPAdaEasterEggs::CheckTrack(const ABBPMusicChannel* Channel)
 {
 	FBBPQueueEntry Entry;
+	// A moment with nothing heard (the next song still loading, a station reconnecting) keeps the count going.
 	if (!Channel || !Channel->GetCurrentEntry(Entry))
 	{
-		TrackChannel = nullptr;
-		TrackEntryId = INDEX_NONE;
 		return;
 	}
 	const float Position = Channel->GetPlaybackPosition();
@@ -667,40 +684,52 @@ void UBBPAdaEasterEggs::CheckTrack(const ABBPMusicChannel* Channel)
 	}
 }
 
-void UBBPAdaEasterEggs::CheckVolume()
+AFGBoomBoxPlayer* UBBPAdaEasterEggs::GetHeldBoomBox() const
+{
+	const ABBPPlaylistSubsystem* Playlist = Controller->GetPlaylist();
+	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Controller, 0);
+	if (!Playlist || !Pawn)
+	{
+		return nullptr;
+	}
+	for (const FBBPActiveBoomBox& Active : Playlist->GetActiveBoomBoxes())
+	{
+		if (IsValid(Active.BoomBox) && Active.BoomBox->IsInEquipmentMode() && Active.BoomBox->GetmOwningCharacter() == Pawn)
+		{
+			return Active.BoomBox;
+		}
+	}
+	return nullptr;
+}
+
+void UBBPAdaEasterEggs::CheckVolume(const AFGBoomBoxPlayer* Held)
 {
 	const ABBPPlaylistSubsystem* Playlist = Controller->GetPlaylist();
 	const UWorld* World = Controller->GetWorld();
-	const APawn* LocalPawn = UGameplayStatics::GetPlayerPawn(Controller, 0);
+	const APlayerController* PlayerController = UGameplayStatics::GetPlayerController(Controller, 0);
+	const APawn* LocalPawn = PlayerController ? PlayerController->GetPawn() : nullptr;
 	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
-	if (!Playlist || !LocalPawn || !GameState || Played.Contains(TEXT("volume")))
+	if (!Held || !Playlist || !LocalPawn || !GameState || Played.Contains(TEXT("volume")))
 	{
 		return;
 	}
-	TArray<FBBPNearbyBoomBox> Audible;
-	Controller->GetAudibleBoomBoxes(Audible);
-	for (const FBBPActiveBoomBox& Active : Playlist->GetActiveBoomBoxes())
+	const FBBPActiveBoomBox* Active = Playlist->GetActiveBoomBoxes().FindByPredicate([Held](const FBBPActiveBoomBox& A) { return A.BoomBox == Held; });
+	if (!Active || Active->Volume < 0.99f)
 	{
-		if (!IsValid(Active.BoomBox) || Active.Volume < 0.99f
-			|| !Audible.ContainsByPredicate([&Active](const FBBPNearbyBoomBox& Near) { return Near.BoomBox == Active.BoomBox && !Near.bMutedByMode; }))
-		{
-			continue;
-		}
-		const FVector Location = Active.BoomBox->GetActorLocation();
-		const bool bNeighbour = GameState->PlayerArray.ContainsByPredicate([LocalPawn, &Location](const APlayerState* PlayerState)
-		{
-			const APawn* Other = PlayerState ? PlayerState->GetPawn() : nullptr;
-			return Other && Other != LocalPawn && FVector::Dist(Other->GetActorLocation(), Location) <= VolumeNeighbourDistance;
-		});
-		if (!bNeighbour)
-		{
-			continue;
-		}
-		const APawn* Carrier = Active.BoomBox->IsInEquipmentMode() ? Cast<APawn>(Active.BoomBox->GetmOwningCharacter()) : nullptr;
-		const APlayerState* CarrierState = Carrier ? Carrier->GetPlayerState() : nullptr;
-		FString Text = Subtitles.FindRef(TEXT("volume"));
-		Text.ReplaceInline(TEXT("Pioneer {name}"), CarrierState ? *(TEXT("Pioneer ") + CarrierState->GetPlayerName()) : TEXT("A Pioneer"));
-		TryPlay(TEXT("volume"), Text);
 		return;
 	}
+	const FVector Location = Held->GetActorLocation();
+	const bool bNeighbour = GameState->PlayerArray.ContainsByPredicate([LocalPawn, &Location](const APlayerState* PlayerState)
+	{
+		const APawn* Other = PlayerState ? PlayerState->GetPawn() : nullptr;
+		return Other && Other != LocalPawn && FVector::Dist(Other->GetActorLocation(), Location) <= VolumeNeighbourDistance;
+	});
+	if (!bNeighbour)
+	{
+		return;
+	}
+	const APlayerState* LocalState = PlayerController->PlayerState;
+	FString Text = Subtitles.FindRef(TEXT("volume"));
+	Text.ReplaceInline(TEXT("Pioneer {name}"), LocalState ? *(TEXT("Pioneer ") + LocalState->GetPlayerName()) : TEXT("A Pioneer"));
+	TryPlay(TEXT("volume"), Text);
 }

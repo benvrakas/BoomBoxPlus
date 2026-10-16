@@ -77,8 +77,8 @@ Inspired by the PEAK mod sPEAKer.
   when it stops.
 - **Looks like Satisfactory.** Built from the game's own buttons, fonts and colours. The Boom Box's own
   screen follows along too, with the song, its source and a working progress bar.
-- **ADA is listening.** Now and then she has something to say about your music. Only you hear her, and she can
-  be turned off.
+- **ADA is listening.** Now and then she has something to say about the Boom Box you're holding. Only you hear her
+  (and anyone holding a Boom Box linked to yours), and she can be turned off.
 
 ### Getting started
 

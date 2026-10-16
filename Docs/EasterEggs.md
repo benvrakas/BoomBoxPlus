@@ -136,21 +136,36 @@ game (the host's log showed `fih: /ada copyright` and the host heard it). Now th
 own command runs locally (`ABBPAdaChatCommand::RunLocally`); a remote player's is sent to their game with
 `UBBPRemoteCallObject::Client_AdaCommand`, which runs it there and puts the reply in their chat through
 `AFGChatManager::AddChatMessageToReceived` (as SML's own replies do). On a dedicated server every command is
-forwarded. The automatic triggers were never host-only: every machine runs its own `UBBPAdaEasterEggs`, and what
-they read (the channel heard, the active Boom Boxes, other players' pawns) is replicated.
+forwarded.
 
 ## Triggers
 
-All are about the channel the player hears (`GetAudibleChannel(true)`):
+**Who hears a line (1.5.1): the player holding the Boom Box.** Every game checks its own player:
+`GetHeldBoomBox` finds the Custom Music Boom Box they carry (`IsInEquipmentMode`, `mOwningCharacter` is their pawn),
+and every trigger but the page one is about that Boom Box's channel. Linked Boom Boxes share a channel, so when lofi
+starts on a linked pair carried by two players, both hear the line; a player who only hears the music, or whose
+Boom Box is placed, hears nothing. No networking is involved: the channel, its queue and the Boom Boxes' carriers
+are replicated.
 
-- Standing still (under 1 m and 5° of camera) for 5 minutes while music plays; a follow-up line after 15. Time with a
-  menu open (mouse cursor shown) doesn't count.
+Before 1.5.1 the triggers followed the nearest channel the player could hear. A friend's carried Boom Box playing
+a rickroll set off the line on the host's game (the host heard the song), not as the line intends ("an attempt to
+deceive a coworker... FICSIT applauds your initiative"), and the volume line played for everyone near a loud Boom
+Box. Refusals weren't logged either, so it couldn't be told from a log why a line didn't play. Now `TryPlay` logs
+"'<line>' triggered but not played (<reason>)" once per line and reason.
+
+The loop count also used to restart whenever nothing was heard for a moment between plays (the next song loading, a
+station reconnecting); a gap no longer resets it.
+
+The triggers:
+
+- Standing still (under 1 m and 5° of camera) for 5 minutes while holding a playing Boom Box; a follow-up line
+  after 15. Time with a menu open (mouse cursor shown) doesn't count.
 - The same track starting 4 and 10 times in a row (a new entry with the same track id, or the position jumping back
   more than 5 s on the same entry, which is how repeat-one restarts).
 - Keywords in the title, artist or uploader when a track starts: the Rick Astley video (id or title), Coffee Stain or
   "Satisfactory", metal/doom/thrash/deathcore, lofi/lo-fi/chillhop/"beats to relax". Checked in that order; the first
   that plays wins.
 - A track from a YouTube "VEVO" or "- Topic" channel: 10% chance.
-- An audible Boom Box at full volume (the Boom Box's own volume) with another player within 30 m of it. The subtitle
-  names the player carrying it, if anyone is.
-- Opening a Custom Music page: 1 in 500.
+- The held Boom Box at full volume (the Boom Box's own volume) with another player within 30 m of it. The subtitle
+  names the holder.
+- Opening a Custom Music page: 1 in 500, for the player who opened it (held Boom Box or not).

@@ -5,6 +5,7 @@
 #include "BBPAdaEasterEggs.generated.h"
 
 class ABBPMusicChannel;
+class AFGBoomBoxPlayer;
 class UAudioComponent;
 class UBBPPlaybackController;
 class UBBPStreamingSoundWave;
@@ -12,9 +13,10 @@ class UFGAudioMessage;
 class UFGMessage;
 class UFGMessageSender;
 
-// Now and then ADA comments on what the local player is listening to (the AdaEasterEggs setting). Lines and subtitles
-// come from Resources/Audio/ADA (lines.json and <name>.ogg). Each line plays at most once a session, never within
-// MinGapSeconds of another, only on this machine.
+// Now and then ADA comments on the Boom Box the local player is holding (the AdaEasterEggs setting): what it plays,
+// its volume, and the player idling with it. Each game checks its own player, so everyone holding a Boom Box of the
+// same (linked) channel hears a song's line, and nobody else does. Lines and subtitles come from Resources/Audio/ADA
+// (lines.json and <name>.ogg). Each line plays at most once a session, never within MinGapSeconds of another.
 //
 // A line is shown like ADA's own messages: queued in the game's message box as a runtime UFGMessage from ADA's sender
 // (which shows her box and plays her jingle), with the voice started when the box starts playback
@@ -85,14 +87,17 @@ private:
 	// ADA's message sender class, loaded on first use.
 	TSubclassOf<UFGMessageSender> GetAdaSender();
 
-	// Idle while listening (idle, then idle2 if still idle).
+	// Idle while holding a playing Boom Box (idle, then idle2 if still idle).
 	void CheckIdle(float DeltaSeconds, const ABBPMusicChannel* Channel);
 
-	// Song starts and restarts on the channel heard: loops, keywords, copyright.
+	// Song starts and restarts on the held Boom Box's channel: loops, keywords, copyright.
 	void CheckTrack(const ABBPMusicChannel* Channel);
 
-	// A Boom Box at full volume with another player near it.
-	void CheckVolume();
+	// The held Boom Box at full volume with another player near it.
+	void CheckVolume(const AFGBoomBoxPlayer* Held);
+
+	// The Custom Music Boom Box the local player is carrying, or null.
+	AFGBoomBoxPlayer* GetHeldBoomBox() const;
 
 	UPROPERTY()
 	TObjectPtr<UBBPPlaybackController> Controller;
@@ -151,6 +156,9 @@ private:
 	int32 ConsecutivePlays = 0;
 
 	float VolumeCheckTimer = 0.f;
+
+	// "<line>: <reason>" of the last refused line, so a refusal is logged once.
+	FString LastRefusal;
 	float PlayedCleanupTimer = 0.f;
 
 	// Wwise playing id of the voice posted from the bank, or 0.

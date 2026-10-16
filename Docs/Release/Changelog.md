@@ -6,9 +6,12 @@
   while you're in another window (before, it was silenced anyway). Radio stations keep playing while the game is
   paused instead of stalling and skipping when you come back. The game's own music no longer flickers in and out
   when you stand at the edge of a Boom Box's range.
-- **ADA fixes.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since 1.4.0 they
-  quietly fell back to a simpler playback path). The `/ada` test command now plays the line for the player who typed
-  it; before, it always played on the host's game.
+- **ADA talks to the right Pioneer.** Her comments on your music now go to the player holding the Boom Box that
+  played it, and if Boom Boxes are linked, everyone holding one of them hears it. Before, they went to whoever could
+  hear the music, so the host often got lines meant for someone else. The `/ada` test command also plays for the
+  player who typed it now, not the host.
+- **ADA sounds like ADA.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since
+  1.4.0 they quietly fell back to a simpler playback path).
 - **No more ADA leftovers in your save.** The game keeps a saved list of every message ADA has played, and the mod's
   easter-egg lines ended up in it. Because those lines only exist while the game runs, every load afterwards logged
   a warning for each one. The mod now takes its lines back out of that list, so saves stay clean.
