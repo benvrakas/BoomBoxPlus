@@ -240,6 +240,12 @@ private:
 	// True while Custom Music is muted because the game window isn't in front (the MuteInBackground setting).
 	bool bMutedInBackground = false;
 
+	// Unreal's volume while the game is in the background when the controller started, restored at shutdown.
+	float OriginalUnfocusedVolume = 0.f;
+
+	// Seconds left before the game's music comes back up; reset while Custom Music is heard.
+	float GameMusicHoldTimer = 0.f;
+
 	// Listening mode last applied, to log changes.
 	EBBPListenMode AppliedListenMode = EBBPListenMode::All;
 

@@ -22,6 +22,7 @@
 #include "JsonObjectConverter.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/App.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Tape/BBPCustomMusicTape.h"
@@ -73,8 +74,17 @@ namespace
 	}
 
 	// Returns a game volume slider as 0..1, whether the game stores it as 0..1 or 0..100. An option that can't be read counts as 1.
+	// Seconds the game's music stays lowered after Custom Music stops being heard, so it doesn't flicker back in.
+	constexpr float GameMusicHoldSeconds = 3.f;
+
 	float ReadVolumeOption(const UFGGameUserSettings& Settings, const TCHAR* Option)
 	{
+		// Options the game doesn't have stay at full volume; asking again would log the game's error every time.
+		static TSet<FString> Reported;
+		if (Reported.Contains(Option))
+		{
+			return 1.f;
+		}
 		const FVariant Raw = Settings.GetOptionValue(Option);
 		float Value = 1.f;
 		switch (Raw.GetType())
@@ -83,15 +93,9 @@ namespace
 		case EVariantTypes::Double: Value = (float)Raw.GetValue<double>(); break;
 		case EVariantTypes::Int32: Value = (float)Raw.GetValue<int32>(); break;
 		default:
-		{
-			static TSet<FString> Reported;
-			if (!Reported.Contains(Option))
-			{
-				Reported.Add(Option);
-				UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: game option '%s' unreadable (variant type %d); treating it as full volume"), Option, (int32)Raw.GetType());
-			}
+			Reported.Add(Option);
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: game option '%s' unreadable (variant type %d); treating it as full volume"), Option, (int32)Raw.GetType());
 			return 1.f;
-		}
 		}
 		return FMath::Clamp(Value > 1.f ? Value / 100.f : Value, 0.f, 1.f);
 	}
@@ -105,6 +109,7 @@ float UBBPPlaybackController::GetAudibleRange()
 void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
 {
 	Playlist = InPlaylist;
+	OriginalUnfocusedVolume = FApp::GetUnfocusedVolumeMultiplier();
 	const bool bHasAudio = BBPAudioDevice::EnsureAvailable();
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback controller ready (Unreal audio device %s)"), bHasAudio ? TEXT("available") : TEXT("MISSING"));
 	LoadMyVolumes();
@@ -135,6 +140,7 @@ void UBBPPlaybackController::Shutdown()
 		}
 	}
 	Emitters.Empty();
+	FApp::SetUnfocusedVolumeMultiplier(OriginalUnfocusedVolume);
 	GameMusicFader.Restore();
 	if (bMyVolumesDirty)
 	{
@@ -474,8 +480,9 @@ void UBBPPlaybackController::UpdateGameMusic(float DeltaSeconds)
 {
 	const float Level = FMath::Clamp(UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicLevelKey, 0.f), 0.f, 1.f);
 	const float FadeSeconds = UBBPConfig::GetFloat(Playlist, UBBPConfig::GameMusicFadeTimeKey, 2.f);
+	GameMusicHoldTimer = GetAudibleChannel(true) ? GameMusicHoldSeconds : GameMusicHoldTimer - DeltaSeconds;
 	// A level of 1 means "leave the game's music alone", so it's never lowered at all.
-	const bool bLower = Level < 1.f && GetAudibleChannel(true) != nullptr;
+	const bool bLower = Level < 1.f && GameMusicHoldTimer > 0.f;
 	GameMusicFader.Update(bLower, Level, FadeSeconds, DeltaSeconds);
 }
 
@@ -547,8 +554,16 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 void UBBPPlaybackController::SyncEmitters()
 {
 	const TArray<FBBPActiveBoomBox>& Active = Playlist->GetActiveBoomBoxes();
-	// Unreal's own unfocused-volume setting doesn't apply here: the game mixes its audio in Wwise, not Unreal.
-	const bool bMute = UBBPConfig::GetBool(Playlist, UBBPConfig::MuteInBackgroundKey, true) && !FPlatformApplicationMisc::IsThisApplicationForeground();
+	const bool bMuteSetting = UBBPConfig::GetBool(Playlist, UBBPConfig::MuteInBackgroundKey, true);
+	// Unreal silences its own audio, which is all of Custom Music, while the window isn't in front (its unfocused volume,
+	// 0 in Satisfactory). With the setting off, that's lifted so the music plays on; the game's own sounds are Wwise's.
+	const float Unfocused = bMuteSetting ? OriginalUnfocusedVolume : 1.f;
+	if (FApp::GetUnfocusedVolumeMultiplier() != Unfocused)
+	{
+		FApp::SetUnfocusedVolumeMultiplier(Unfocused);
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: Unreal's volume while the game is in the background set to %.2f"), Unfocused);
+	}
+	const bool bMute = bMuteSetting && !FPlatformApplicationMisc::IsThisApplicationForeground();
 	if (bMute != bMutedInBackground)
 	{
 		bMutedInBackground = bMute;
@@ -938,6 +953,9 @@ void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWa
 {
 	Emitter.Wave = Wave;
 	Emitter.Component->SetSound(Wave);
+	// Unreal pauses game sounds while the game is paused (the single-player pause menu). A station can't pause, so it
+	// keeps playing; a track pauses with the game, whose clock it follows.
+	Emitter.Component->bIsUISound = Emitter.bLive;
 	Emitter.Component->Play();
 	if (!Emitter.Component->GetAudioDevice() && !bReportedNoAudioDevice)
 	{

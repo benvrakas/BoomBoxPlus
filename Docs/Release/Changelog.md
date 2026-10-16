@@ -13,6 +13,10 @@
   with the one you're on lit up (the Radio and History buttons used to disappear while you were on them). **Back**
   always goes back to the Boom Box player, and **Open Folder** and **Rescan** moved next to Search, since they're
   about your music folder.
+- **Tabbing out fixed.** "Mute when the game is in the background" turned off now really keeps the music playing
+  while you're in another window (before, it was silenced anyway). Radio stations keep playing while the game is
+  paused instead of stalling and skipping when you come back. The game's own music no longer flickers in and out
+  when you stand at the edge of a Boom Box's range.
 - **ADA fixes.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since 1.4.0 they
   quietly fell back to a simpler playback path). The `/ada` test command now plays the line for the player who typed
   it; before, it always played on the host's game.

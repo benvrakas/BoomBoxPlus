@@ -260,6 +260,20 @@ The background mute only zeroes the audio component's multiplier (`FBBPEmitter::
 decoding in time (the wave plays when silent), so it comes back at the right position, and `AppliedVolume` keeps
 the unmuted value, so the game's own music isn't faded back in while you're in another window.
 
+**In the background** (1.5.0). Custom Music is Unreal audio, and Unreal multiplies all of its audio by
+`[Audio] UnfocusedVolumeMultiplier` while the window isn't in front (`FWindowsPlatformApplicationMisc::PumpMessages`
+sets `FApp::SetVolumeMultiplier`, which `FAudioDevice::Update` applies to the primary volume). Satisfactory keeps the
+engine default, 0. The game's own sounds are Wwise and don't go through it, but Custom Music was silenced in another
+window even with "Mute when the game is in the background" off, so the setting did nothing. `SyncEmitters` now sets
+the multiplier: the original value (0) with the setting on, 1 with it off; `Shutdown` restores the original. It's
+process-wide, so other mods' Unreal sounds also follow the setting.
+
+**While the game is paused** (the single-player pause menu), Unreal pauses every sound that isn't a UI sound
+(`FAudioDevice::HandlePause`). For a track that's right: the channel's position follows the server clock, which stops
+too, so it resumes in sync. A station can't pause: its stream kept arriving, so on resume it stalled, buffered and
+skipped. `PlayWave` marks the component `bIsUISound` for live streams only, so a station keeps playing (and the
+background mute still applies) while the game is paused.
+
 There is no hidden gain. An earlier fixed 0.3 "headroom" factor was removed: it was tuned while the
 Master slider was being ignored (see below), and "My Volume" (per Boom Box, on its Custom Music page) is the
 one place to compensate for Unreal audio being

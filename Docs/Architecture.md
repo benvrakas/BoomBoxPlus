@@ -126,7 +126,7 @@ carry migration code for old config layouts.
 | `DopplerStrength` | 1 | Playback controller: multiplies the speeds past the deadzone (0-5; 1 is true to life) |
 | `AdaEasterEggs` | on | `UBBPAdaEasterEggs`: ADA's occasional comments on the music (see EasterEggs.md) |
 | `Doppler` | on | Playback controller: pitches each emitter by its relative motion to the listener (see Multiplayer.md, Doppler effect) |
-| `MuteInBackground` | on | Playback controller: zeroes every emitter's volume while `FPlatformApplicationMisc::IsThisApplicationForeground()` is false. Unreal's own unfocused-volume setting doesn't reach it, since the game mixes in Wwise |
+| `MuteInBackground` | on | Playback controller: zeroes every emitter's volume while `FPlatformApplicationMisc::IsThisApplicationForeground()` is false. Off also lifts Unreal's own unfocused volume (see Multiplayer.md, "In the background") so the music keeps playing |
 | `HostOnlyControl` | off | RCO, server side; listen servers only (on a dedicated server there's no host player) |
 | `MaxCachedSongs` | 50 | Download cache eviction |
 | `GameMusicLevel` / `GameMusicFadeTime` | 0 / 2 s | Game music fader; level 1 leaves the game's music alone |
@@ -164,3 +164,8 @@ is needed. If the value changes while lowered (the player moved the slider), tha
 After fading back up, it calls `UFGGameUserSettings::UpdateAudioOption` so the game re-applies the
 player's exact setting. Settings: Game music level while playing (0 = fade out, 1 = leave alone; the
 separate on/off toggle was dropped as redundant) and Game music fade time (2 s).
+
+The music only comes back up after no Boom Box has been heard for 3 s (`GameMusicHoldSeconds`). Before 1.5.0 it
+followed `GetAudibleChannel` frame by frame, so standing at the edge of a Boom Box's range (or a station
+reconnecting) lowered and raised it many times a second (a log showed 20 switches in a minute), letting short
+bits of the game's soundtrack through.
