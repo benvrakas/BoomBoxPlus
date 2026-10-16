@@ -2,6 +2,13 @@
 
 ## 1.5.1
 
+- **Tabbing out fixed.** "Mute when the game is in the background" turned off now really keeps the music playing
+  while you're in another window (before, it was silenced anyway). Radio stations keep playing while the game is
+  paused instead of stalling and skipping when you come back. The game's own music no longer flickers in and out
+  when you stand at the edge of a Boom Box's range.
+- **ADA fixes.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since 1.4.0 they
+  quietly fell back to a simpler playback path). The `/ada` test command now plays the line for the player who typed
+  it; before, it always played on the host's game.
 - **No more ADA leftovers in your save.** The game keeps a saved list of every message ADA has played, and the mod's
   easter-egg lines ended up in it. Because those lines only exist while the game runs, every load afterwards logged
   a warning for each one. The mod now takes its lines back out of that list, so saves stay clean.
@@ -19,13 +26,6 @@
   with the one you're on lit up (the Radio and History buttons used to disappear while you were on them). **Back**
   always goes back to the Boom Box player, and **Open Folder** and **Rescan** moved next to Search, since they're
   about your music folder.
-- **Tabbing out fixed.** "Mute when the game is in the background" turned off now really keeps the music playing
-  while you're in another window (before, it was silenced anyway). Radio stations keep playing while the game is
-  paused instead of stalling and skipping when you come back. The game's own music no longer flickers in and out
-  when you stand at the edge of a Boom Box's range.
-- **ADA fixes.** Her easter-egg lines now play through the game's own ADA voice mixing as intended (since 1.4.0 they
-  quietly fell back to a simpler playback path). The `/ada` test command now plays the line for the player who typed
-  it; before, it always played on the host's game.
 
 ## 1.4.0
 

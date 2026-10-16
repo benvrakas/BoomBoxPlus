@@ -260,7 +260,7 @@ The background mute only zeroes the audio component's multiplier (`FBBPEmitter::
 decoding in time (the wave plays when silent), so it comes back at the right position, and `AppliedVolume` keeps
 the unmuted value, so the game's own music isn't faded back in while you're in another window.
 
-**In the background** (1.5.0). Custom Music is Unreal audio, and Unreal multiplies all of its audio by
+**In the background** (1.5.1). Custom Music is Unreal audio, and Unreal multiplies all of its audio by
 `[Audio] UnfocusedVolumeMultiplier` while the window isn't in front (`FWindowsPlatformApplicationMisc::PumpMessages`
 sets `FApp::SetVolumeMultiplier`, which `FAudioDevice::Update` applies to the primary volume). Satisfactory keeps the
 engine default, 0. The game's own sounds are Wwise and don't go through it, but Custom Music was silenced in another

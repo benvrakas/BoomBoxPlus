@@ -131,7 +131,7 @@ been checked.
 the once-a-session rule and the 10-minute gap; `/ada list` names them; `/ada volume <0-10>` sets `VoiceGain` for the
 session (default 5), to compare against the game's own voice.
 
-SML runs every chat command on the server. Before 1.5.0, a client's `/ada` therefore played the line on the host's
+SML runs every chat command on the server. Before 1.5.1, a client's `/ada` therefore played the line on the host's
 game (the host's log showed `fih: /ada copyright` and the host heard it). Now the command checks the sender: the host's
 own command runs locally (`ABBPAdaChatCommand::RunLocally`); a remote player's is sent to their game with
 `UBBPRemoteCallObject::Client_AdaCommand`, which runs it there and puts the reply in their chat through

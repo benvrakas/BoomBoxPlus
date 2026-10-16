@@ -165,7 +165,7 @@ After fading back up, it calls `UFGGameUserSettings::UpdateAudioOption` so the g
 player's exact setting. Settings: Game music level while playing (0 = fade out, 1 = leave alone; the
 separate on/off toggle was dropped as redundant) and Game music fade time (2 s).
 
-The music only comes back up after no Boom Box has been heard for 3 s (`GameMusicHoldSeconds`). Before 1.5.0 it
+The music only comes back up after no Boom Box has been heard for 3 s (`GameMusicHoldSeconds`). Before 1.5.1 it
 followed `GetAudibleChannel` frame by frame, so standing at the edge of a Boom Box's range (or a station
 reconnecting) lowered and raised it many times a second (a log showed 20 switches in a minute), letting short
 bits of the game's soundtrack through.
