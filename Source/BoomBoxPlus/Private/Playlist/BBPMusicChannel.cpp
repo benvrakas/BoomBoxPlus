@@ -3,6 +3,7 @@
 #include "FGBoomBoxPlayer.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerState.h"
+#include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "Net/UnrealNetwork.h"
 
@@ -20,7 +21,7 @@ namespace
 	constexpr float PreviousRestartThreshold = 3.f;
 	constexpr double SkipDebounceSeconds = 0.25;
 
-	// Once more than half the players have a track loaded, the rest get this long before it starts without them.
+	// Once at least half the players have a track loaded, the rest get this long before it starts without them.
 	constexpr double MajorityLoadGraceSeconds = 10.0;
 
 	// With more than one player, a track never waits longer than this in total (a hung download can't hold everyone).
@@ -587,13 +588,16 @@ void ABBPMusicChannel::UpdateLoading()
 	const double Now = GetServerTime();
 	const UWorld* World = GetWorld();
 	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+	// Only players within earshot of one of the channel's Boom Boxes are waited for. A player further away may not
+	// have the Boom Box on their game at all (it's out of their network range), so they'd never report, and they join
+	// the song at the right spot when they come closer anyway.
 	int32 NumPlayers = 0;
 	int32 NumLoaded = 0;
 	if (GameState)
 	{
 		for (const APlayerState* Player : GameState->PlayerArray)
 		{
-			if (Player && !Player->IsInactive())
+			if (Player && !Player->IsInactive() && IsInEarshot(Player))
 			{
 				++NumPlayers;
 				NumLoaded += LoadedPlayers.Contains(Player) ? 1 : 0;
@@ -609,10 +613,10 @@ void ABBPMusicChannel::UpdateLoading()
 		NobodyListeningSince = Now;
 	}
 
-	// Everyone ready starts it at once. Otherwise the stragglers' countdown only begins once most players are ready,
-	// so a track isn't started for a minority just because everyone's downloads are slow. A single player always
-	// waits for their own download.
-	if (MajorityLoadedSince < 0.0 && NumLoaded * 2 > NumPlayers && NumLoaded < NumPlayers)
+	// Everyone ready starts it at once. Otherwise the stragglers' countdown only begins once at least half the players
+	// are ready, so a track isn't started for a minority just because everyone's downloads are slow. A single player
+	// always waits for their own download.
+	if (MajorityLoadedSince < 0.0 && NumLoaded > 0 && NumLoaded * 2 >= NumPlayers && NumLoaded < NumPlayers)
 	{
 		MajorityLoadedSince = Now;
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: %d of %d players have the track loaded; starting it in %.0f s unless the rest are ready sooner"),
@@ -639,11 +643,25 @@ void ABBPMusicChannel::UpdateLoading()
 	{
 		return;
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: starting the track after %.1f s of loading; %s (%d of %d players loaded)"),
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Channel %04d: starting the track after %.1f s of loading; %s (%d of %d players in earshot loaded)"),
 		LinkCode, Now - LoadStartTime, Reason, NumLoaded, NumPlayers);
 	PlaybackState.bLoading = false;
 	PlaybackState.TrackStartServerTime = Now - PlaybackState.PausedPosition;
 	MarkPlaybackChanged();
+}
+
+bool ABBPMusicChannel::IsInEarshot(const APlayerState* Player) const
+{
+	const APawn* Pawn = Player ? Player->GetPawn() : nullptr;
+	if (!Pawn)
+	{
+		return false;
+	}
+	const float RangeSquared = FMath::Square(UBBPPlaybackController::GetAudibleRange());
+	return Members.ContainsByPredicate([Pawn, RangeSquared](const AFGBoomBoxPlayer* BoomBox)
+	{
+		return IsValid(BoomBox) && FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= RangeSquared;
+	});
 }
 
 bool ABBPMusicChannel::IsHeard() const

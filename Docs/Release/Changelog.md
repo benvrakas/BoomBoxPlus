@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2
+
+- **No more 2-minute hangs in multiplayer.** A new song waits for the players near the Boom Box to have it ready.
+  It used to wait for everyone in the session, so a friend on the other side of the map held every new song for
+  2 minutes. Now only players within earshot count, and when only some of them are ready, the rest get 10 seconds
+  before the song starts without them (with two players, it used to take both).
+
 ## 1.5.1
 
 - **Tabbing out fixed.** "Mute when the game is in the background" turned off now really keeps the music playing

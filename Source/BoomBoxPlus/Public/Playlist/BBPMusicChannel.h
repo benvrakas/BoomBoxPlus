@@ -150,6 +150,9 @@ private:
 	// Server only. Returns true if a Boom Box with Custom Music loaded plays this channel.
 	bool IsHeard() const;
 
+	// True if Player's pawn is within hearing range of one of this channel's Boom Boxes.
+	bool IsInEarshot(const APlayerState* Player) const;
+
 	// Server only. Players who reported the current load generation.
 	TSet<TWeakObjectPtr<const APlayerState>> LoadedPlayers;
 

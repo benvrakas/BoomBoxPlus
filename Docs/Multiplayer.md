@@ -196,13 +196,18 @@ in the library, stream failed), sends `Server_ReportLoaded(Channel, LoadGenerati
 (`UBBPPlaybackController::ReportLoadedTracks`). The server (`ABBPMusicChannel::UpdateLoading`) ends the wait and
 starts the clock from `PausedPosition` when:
 
-- every player in `GameState->PlayerArray` has reported the current generation: it starts at once (a lone player
-  always waits for themselves, however long the download takes);
+- every player in earshot has reported the current generation: it starts at once (a lone player always waits for
+  themselves, however long the download takes). "In earshot" (`IsInEarshot`, 1.5.2) is a player whose pawn is within
+  the audible range (250 m) of one of the channel's Boom Boxes; players without a pawn or further away aren't waited
+  for and join mid-song when they come closer. Before 1.5.2 every player in `GameState->PlayerArray` counted. A
+  player far away may not even have the Boom Box on their game (it's outside their network range), so they never
+  reported, and with two players every new song hung for the full 2 minutes (seen in a log: "1 of 2 players
+  loaded", twice in one evening);
 - or no Boom Box with Custom Music loaded has played the channel for 3 s (nobody to wait for);
-- or 10 s have passed since more than half the players reported (`MajorityLoadedSince`, 1.3.0), so a few slow
-  downloads can't hold everyone. Before 1.3.0 the 10 s counted from the track's start, which with everyone's
-  downloads being slow could start a track almost nobody had yet. With 2 players a majority is both of them, so
-  this rule never fires there;
+- or 10 s have passed since at least half the players in earshot reported (`MajorityLoadedSince`, 1.3.0), so a few
+  slow downloads can't hold everyone. Before 1.3.0 the 10 s counted from the track's start, which with everyone's
+  downloads being slow could start a track almost nobody had yet. Until 1.5.2 it took more than half, which with 2
+  players meant both, so one slow download held the other player for 2 minutes; now 1 of 2 starts the 10 s;
 - or there is more than one player and 2 minutes have passed since the track started (`MultiplayerMaxLoadSeconds`),
   a backstop so a download that hangs (rather than failing, which reports as ready) can't hold everyone forever.
 
