@@ -114,6 +114,13 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   alignment/flags, project id, then the type) to 0, a user bank, before loading, and logs that it did. `make_bank.py`
   now writes 0 there too. It didn't help: the first 1.5.3 session logged the type change, then the same 15
   with type 0. The cause of the 15 is still unknown.
+- 1.5.4 adds diagnostics instead of another guess. While `LoadBank` runs, `AK::Monitor::SetLocalOutput` sends Wwise's
+  own monitor messages to the log ("ADA: Wwise says (code, level): ..."; switched off again afterwards; the game sets
+  no local output of its own, its log never shows Wwise monitor text, and the Release build of the sound engine may
+  not post any). If the load fails, `DiagnoseBank` logs the bank's chunks and test-loads three cut-down copies, each
+  under its own bank id (the real id + 1, 2, 3): the header alone, header + media (DIDX, DATA), header + objects
+  (HIRC). Each that loads is unloaded again (`UnloadBank(id, nullptr, type)`). Which ones load narrows the 15 down to
+  the header, the media or the objects.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not

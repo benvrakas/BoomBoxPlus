@@ -81,6 +81,9 @@ namespace
 		uint32 (*PostEvent)(uint32, uint64, uint32, void*, void*, uint32, void*, uint32) = nullptr;
 		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
 		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
+		// Optional, for diagnosing a bank that won't load.
+		int32 (*UnloadBank)(uint32, const void*, uint32) = nullptr;
+		int32 (*SetLocalOutput)(uint32, void (*)(int32, const wchar_t*, int32, uint32, uint64)) = nullptr;
 
 		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
 	};
@@ -103,15 +106,101 @@ namespace
 				Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
 				Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
 				Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s (with bank type %s), PostEvent %s, RegisterGameObj %s, StopPlayingID %s"), Dll,
+				Found.UnloadBank = reinterpret_cast<decltype(Found.UnloadBank)>(FPlatformProcess::GetDllExport(Module, TEXT("?UnloadBank@SoundEngine@AK@@YA?AW4AKRESULT@@IPEBXI@Z")));
+				Found.SetLocalOutput = reinterpret_cast<decltype(Found.SetLocalOutput)>(FPlatformProcess::GetDllExport(Module, TEXT("?SetLocalOutput@Monitor@AK@@YA?AW4AKRESULT@@IP6AXW4ErrorCode@12@PEB_WW4ErrorLevel@12@I_K@Z@Z")));
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s (with bank type %s), PostEvent %s, RegisterGameObj %s, StopPlayingID %s, UnloadBank %s, Monitor::SetLocalOutput %s"), Dll,
 					Found.LoadBankMemoryCopy ? TEXT("found") : TEXT("MISSING"), Found.LoadBankMemoryCopyTyped ? TEXT("found") : TEXT("MISSING"), Found.PostEvent ? TEXT("found") : TEXT("MISSING"),
-					Found.RegisterGameObj ? TEXT("found") : TEXT("MISSING"), Found.StopPlayingID ? TEXT("found") : TEXT("MISSING"));
+					Found.RegisterGameObj ? TEXT("found") : TEXT("MISSING"), Found.StopPlayingID ? TEXT("found") : TEXT("MISSING"),
+					Found.UnloadBank ? TEXT("found") : TEXT("missing"), Found.SetLocalOutput ? TEXT("found") : TEXT("missing"));
 				break;
 			}
 #endif
 			return Found;
 		}();
 		return Calls;
+	}
+
+	// Receives Wwise's own monitor messages while the bank loads (AK::Monitor::LocalOutputFunc).
+	void LogWwiseMessage(int32 Code, const wchar_t* Message, int32 Level, uint32 PlayingId, uint64 GameObject)
+	{
+#if PLATFORM_WINDOWS
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise says (code %d, level %d): %s"), Code, Level, Message ? Message : TEXT(""));
+#endif
+	}
+
+	// AK::Monitor::ErrorLevel_All.
+	constexpr uint32 WwiseAllMessages = 3;
+
+	// Offset of the bank id in a bank file ('BKHD', chunk size, version, then the id).
+	constexpr int32 BankIdOffset = 12;
+
+	// Loads parts of a bank that failed to load, each as its own small bank, and logs which load: the header alone, then
+	// with the media, then with the objects. Each one that loads is unloaded again.
+	void DiagnoseBank(const FBBPWwiseCalls& Wwise, const TArray<uint8>& Bytes)
+	{
+		struct FChunk
+		{
+			FString Tag;
+			int32 Start = 0;
+			int32 Size = 0;
+		};
+		TArray<FChunk> Chunks;
+		for (int32 Pos = 0; Pos + 8 <= Bytes.Num();)
+		{
+			uint32 Size = 0;
+			FMemory::Memcpy(&Size, Bytes.GetData() + Pos + 4, sizeof(Size));
+			if (Pos + 8 + (int64)Size > Bytes.Num())
+			{
+				UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: bank chunk at byte %d runs past the end of the file"), Pos);
+				break;
+			}
+			FString Tag;
+			for (int32 i = 0; i < 4; ++i)
+			{
+				Tag.AppendChar(static_cast<TCHAR>(Bytes[Pos + i]));
+			}
+			Chunks.Add({ Tag, Pos, (int32)Size + 8 });
+			Pos += 8 + Size;
+		}
+		FString Layout;
+		for (const FChunk& Chunk : Chunks)
+		{
+			Layout += FString::Printf(TEXT("%s %d, "), *Chunk.Tag, Chunk.Size - 8);
+		}
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank chunks: %s%d bytes"), *Layout, Bytes.Num());
+		if (Chunks.Num() == 0 || Chunks[0].Tag != TEXT("BKHD") || Bytes.Num() < BankIdOffset + 4)
+		{
+			return;
+		}
+		uint32 BaseId = 0;
+		FMemory::Memcpy(&BaseId, Bytes.GetData() + BankIdOffset, sizeof(BaseId));
+		const TArray<TArray<FString>> Variants = {
+			{ TEXT("BKHD") },
+			{ TEXT("BKHD"), TEXT("DIDX"), TEXT("DATA") },
+			{ TEXT("BKHD"), TEXT("HIRC") },
+		};
+		for (int32 i = 0; i < Variants.Num(); ++i)
+		{
+			TArray<uint8> Part;
+			for (const FChunk& Chunk : Chunks)
+			{
+				if (Variants[i].Contains(Chunk.Tag))
+				{
+					Part.Append(Bytes.GetData() + Chunk.Start, Chunk.Size);
+				}
+			}
+			const uint32 PartId = BaseId + 1 + i;
+			FMemory::Memcpy(Part.GetData() + BankIdOffset, &PartId, sizeof(PartId));
+			uint32 LoadedId = 0;
+			uint32 LoadedType = 0;
+			const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Part.GetData(), Part.Num(), LoadedId, LoadedType)
+				: Wwise.LoadBankMemoryCopy(Part.GetData(), Part.Num(), LoadedId);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: test load of the bank's %s (%d bytes): result %d"), *FString::Join(Variants[i], TEXT("+")), Part.Num(), Result);
+			if (Result == 1 && Wwise.UnloadBank)
+			{
+				Wwise.UnloadBank(LoadedId, nullptr, LoadedType);
+			}
+		}
 	}
 
 	// Wwise's id for a name: FNV-1 of the lowercase name (as AK::SoundEngine::GetIDFromString).
@@ -229,6 +318,10 @@ void UBBPAdaEasterEggs::LoadBank()
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank header type %u changed to %u (user bank) before loading"), HeaderType, UserBankType);
 		}
 	}
+	if (Wwise.SetLocalOutput)
+	{
+		Wwise.SetLocalOutput(WwiseAllMessages, &LogWwiseMessage);
+	}
 	uint32 BankId = 0;
 	uint32 BankType = 0;
 	const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Bytes.GetData(), Bytes.Num(), BankId, BankType)
@@ -241,6 +334,14 @@ void UBBPAdaEasterEggs::LoadBank()
 	}
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u, type %u)"), BankFileName, Bytes.Num(),
 		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), Result, BankId, BankType);
+	if (!bBankLoaded)
+	{
+		DiagnoseBank(Wwise, Bytes);
+	}
+	if (Wwise.SetLocalOutput)
+	{
+		Wwise.SetLocalOutput(0, nullptr);
+	}
 }
 
 bool UBBPAdaEasterEggs::PostWwiseVoice()

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.4
+
+- **ADA's sound bank: finding out why it won't load.** The game still refuses the mod's ADA sound bank, so her
+  easter-egg lines play through the mod's own audio (they work as before). This version doesn't fix that yet: it
+  writes the details of the refusal to the game log, so the next version can.
+
 ## 1.5.3
 
 - **ADA: another try at the game's own voice mixing (didn't work).** The 1.5.1 notes said her easter-egg lines went
