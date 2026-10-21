@@ -2,9 +2,10 @@
 
 ## 1.5.3
 
-- **ADA through the game's own voice mixing, for real this time.** The 1.5.1 notes said her easter-egg lines went
-  through the game's ADA voice processing, but the game kept refusing the mod's sound bank, so they still played
-  through the mod's own audio. The bank now loads, so she gets the same processing as her other lines.
+- **ADA: another try at the game's own voice mixing (didn't work).** The 1.5.1 notes said her easter-egg lines went
+  through the game's ADA voice processing; they don't, because the game refuses the mod's sound bank. 1.5.3 changed
+  how the bank is marked, but the game still refuses it, so her lines still play through the mod's own audio, as in
+  every version so far. They work the same as before.
 
 ## 1.5.2
 
