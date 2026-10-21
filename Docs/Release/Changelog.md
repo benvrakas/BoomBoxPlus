@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.3
+
+- **ADA through the game's own voice mixing, for real this time.** The 1.5.1 notes said her easter-egg lines went
+  through the game's ADA voice processing, but the game kept refusing the mod's sound bank, so they still played
+  through the mod's own audio. The bank now loads, so she gets the same processing as her other lines.
+
 ## 1.5.2
 
 - **Your queue survives dying.** When you die, the game replaces the Boom Box you were carrying, and the mod used

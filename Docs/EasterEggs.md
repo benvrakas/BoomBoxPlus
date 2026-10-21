@@ -108,6 +108,12 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   overload only accepts User banks: up to 1.5.0 it returned 100 (`AK_InvalidBankType`) every time, so every line
   played through Unreal (the fallback below) even though the log printed the cause. The 3-argument one is still used
   if the other isn't exported.
+- That overload still failed, with 15 (`AK_IDNotFound`), in every session of 1.5.1 and 1.5.2: a per-event bank (type
+  30) is the kind the game's own asset system loads by its event's id, not one to load from memory. Since 1.5.3
+  `LoadBank` changes the header's bank type (byte 28 of the file: 'BKHD', chunk size, version, bank id, language id,
+  alignment/flags, project id, then the type) to 0, a user bank, before loading, and logs that it did. `make_bank.py`
+  now writes 0 there too. Untested in game when written; the log line `Wwise bank 'BBP_ADA.bnk' ... loaded` says
+  whether it worked.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not

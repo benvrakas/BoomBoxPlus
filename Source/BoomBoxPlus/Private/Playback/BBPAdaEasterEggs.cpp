@@ -62,6 +62,11 @@ namespace
 	const TCHAR* BankFileName = TEXT("BBP_ADA.bnk");
 	const TCHAR* EventPrefix = TEXT("BBP_ADA_");
 
+	// Byte offset of the bank type in a bank's BKHD header ('BKHD', chunk size, then version, bank id, language id,
+	// alignment and flags, project id, bank type), and the type of a bank loaded by hand.
+	constexpr int32 BankTypeOffset = 28;
+	constexpr uint32 UserBankType = 0;
+
 	// The Wwise game object ADA's voice plays on (registered with the bank; uses the default listeners).
 	constexpr uint64 VoiceGameObject = 0x4242504144414441ull;
 
@@ -211,6 +216,18 @@ void UBBPAdaEasterEggs::LoadBank()
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: %s; lines play through Unreal"),
 			Wwise.IsComplete() ? *FString::Printf(TEXT("no Wwise bank at '%s'"), *Path) : TEXT("the game's Wwise functions weren't found"));
 		return;
+	}
+	// The bank's header comes from one of the game's per-event banks (type 30), which Wwise only loads through the
+	// game's own asset system; marked as a hand-loaded bank it loads like any other.
+	if (Bytes.Num() > BankTypeOffset + 4 && FMemory::Memcmp(Bytes.GetData(), "BKHD", 4) == 0)
+	{
+		uint32 HeaderType = 0;
+		FMemory::Memcpy(&HeaderType, Bytes.GetData() + BankTypeOffset, sizeof(HeaderType));
+		if (HeaderType != UserBankType)
+		{
+			FMemory::Memcpy(Bytes.GetData() + BankTypeOffset, &UserBankType, sizeof(UserBankType));
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank header type %u changed to %u (user bank) before loading"), HeaderType, UserBankType);
+		}
 	}
 	uint32 BankId = 0;
 	uint32 BankType = 0;
