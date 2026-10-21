@@ -165,6 +165,9 @@ next to the transport controls, rather than a setting here.
 
 ### Good to know
 
+- A Boom Box you're nowhere near doesn't stream anything: past hearing range it stops decoding and disconnects its
+  radio station, and it picks the music up at the right spot when you come back. The host can pause every Custom
+  Music Boom Box in the world with the chat command `/bbp stopall`.
 - Radio and YouTube live streams can't be synced to the second like songs: each player's game connects
   to the station itself, so players may hear it a few seconds apart. Pausing disconnects; resuming picks up
   the live broadcast. Seeking, lyrics and repeat don't apply to them, and they play until someone presses

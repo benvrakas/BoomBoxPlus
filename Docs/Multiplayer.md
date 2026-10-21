@@ -184,6 +184,19 @@ Each emitter remembers which channel it is playing. When its Boom Box's channel 
 first channel), the stream is stopped and restarted from the new channel's position, because entry ids from
 different channels can collide.
 
+## Out of range
+
+Each machine used to play every Custom Music Boom Box it knew about, however far away: a forgotten Boom Box across
+the map kept its radio connected and kept decoding (and downloading the next songs), silent only by distance.
+Since 1.5.4 `UpdateEmitter` stops an emitter's stream (`StopTrack`) once the Boom Box is more than the hearing range
+plus 20 m (`OutOfRangeMargin`) from the player's pawn, and sets `FBBPEmitter::bOutOfRange`; a radio station drops its
+connection with it. Back within hearing range, the emitter has no entry, so the normal start path plays the current
+track at the channel's current position (a station reconnects to what it's playing now), the same way a late
+joiner catches up. The margin keeps a player standing at the edge from stopping and starting it over and over.
+`PrefetchNetworkTracks` only downloads for channels with an emitter in range. The channel itself is untouched: its
+queue keeps advancing on the server, so linked Boom Boxes stay in step and everything is where it should be on
+return. With no pawn (dead, loading) nothing changes until there is one.
+
 ## Shuffle and repeat
 
 **The server alone chooses the next track**; clients only follow `CurrentEntryId`. Shuffle picks randomly
@@ -307,3 +320,8 @@ ignored the Master slider — at 10% Master it played far louder than the game.
 Everyone can control by default. `HostOnlyControl` (mod config) rejects requests from non-host players on a
 listen server, including link/unlink; the check is `UBBPRemoteCallObject::MayControl`. Link and unlink
 replies go back to the requesting player (`Client_LinkResult`) and show under the page's Link field.
+
+**`/bbp stopall`** (1.5.4, `ABBPStopAllChatCommand`) pauses every channel that's playing (`SetPlaying(false)`, so
+queues and positions stay). Chat commands run on the server, so "the host" is a player sender whose player
+controller is local there; any other player gets "Only the host can stop every Boom Box". On a dedicated server, no
+player is local, so only the server console can run it. Vanilla tapes aren't touched.

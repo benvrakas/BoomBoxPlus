@@ -75,6 +75,9 @@ struct FBBPEmitter
 	// True while EntryId is a live radio stream.
 	bool bLive = false;
 
+	// True while the Boom Box is too far from this player to hear: nothing is decoded or streamed for it.
+	bool bOutOfRange = false;
+
 	// Last value written to the Boom Box's own (vanilla, unreplicated) "is playing" flag; see
 	// UBBPPlaybackController::ApplyPaused. Lets Turbo Bass and anything else reading it work with Custom Music.
 	bool bAppliedVanillaPlaying = false;

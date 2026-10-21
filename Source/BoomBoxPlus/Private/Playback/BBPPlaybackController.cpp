@@ -51,6 +51,9 @@ namespace
 	// Closer than this (cm), the direction between Boom Box and listener is too unstable for Doppler.
 	constexpr float MinDopplerDistance = 100.f;
 
+	// A Boom Box this much beyond hearing range stops streaming; it starts again once back within range (cm).
+	constexpr float OutOfRangeMargin = 2000.f;
+
 	constexpr float MinDopplerPitch = 0.5f;
 	constexpr float MaxDopplerPitch = 2.f;
 
@@ -517,11 +520,11 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 	{
 		return;
 	}
-	// Only channels some Boom Box is playing need their tracks on disk.
+	// Only channels a Boom Box in range is playing need their tracks on disk.
 	TSet<const ABBPMusicChannel*> Heard;
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
-		if (const ABBPMusicChannel* Channel = Emitter.Channel.Get())
+		if (const ABBPMusicChannel* Channel = Emitter.bOutOfRange ? nullptr : Emitter.Channel.Get())
 		{
 			Heard.Add(Channel);
 		}
@@ -714,6 +717,30 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		Emitter.bLive = false;
 	}
 	if (!Channel)
+	{
+		return;
+	}
+
+	// Out of earshot nothing is decoded or streamed (a radio station disconnects). Back in range, the current track
+	// starts again below at the channel's current position, like for a player joining mid-song.
+	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
+	const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+	if (Pawn && BoomBox)
+	{
+		const float Distance = FVector::Dist(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
+		if (!Emitter.bOutOfRange && Distance > GetAudibleRange() + OutOfRangeMargin)
+		{
+			Emitter.bOutOfRange = true;
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is out of range (%.0f m); stopped streaming it"), *GetNameSafe(BoomBox), Distance / 100.f);
+			StopTrack(Emitter);
+		}
+		else if (Emitter.bOutOfRange && Distance <= GetAudibleRange())
+		{
+			Emitter.bOutOfRange = false;
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is back in range (%.0f m); joining its music"), *GetNameSafe(BoomBox), Distance / 100.f);
+		}
+	}
+	if (Emitter.bOutOfRange)
 	{
 		return;
 	}
