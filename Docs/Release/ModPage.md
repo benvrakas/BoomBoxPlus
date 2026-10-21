@@ -193,7 +193,8 @@ Lines starting with `LogBoomBoxPlus` explain most problems.
 
 - Mod icon: rendered from ["Satisfactory Boombox"](https://sketchfab.com/3d-models/satisfactory-boombox-f1d2455b48a34df6a9d2536f056e4fb2)
   by Laxity ([JME.3D](https://sketchfab.com/JME.3D)), licensed under
-  [Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/).
+  [Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/). The background was
+  extended to make the image square.
 - Demo track: "Monkeys Spinning Monkeys" by Kevin MacLeod ([incompetech.com](https://incompetech.com)),
   licensed under [Creative Commons: By Attribution 4.0](http://creativecommons.org/licenses/by/4.0/).
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (Unlicense) and [FFmpeg](https://ffmpeg.org) 8.1.3
