@@ -20,17 +20,21 @@ everyone within earshot hears the same song at the same moment.
 
 Inspired by the PEAK mod sPEAKer.
 
-![The Custom Music page: now playing with its source and Copy Link, the current lyric and the queue](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+![The Custom Music page: now playing with the current lyric, the Music, Radio and History tabs, search, the queue and the Boom Boxes you can hear](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/music-page.png)
+
+![The Radio tab: add a station or import a whole list, then play, rename or remove saved stations](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/radio-stations.png)
+
+![The History tab: the songs this Boom Box played, radio songs included, to play again or copy](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/history.png)
 
 ![Search results with Play Now, Play Next and Add](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/search-results.png)
 
 ![A radio station's announced song in the now-playing notification](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/radio.png)
 
-![A placed Boom Box playing, with the current lyric line on screen](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-in-world.png)
+![A placed Boom Box playing: the now-playing notification and the current lyric line](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-in-world.png)
 
-![Carrying a Boom Box: lyrics on screen, and Turbo Bass still works](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-carrying.png)
+![Carrying a Boom Box with the current lyric line on screen](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/lyrics-carrying.png)
 
-![The Boom Box's own screen following Custom Music](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/vanilla-boombox-page.png)
+![The Boom Box's own screen with the Custom Music tape and its button back to the Custom Music page](https://raw.githubusercontent.com/benvrakas/BoomBoxPlus/main/Docs/Images/vanilla-boombox-page.png)
 
 ### Features
 

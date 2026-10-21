@@ -10,6 +10,7 @@
   It used to wait for everyone in the session, so a friend on the other side of the map held every new song for
   2 minutes. Now only players within earshot count, and when only some of them are ready, the rest get 10 seconds
   before the song starts without them (with two players, it used to take both).
+- **A proper mod icon.** The icon is square without squashing the Boom Box any more.
 
 ## 1.5.1
 

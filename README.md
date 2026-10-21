@@ -4,7 +4,7 @@ A Satisfactory mod that makes the Boom Box play **your** music: songs from your 
 whole Spotify playlists and live internet radio. Everyone within earshot hears the same song at the same moment,
 with synced lyrics. Inspired by the PEAK mod sPEAKer.
 
-- **Current version:** 1.5.0 ([changelog](Docs/Release/Changelog.md))
+- **Current version:** 1.5.2 ([changelog](Docs/Release/Changelog.md))
 - **Needs:** Satisfactory build 513885 or newer (the October 2026 update) and SML 3.12 or newer.
 - **Get it:** install **BoomBoxPlus** with Satisfactory Mod Manager. Everyone in a multiplayer session needs it,
   on the same version.
@@ -79,9 +79,17 @@ rest are still being looked up, and the import carries on if you close the windo
 
 ## Screenshots
 
-The Custom Music page: now playing with its source, Copy Link, the current lyric, the seek bar and the queue.
+The Custom Music page: now playing with the current lyric, the Music, Radio and History tabs, search, the queue and the Boom Boxes you can hear.
 
 ![The Custom Music page](Docs/Images/music-page.png)
+
+The Radio tab: add a station or import a whole list of them, then play, rename or remove your saved stations.
+
+![The Radio tab](Docs/Images/radio-stations.png)
+
+The History tab: the songs this Boom Box played, radio songs included, to play again or copy.
+
+![The History tab](Docs/Images/history.png)
 
 Search results from YouTube and SoundCloud, each with Play Now, Play Next and Add.
 
