@@ -4,8 +4,8 @@ narrow band of the original.
 
     python Tools/MakeSquareIcon.py <16:9 render.png> <square output.png>
 
-The output was resized to Docs/Images/icon-512.png and Resources/Icon128.png (Docs/Images/icon-1920.png is the
-full size). Needs numpy, scipy and Pillow.
+The output was resized to Docs/Images/icon-1080.png (full resolution), Docs/Images/icon-512.png and
+Resources/Icon128.png. Needs numpy, scipy and Pillow.
 """
 import sys
 import numpy as np
