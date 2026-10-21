@@ -467,6 +467,31 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 			continue;
 		}
 		Channel->PruneMembers();
+		for (const AFGBoomBoxPlayer* Member : Channel->GetMembers())
+		{
+			if (const APlayerState* Carrier = GetCarrier(Member))
+			{
+				Channel->LastCarrier = Carrier;
+				break;
+			}
+		}
+		// A carried Boom Box is destroyed and made again when its player dies (and respawns, or picks it up from their
+		// crate). Its queue is kept for that player until they carry a Boom Box again.
+		if (Channel->GetMembers().Num() == 0 && Channel->LastCarrier.IsValid() && Channel->GetQueue().Num() > 0)
+		{
+			if (!Channel->bKeptForCarrier)
+			{
+				Channel->bKeptForCarrier = true;
+				Channel->bResumeWhenAdopted = Channel->IsPlaying();
+				if (Channel->bResumeWhenAdopted)
+				{
+					Channel->SetPlaying(false);
+				}
+				UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d lost its Boom Box; keeping its queue for %s until they carry a Boom Box again"),
+					Channel->GetLinkCode(), *Channel->LastCarrier->GetPlayerName());
+			}
+			continue;
+		}
 		if (Channel->GetMembers().Num() == 0)
 		{
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: channel %04d has no Boom Boxes left; removing it"), Channel->GetLinkCode());
@@ -492,6 +517,7 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 
 	// Saved channels first, so their Boom Boxes get their saved queue back instead of an empty channel below.
 	RestoreSavedChannels();
+	AdoptKeptChannels();
 
 	for (const FBBPActiveBoomBox& Active : ActiveBoomBoxes)
 	{
@@ -506,6 +532,60 @@ void ABBPPlaylistSubsystem::MaintainChannels()
 	{
 		SaveSyncTimer = SaveSyncInterval;
 		SaveChannels();
+	}
+}
+
+const APlayerState* ABBPPlaylistSubsystem::GetCarrier(const AFGBoomBoxPlayer* BoomBox)
+{
+	const APawn* Pawn = IsValid(BoomBox) && BoomBox->IsInEquipmentMode() ? Cast<APawn>(BoomBox->GetmOwningCharacter()) : nullptr;
+	return Pawn ? Pawn->GetPlayerState() : nullptr;
+}
+
+void ABBPPlaylistSubsystem::AdoptKeptChannels()
+{
+	TArray<ABBPMusicChannel*> Kept;
+	for (ABBPMusicChannel* Channel : Channels)
+	{
+		if (IsValid(Channel) && Channel->bKeptForCarrier)
+		{
+			Kept.Add(Channel);
+		}
+	}
+	for (ABBPMusicChannel* Channel : Kept)
+	{
+		const APlayerState* KeptFor = Channel->LastCarrier.Get();
+		if (!KeptFor)
+		{
+			continue;
+		}
+		for (const FBBPActiveBoomBox& Active : ActiveBoomBoxes)
+		{
+			if (!IsValid(Active.BoomBox) || GetCarrier(Active.BoomBox) != KeptFor)
+			{
+				continue;
+			}
+			// Only a Boom Box with nothing of its own takes the kept queue; one with music on it keeps it.
+			ABBPMusicChannel* Current = FindChannel(Active.BoomBox);
+			if (Current && (Current->GetMembers().Num() > 1 || Current->GetQueue().Num() > 0))
+			{
+				continue;
+			}
+			if (Current)
+			{
+				LeaveChannel(Current, Active.BoomBox);
+			}
+			Channel->AddMember(Active.BoomBox);
+			Channel->bKeptForCarrier = false;
+			if (Channel->bResumeWhenAdopted)
+			{
+				Channel->SetPlaying(true);
+			}
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: %s carries %s now; it gets back channel %04d's queue (%d track(s))"),
+				*KeptFor->GetPlayerName(), *GetNameSafe(Active.BoomBox), Channel->GetLinkCode(), Channel->GetQueue().Num());
+			EnsureMembersLoaded(Channel);
+			ForceNetUpdate();
+			break;
+		}
 	}
 }
 

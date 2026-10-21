@@ -2,6 +2,10 @@
 
 ## 1.5.2
 
+- **Your queue survives dying.** When you die, the game replaces the Boom Box you were carrying, and the mod used
+  to throw its queue away. Now the queue waits for you and picks up where it left off as soon as you carry a
+  Boom Box again (after respawning, or once you get it back from your crate). A Boom Box that already has songs of
+  its own keeps them.
 - **No more 2-minute hangs in multiplayer.** A new song waits for the players near the Boom Box to have it ready.
   It used to wait for everyone in the session, so a friend on the other side of the map held every new song for
   2 minutes. Now only players within earshot count, and when only some of them are ready, the rest get 10 seconds

@@ -90,6 +90,15 @@ public:
 	// Server only. True while one of this channel's Boom Boxes had Custom Music loaded at the last check.
 	bool bWasHeard = false;
 
+	// Server only. The player who last carried one of this channel's Boom Boxes.
+	TWeakObjectPtr<const APlayerState> LastCarrier;
+
+	// Server only. True while the channel has no Boom Box and is kept for LastCarrier (see ABBPPlaylistSubsystem::AdoptKeptChannels).
+	bool bKeptForCarrier = false;
+
+	// Server only. Whether the channel was playing when it was kept, so it resumes when adopted.
+	bool bResumeWhenAdopted = false;
+
 	UFUNCTION(BlueprintPure, Category = "BoomBoxPlus|Playlist")
 	const TArray<FBBPQueueEntry>& GetQueue() const { return Queue; }
 

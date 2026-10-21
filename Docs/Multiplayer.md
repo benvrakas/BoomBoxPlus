@@ -89,6 +89,18 @@ current track at the saved position through the usual load wait, or leaves it pa
 whose Boom Boxes are all gone are dropped. Saves from 1.2.1 and earlier (which only had `SavedGroups`, the
 group memberships) aren't read.
 
+**A carried Boom Box that's remade keeps its queue** (1.5.2). When a player dies, the game destroys the Boom Box
+they carry with their old character and makes a new one (on respawn, or when they take it from their crate); the
+tape, volume and song index come across in its item state (`FFGBoomBoxItemState`), but the new actor has a new path,
+and `MaintainChannels` used to drop the channel as having "no Boom Boxes left" (seen in a log: out of bounds at
+04:35:31, the Boom Box destroyed at :34 and a new one with Custom Music at :36, its queue gone). Now each channel
+remembers the player who last carried one of its Boom Boxes (`LastCarrier`, refreshed every maintenance pass). A
+channel left with no Boom Box but with a queue and a living `LastCarrier` is kept (`bKeptForCarrier`), paused if it
+was playing. `AdoptKeptChannels` (every pass, after restoring saved channels) gives it to the Boom Box that player
+carries next, if that Boom Box's own channel is unused (only it, empty queue): it leaves its empty channel, joins the
+kept one, and the kept one resumes if it was playing. A Boom Box with music of its own keeps it. Kept channels have
+no members, so they aren't saved: a player who saves and quits before carrying a Boom Box again loses that queue.
+
 **Leaving is the only way a group loses a member**, and it's per Boom Box: `UnlinkBoomBox` ("Leave Group"
 on the page) takes one Boom Box off a shared channel and gives it its own again; the rest of the group
 keeps playing together and stays paired, restart or not. There's no automatic disconnect any more — a group

@@ -6,6 +6,7 @@
 #include "Subsystem/ModSubsystem.h"
 #include "BBPPlaylistSubsystem.generated.h"
 
+class APlayerState;
 class ABBPMusicChannel;
 class AFGBoomBoxPlayer;
 class UBBPPlaybackController;
@@ -102,6 +103,13 @@ private:
 
 	// Server only. Removes BoomBox from Channel, destroying the channel if nobody is left on it.
 	void LeaveChannel(ABBPMusicChannel* Channel, AFGBoomBoxPlayer* BoomBox);
+
+	// Server only. Gives each channel kept for a player (its carried Boom Box was destroyed, e.g. when they died) to the
+	// Boom Box that player carries now, if that one has an unused channel of its own.
+	void AdoptKeptChannels();
+
+	// The player state of whoever carries BoomBox, or null if it's placed or not carried.
+	static const APlayerState* GetCarrier(const AFGBoomBoxPlayer* BoomBox);
 
 	// Server only. Moves every Boom Box on Absorbed onto Kept, merges Absorbed's queue into Kept's and destroys Absorbed.
 	void MergeChannels(ABBPMusicChannel* Kept, ABBPMusicChannel* Absorbed);
