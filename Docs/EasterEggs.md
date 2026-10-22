@@ -128,7 +128,12 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   also rewrites every action's bank type to 0 (`RetargetActions`), and `make_bank.py` writes 0 there. (That first
   objects test was flawed anyway: the cut-down copies get their own id, but their actions still named the original.)
   The diagnostics now point each copy's actions at the copy, and add the objects type by type (actor-mixer, sounds,
-  actions, events), so a remaining problem shows which type it's in. Untested in game when written.
+  actions, events), so a remaining problem shows which type it's in.
+- Result (first session on the action fix): the 11 actions were rewritten to type 0 and the whole bank still failed
+  with 15. Test loads: header 1, header + media 1, + actor-mixer 15. So it is the actor-mixer (the object that
+  routes to ADA's voice bus 1690368967): the first object type that fails, and every later variant includes it.
+  Suspects: the bus id it names isn't known to Wwise at that point, or the mixer's child list (sounds that aren't in
+  the cut-down copy). Next test: mixer with an empty child list; mixer with the bus id zeroed.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
