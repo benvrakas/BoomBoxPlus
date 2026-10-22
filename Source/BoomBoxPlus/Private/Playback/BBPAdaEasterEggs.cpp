@@ -1,11 +1,7 @@
 #include "Playback/BBPAdaEasterEggs.h"
-#if PLATFORM_WINDOWS
-#include "Windows/AllowWindowsPlatformTypes.h"
-#include <Windows.h>
-#include "Windows/HideWindowsPlatformTypes.h"
-#endif
 #include "AkAudioEvent.h"
 #include "Audio/BBPDecoder.h"
+#include "Audio/BBPWwise.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "BBPConfig.h"
 #include "BoomBoxPlus.h"
@@ -62,349 +58,8 @@ namespace
 	const TCHAR* BankFileName = TEXT("BBP_ADA.bnk");
 	const TCHAR* EventPrefix = TEXT("BBP_ADA_");
 
-	// Byte offset of the bank type in a bank's BKHD header ('BKHD', chunk size, then version, bank id, language id,
-	// alignment and flags, project id, bank type), and the type of a bank loaded by hand.
-	constexpr int32 BankTypeOffset = 28;
-	constexpr uint32 UserBankType = 0;
-
-	// The Wwise game object ADA's voice plays on (registered with the bank; uses the default listeners).
+	// The Wwise game object ADA's voice plays on when the message box's own emitter isn't available.
 	constexpr uint64 VoiceGameObject = 0x4242504144414441ull;
-
-	// The game's own AK::SoundEngine functions, found by their exported names in its Wwise DLL. The modding kit's
-	// Wwise (2023.1) doesn't export them and the game's (2025.1) virtual API may be laid out differently, while these
-	// plain functions are matched by exact signature.
-	struct FBBPWwiseCalls
-	{
-		int32 (*LoadBankMemoryCopy)(const void*, uint32, uint32&) = nullptr;
-		// The overload that also reports the bank's type; the plain one only accepts User banks, and ours is an Event bank.
-		int32 (*LoadBankMemoryCopyTyped)(const void*, uint32, uint32&, uint32&) = nullptr;
-		uint32 (*PostEvent)(uint32, uint64, uint32, void*, void*, uint32, void*, uint32) = nullptr;
-		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
-		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
-		// Optional, for diagnosing a bank that won't load.
-		int32 (*UnloadBank)(uint32, const void*, uint32) = nullptr;
-		int32 (*SetLocalOutput)(uint32, void (*)(int32, const wchar_t*, int32, uint32, uint64)) = nullptr;
-
-		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
-	};
-
-	const FBBPWwiseCalls& GetWwiseCalls()
-	{
-		static const FBBPWwiseCalls Calls = []
-		{
-			FBBPWwiseCalls Found;
-#if PLATFORM_WINDOWS
-			for (const TCHAR* Dll : { TEXT("FactoryGameSteam-WwiseSoundEngine-Win64-Shipping.dll"), TEXT("FactoryGameEGS-WwiseSoundEngine-Win64-Shipping.dll") })
-			{
-				void* Module = GetModuleHandleW(Dll);
-				if (!Module)
-				{
-					continue;
-				}
-				Found.LoadBankMemoryCopy = reinterpret_cast<decltype(Found.LoadBankMemoryCopy)>(FPlatformProcess::GetDllExport(Module, TEXT("?LoadBankMemoryCopy@SoundEngine@AK@@YA?AW4AKRESULT@@PEBXIAEAI@Z")));
-				Found.LoadBankMemoryCopyTyped = reinterpret_cast<decltype(Found.LoadBankMemoryCopyTyped)>(FPlatformProcess::GetDllExport(Module, TEXT("?LoadBankMemoryCopy@SoundEngine@AK@@YA?AW4AKRESULT@@PEBXIAEAI1@Z")));
-				Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
-				Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
-				Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
-				Found.UnloadBank = reinterpret_cast<decltype(Found.UnloadBank)>(FPlatformProcess::GetDllExport(Module, TEXT("?UnloadBank@SoundEngine@AK@@YA?AW4AKRESULT@@IPEBXI@Z")));
-				Found.SetLocalOutput = reinterpret_cast<decltype(Found.SetLocalOutput)>(FPlatformProcess::GetDllExport(Module, TEXT("?SetLocalOutput@Monitor@AK@@YA?AW4AKRESULT@@IP6AXW4ErrorCode@12@PEB_WW4ErrorLevel@12@I_K@Z@Z")));
-				UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: game Wwise functions in %s: LoadBankMemoryCopy %s (with bank type %s), PostEvent %s, RegisterGameObj %s, StopPlayingID %s, UnloadBank %s, Monitor::SetLocalOutput %s"), Dll,
-					Found.LoadBankMemoryCopy ? TEXT("found") : TEXT("MISSING"), Found.LoadBankMemoryCopyTyped ? TEXT("found") : TEXT("MISSING"), Found.PostEvent ? TEXT("found") : TEXT("MISSING"),
-					Found.RegisterGameObj ? TEXT("found") : TEXT("MISSING"), Found.StopPlayingID ? TEXT("found") : TEXT("MISSING"),
-					Found.UnloadBank ? TEXT("found") : TEXT("missing"), Found.SetLocalOutput ? TEXT("found") : TEXT("missing"));
-				break;
-			}
-#endif
-			return Found;
-		}();
-		return Calls;
-	}
-
-	// Receives Wwise's own monitor messages while the bank loads (AK::Monitor::LocalOutputFunc).
-	void LogWwiseMessage(int32 Code, const wchar_t* Message, int32 Level, uint32 PlayingId, uint64 GameObject)
-	{
-#if PLATFORM_WINDOWS
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise says (code %d, level %d): %s"), Code, Level, Message ? Message : TEXT(""));
-#endif
-	}
-
-	// AK::Monitor::ErrorLevel_All.
-	constexpr uint32 WwiseAllMessages = 3;
-
-	// Offset of the bank id in a bank file ('BKHD', chunk size, version, then the id).
-	constexpr int32 BankIdOffset = 12;
-
-	// A chunk of a bank file ('BKHD', 'DIDX', 'DATA', 'HIRC'), as a byte range including its 8-byte header.
-	struct FBankChunk
-	{
-		FString Tag;
-		int32 Start = 0;
-		int32 Size = 0;
-	};
-
-	// One object of a bank's HIRC chunk: its type (2 sound, 3 action, 4 event, 7 actor-mixer) and byte range including its
-	// 5-byte header.
-	struct FBankObject
-	{
-		uint8 Type = 0;
-		int32 Start = 0;
-		int32 Size = 0;
-	};
-
-	TArray<FBankChunk> ReadChunks(const TArray<uint8>& Bytes)
-	{
-		TArray<FBankChunk> Chunks;
-		for (int32 Pos = 0; Pos + 8 <= Bytes.Num();)
-		{
-			uint32 Size = 0;
-			FMemory::Memcpy(&Size, Bytes.GetData() + Pos + 4, sizeof(Size));
-			if (Pos + 8 + (int64)Size > Bytes.Num())
-			{
-				UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: bank chunk at byte %d runs past the end of the file"), Pos);
-				break;
-			}
-			FString Tag;
-			for (int32 i = 0; i < 4; ++i)
-			{
-				Tag.AppendChar(static_cast<TCHAR>(Bytes[Pos + i]));
-			}
-			Chunks.Add({ Tag, Pos, (int32)Size + 8 });
-			Pos += 8 + Size;
-		}
-		return Chunks;
-	}
-
-	TArray<FBankObject> ReadObjects(const TArray<uint8>& Bytes, const FBankChunk& Hirc)
-	{
-		TArray<FBankObject> Objects;
-		const int32 End = Hirc.Start + Hirc.Size;
-		uint32 Count = 0;
-		FMemory::Memcpy(&Count, Bytes.GetData() + Hirc.Start + 8, sizeof(Count));
-		int32 Pos = Hirc.Start + 12;
-		for (uint32 i = 0; i < Count && Pos + 5 <= End; ++i)
-		{
-			uint32 Size = 0;
-			FMemory::Memcpy(&Size, Bytes.GetData() + Pos + 1, sizeof(Size));
-			if (Pos + 5 + (int64)Size > End)
-			{
-				break;
-			}
-			Objects.Add({ Bytes[Pos], Pos, (int32)Size + 5 });
-			Pos += 5 + Size;
-		}
-		return Objects;
-	}
-
-	// Points every play action that names bank FromId at bank ToId of type ToType instead (an action ends with the id and
-	// type of the bank holding its target). Returns how many changed.
-	int32 RetargetActions(TArray<uint8>& Bytes, uint32 FromId, uint32 ToId, uint32 ToType)
-	{
-		int32 Changed = 0;
-		for (const FBankChunk& Chunk : ReadChunks(Bytes))
-		{
-			if (Chunk.Tag != TEXT("HIRC"))
-			{
-				continue;
-			}
-			for (const FBankObject& Object : ReadObjects(Bytes, Chunk))
-			{
-				if (Object.Type != 3 || Object.Size < 5 + 8)
-				{
-					continue;
-				}
-				uint8* Tail = Bytes.GetData() + Object.Start + Object.Size - 8;
-				uint32 BankId = 0;
-				uint32 BankType = 0;
-				FMemory::Memcpy(&BankId, Tail, sizeof(BankId));
-				FMemory::Memcpy(&BankType, Tail + 4, sizeof(BankType));
-				if (BankId == FromId && (BankId != ToId || BankType != ToType))
-				{
-					FMemory::Memcpy(Tail, &ToId, sizeof(ToId));
-					FMemory::Memcpy(Tail + 4, &ToType, sizeof(ToType));
-					++Changed;
-				}
-			}
-		}
-		return Changed;
-	}
-
-	// Moves the bank's actor-mixers after its sounds. Wwise looks up a container's children while loading it, so they
-	// have to come first; the bank from make_bank.py up to 1.5.5 put the mixer first. Returns true if anything moved.
-	bool PutChildrenFirst(TArray<uint8>& Bytes)
-	{
-		for (const FBankChunk& Chunk : ReadChunks(Bytes))
-		{
-			if (Chunk.Tag != TEXT("HIRC"))
-			{
-				continue;
-			}
-			const TArray<FBankObject> Objects = ReadObjects(Bytes, Chunk);
-			const int32 FirstSound = Objects.IndexOfByPredicate([](const FBankObject& Object) { return Object.Type == 2; });
-			const int32 FirstMixer = Objects.IndexOfByPredicate([](const FBankObject& Object) { return Object.Type == 7; });
-			if (FirstSound == INDEX_NONE || FirstMixer == INDEX_NONE || FirstMixer > FirstSound)
-			{
-				return false;
-			}
-			TArray<uint8> Body;
-			for (const uint8 Type : { 2, 7 })
-			{
-				for (const FBankObject& Object : Objects)
-				{
-					if (Object.Type == Type)
-					{
-						Body.Append(Bytes.GetData() + Object.Start, Object.Size);
-					}
-				}
-			}
-			for (const FBankObject& Object : Objects)
-			{
-				if (Object.Type != 2 && Object.Type != 7)
-				{
-					Body.Append(Bytes.GetData() + Object.Start, Object.Size);
-				}
-			}
-			if (Objects.Num() == 0 || Body.Num() != Objects.Last().Start + Objects.Last().Size - Objects[0].Start)
-			{
-				return false;
-			}
-			FMemory::Memcpy(Bytes.GetData() + Objects[0].Start, Body.GetData(), Body.Num());
-			return true;
-		}
-		return false;
-	}
-
-	// Loads parts of a bank that failed to load, each as its own small bank (its own id, its actions pointed at it), and
-	// logs which load: the header alone, with the media, then with the objects added type by type. Each that loads is
-	// unloaded again.
-	void DiagnoseBank(const FBBPWwiseCalls& Wwise, const TArray<uint8>& Bytes)
-	{
-		const TArray<FBankChunk> Chunks = ReadChunks(Bytes);
-		FString Layout;
-		for (const FBankChunk& Chunk : Chunks)
-		{
-			Layout += FString::Printf(TEXT("%s %d, "), *Chunk.Tag, Chunk.Size - 8);
-		}
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank chunks: %s%d bytes"), *Layout, Bytes.Num());
-		if (Chunks.Num() == 0 || Chunks[0].Tag != TEXT("BKHD") || Bytes.Num() < BankIdOffset + 4)
-		{
-			return;
-		}
-		uint32 BaseId = 0;
-		FMemory::Memcpy(&BaseId, Bytes.GetData() + BankIdOffset, sizeof(BaseId));
-		const FBankChunk* Hirc = Chunks.FindByPredicate([](const FBankChunk& Chunk) { return Chunk.Tag == TEXT("HIRC"); });
-		const TArray<FBankObject> Objects = Hirc ? ReadObjects(Bytes, *Hirc) : TArray<FBankObject>();
-
-		struct FVariant
-		{
-			const TCHAR* Label;
-			bool bMedia;
-			TArray<uint8> ObjectTypes;
-			// Changes to the actor-mixer in this copy: no child list, and/or the bus it routes to set to none (0).
-			bool bMixerNoChildren = false;
-			bool bMixerNoBus = false;
-		};
-		const TArray<FVariant> Variants = {
-			{ TEXT("header"), false, {} },
-			{ TEXT("header + media"), true, {} },
-			{ TEXT("header + media + actor-mixer"), true, { 7 } },
-			{ TEXT("header + media + actor-mixer + sounds"), true, { 7, 2 } },
-			{ TEXT("header + media + actor-mixer + sounds + actions"), true, { 7, 2, 3 } },
-			{ TEXT("everything"), true, { 7, 2, 3, 4 } },
-			{ TEXT("header + actor-mixer without children"), false, { 7 }, true, false },
-			{ TEXT("header + actor-mixer without a bus"), false, { 7 }, false, true },
-			{ TEXT("header + actor-mixer without children or bus"), false, { 7 }, true, true },
-			{ TEXT("header + media + all objects, mixer without a bus"), true, { 7, 2, 3, 4 }, false, true },
-		};
-		for (int32 i = 0; i < Variants.Num(); ++i)
-		{
-			const FVariant& Variant = Variants[i];
-			TArray<uint8> Part;
-			for (const FBankChunk& Chunk : Chunks)
-			{
-				if (Chunk.Tag == TEXT("BKHD") || (Variant.bMedia && (Chunk.Tag == TEXT("DIDX") || Chunk.Tag == TEXT("DATA"))))
-				{
-					Part.Append(Bytes.GetData() + Chunk.Start, Chunk.Size);
-				}
-			}
-			if (Hirc && Variant.ObjectTypes.Num() > 0)
-			{
-				TArray<uint8> Body;
-				uint32 Count = 0;
-				for (const FBankObject& Object : Objects)
-				{
-					if (!Variant.ObjectTypes.Contains(Object.Type))
-					{
-						continue;
-					}
-					TArray<uint8> Copy(Bytes.GetData() + Object.Start, Object.Size);
-					if (Object.Type == 7)
-					{
-						// Object header: type (1), size (4); body: id (4), then 4 bytes, then the bus id at body offset 8;
-						// the child list (count, ids) ends the body.
-						constexpr int32 HeaderBytes = 5;
-						constexpr int32 BusOffset = HeaderBytes + 8;
-						if (Variant.bMixerNoBus && Copy.Num() > BusOffset + 4)
-						{
-							const uint32 NoBus = 0;
-							FMemory::Memcpy(Copy.GetData() + BusOffset, &NoBus, sizeof(NoBus));
-						}
-						if (Variant.bMixerNoChildren)
-						{
-							int32 Sounds = 0;
-							for (const FBankObject& Other : Objects)
-							{
-								Sounds += Other.Type == 2 ? 1 : 0;
-							}
-							const int32 CountAt = Copy.Num() - 4 - 4 * Sounds;
-							uint32 Listed = 0;
-							if (CountAt > HeaderBytes && (FMemory::Memcpy(&Listed, Copy.GetData() + CountAt, sizeof(Listed)), Listed == (uint32)Sounds))
-							{
-								Copy.SetNum(CountAt + 4);
-								const uint32 None = 0;
-								FMemory::Memcpy(Copy.GetData() + CountAt, &None, sizeof(None));
-								const uint32 NewBodySize = Copy.Num() - HeaderBytes;
-								FMemory::Memcpy(Copy.GetData() + 1, &NewBodySize, sizeof(NewBodySize));
-							}
-							else
-							{
-								UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: can't find the actor-mixer's child list; copy '%s' keeps it"), Variant.Label);
-							}
-						}
-					}
-					Body.Append(Copy);
-					++Count;
-				}
-				const uint32 ChunkSize = Body.Num() + 4;
-				Part.Append(reinterpret_cast<const uint8*>("HIRC"), 4);
-				Part.Append(reinterpret_cast<const uint8*>(&ChunkSize), 4);
-				Part.Append(reinterpret_cast<const uint8*>(&Count), 4);
-				Part.Append(Body);
-			}
-			const uint32 PartId = BaseId + 1 + i;
-			FMemory::Memcpy(Part.GetData() + BankIdOffset, &PartId, sizeof(PartId));
-			RetargetActions(Part, BaseId, PartId, UserBankType);
-			uint32 LoadedId = 0;
-			uint32 LoadedType = 0;
-			const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Part.GetData(), Part.Num(), LoadedId, LoadedType)
-				: Wwise.LoadBankMemoryCopy(Part.GetData(), Part.Num(), LoadedId);
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: test load of the bank's %s (%d bytes): result %d"), Variant.Label, Part.Num(), Result);
-			if (Result == 1 && Wwise.UnloadBank)
-			{
-				Wwise.UnloadBank(LoadedId, nullptr, LoadedType);
-			}
-		}
-	}
-
-	// Wwise's id for a name: FNV-1 of the lowercase name (as AK::SoundEngine::GetIDFromString).
-	uint32 WwiseId(const FString& Name)
-	{
-		uint32 Hash = 2166136261u;
-		for (const TCHAR Char : Name.ToLower())
-		{
-			Hash = (Hash * 16777619u) ^ static_cast<uint8>(Char);
-		}
-		return Hash;
-	}
 
 	constexpr float IdleSeconds1 = 300.f;
 	constexpr float IdleSeconds2 = 900.f;
@@ -489,65 +144,19 @@ void UBBPAdaEasterEggs::LoadBank()
 		return;
 	}
 	bBankTried = true;
-	const FBBPWwiseCalls& Wwise = GetWwiseCalls();
 	const FString Path = AudioDir / BankFileName;
 	TArray<uint8> Bytes;
-	if (!Wwise.IsComplete() || !FFileHelper::LoadFileToArray(Bytes, *Path))
+	if (!BBPWwise::GetCalls().IsComplete() || !FFileHelper::LoadFileToArray(Bytes, *Path))
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: %s; lines play through Unreal"),
-			Wwise.IsComplete() ? *FString::Printf(TEXT("no Wwise bank at '%s'"), *Path) : TEXT("the game's Wwise functions weren't found"));
+			BBPWwise::GetCalls().IsComplete() ? *FString::Printf(TEXT("no Wwise bank at '%s'"), *Path) : TEXT("the game's Wwise functions weren't found"));
 		return;
 	}
-	// The bank's header comes from one of the game's per-event banks (type 30), which Wwise only loads through the
-	// game's own asset system; marked as a hand-loaded bank it loads like any other.
-	if (Bytes.Num() > BankTypeOffset + 4 && FMemory::Memcmp(Bytes.GetData(), "BKHD", 4) == 0)
-	{
-		uint32 HeaderType = 0;
-		FMemory::Memcpy(&HeaderType, Bytes.GetData() + BankTypeOffset, sizeof(HeaderType));
-		if (HeaderType != UserBankType)
-		{
-			FMemory::Memcpy(Bytes.GetData() + BankTypeOffset, &UserBankType, sizeof(UserBankType));
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank header type %u changed to %u (user bank) before loading"), HeaderType, UserBankType);
-		}
-	}
-	if (Wwise.SetLocalOutput)
-	{
-		Wwise.SetLocalOutput(WwiseAllMessages, &LogWwiseMessage);
-	}
-	// Each play action also names the bank holding its sound, with that bank's type, still 30 from the template.
-	if (Bytes.Num() >= BankIdOffset + 4)
-	{
-		uint32 HeaderId = 0;
-		FMemory::Memcpy(&HeaderId, Bytes.GetData() + BankIdOffset, sizeof(HeaderId));
-		const int32 Retargeted = RetargetActions(Bytes, HeaderId, HeaderId, UserBankType);
-		if (Retargeted > 0)
-		{
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: %d play action(s) now name this bank as a user bank"), Retargeted);
-		}
-	}
-	if (PutChildrenFirst(Bytes))
-	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank objects reordered so the sounds come before their actor-mixer"));
-	}
-	uint32 BankId = 0;
-	uint32 BankType = 0;
-	const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Bytes.GetData(), Bytes.Num(), BankId, BankType)
-		: Wwise.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId);
-	// AK_Success is 1, AK_BankAlreadyLoaded 21.
-	bBankLoaded = Result == 1 || Result == 21;
+	BBPWwise::PrepareBank(Bytes, TEXT("ADA"));
+	bBankLoaded = BBPWwise::LoadBank(Bytes, TEXT("ADA"));
 	if (bBankLoaded)
 	{
-		Wwise.RegisterGameObj(VoiceGameObject, "BBP_ADA");
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: Wwise bank '%s' (%d bytes) %s (result %d, bank %u, type %u)"), BankFileName, Bytes.Num(),
-		bBankLoaded ? TEXT("loaded; lines play on ADA's voice bus") : TEXT("FAILED to load; lines play through Unreal"), Result, BankId, BankType);
-	if (!bBankLoaded)
-	{
-		DiagnoseBank(Wwise, Bytes);
-	}
-	if (Wwise.SetLocalOutput)
-	{
-		Wwise.SetLocalOutput(0, nullptr);
+		BBPWwise::GetCalls().RegisterGameObj(VoiceGameObject, "BBP_ADA");
 	}
 }
 
@@ -557,13 +166,22 @@ bool UBBPAdaEasterEggs::PostWwiseVoice()
 	{
 		return false;
 	}
+	// On the message box's own emitter, as the game plays ADA's lines, so her voice gets the same treatment.
+	static FObjectPropertyBase* BoxEmitterProperty = FindFProperty<FObjectPropertyBase>(UFGAudioMessage::StaticClass(), TEXT("mAkAudioComponent"));
+	UObject* BoxEmitter = BoxEmitterProperty && ShownBox.IsValid() ? BoxEmitterProperty->GetObjectPropertyValue_InContainer(ShownBox.Get()) : nullptr;
+	const uint64 GameObject = BoxEmitter ? reinterpret_cast<uint64>(BoxEmitter) : VoiceGameObject;
 	const FString EventName = EventPrefix + LineName;
-	const uint32 PlayingId = GetWwiseCalls().PostEvent(WwiseId(EventName), VoiceGameObject, 0, nullptr, nullptr, 0, nullptr, 0);
+	uint32 PlayingId = BBPWwise::GetCalls().PostEvent(BBPWwise::IdFromName(EventName), GameObject, 0, nullptr, nullptr, 0, nullptr, 0);
+	if (PlayingId == 0 && BoxEmitter)
+	{
+		PlayingId = BBPWwise::GetCalls().PostEvent(BBPWwise::IdFromName(EventName), VoiceGameObject, 0, nullptr, nullptr, 0, nullptr, 0);
+	}
 	if (PlayingId == 0)
 	{
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: Wwise wouldn't play '%s'; playing it through Unreal"), *EventName);
 		return false;
 	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: '%s' posted on %s"), *EventName, BoxEmitter && GameObject == reinterpret_cast<uint64>(BoxEmitter) ? TEXT("the message box's emitter") : TEXT("the mod's own emitter"));
 	WwisePlayingId = PlayingId;
 	return true;
 }
@@ -898,7 +516,7 @@ void UBBPAdaEasterEggs::StopLine()
 	if (WwisePlayingId != 0)
 	{
 		// AkCurveInterpolation_Linear is 4.
-		GetWwiseCalls().StopPlayingID(WwisePlayingId, 200, 4);
+		BBPWwise::GetCalls().StopPlayingID(WwisePlayingId, 200, 4);
 		WwisePlayingId = 0;
 	}
 	if (Component)

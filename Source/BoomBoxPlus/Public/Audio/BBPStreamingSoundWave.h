@@ -57,6 +57,14 @@ public:
 	// Sets the pitch the audio plays at, as a ratio (1 unchanged, 2 an octave up), without changing its speed.
 	void SetPitchRatio(float Ratio) { PitchRatio = Ratio; }
 
+	// Fills Out with the next NumSamples interleaved 16-bit samples (silence where none are decoded yet) and advances
+	// the stream. Called by Unreal's mixer, or by Wwise when the music plays there; never by both.
+	void GeneratePCM(int16* Out, int32 NumSamples);
+
+	// Format of the audio GeneratePCM gives (live streams: 48 kHz stereo).
+	int32 GetStreamSampleRate() const;
+	int32 GetStreamChannels() const;
+
 	//~ Begin USoundWaveProcedural interface
 	virtual int32 OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 NumSamples) override;
 	virtual Audio::EAudioMixerStreamDataFormat::Type GetGeneratedPCMDataFormat() const override;

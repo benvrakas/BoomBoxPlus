@@ -142,6 +142,11 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   now reorders the objects (`PutChildrenFirst`: sounds, then actor-mixers, then actions and events) and
   `make_bank.py` writes that order. The first session with it (2026-10-22): "Wwise bank 'BBP_ADA.bnk' ... loaded",
   result 1. So all three were needed: user bank type in the header, user bank type in the actions, children first.
+- The test loads and the Wwise monitor capture were removed once the bank loaded; `BBPWwise::PrepareBank` (shared
+  with the Wwise music bank, WwiseMusic.md) applies the three fixes, and one log line reports the load.
+- Heard through Wwise, her line sounded dry: none of the voice-bus effects. The game plays her lines on the message
+  box's own emitter (`UFGAudioMessage::mAkAudioComponent`), so `PostWwiseVoice` now posts on that component (by
+  reflection; its game object id is its address), falling back to the mod's own game object. Untested when written.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not

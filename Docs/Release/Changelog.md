@@ -2,6 +2,9 @@
 
 ## 1.5.5
 
+- **Custom Music sounds like part of the world.** Boom Boxes now play your music through the game's own audio engine,
+  like the Boom Box's tapes: it echoes inside buildings and caves, is muffled behind walls, and follows the game's
+  Boom Box volume. A new setting, "Play through the game's audio engine", turns it off.
 - **ADA finally sounds like ADA.** Her easter-egg lines now go through the game's own ADA voice processing, the
   same as her other lines. The game had been refusing the mod's sound bank in every version so far, so they played
   through the mod's own audio instead; this version found and fixed the last of the reasons.

@@ -78,6 +78,16 @@ struct FBBPEmitter
 	// True while the Boom Box is too far from this player to hear: nothing is decoded or streamed for it.
 	bool bOutOfRange = false;
 
+	// The Boom Box's Wwise emitter (its own AkComponent), and the Wwise playing id while the music plays there
+	// (BBPWwiseMusic); 0 while it plays through Component instead.
+	TWeakObjectPtr<UObject> WwiseEmitter;
+	uint32 WwisePlayingId = 0;
+	float AppliedWwiseGain = -1.f;
+	double WwiseStartTime = 0.0;
+
+	// Times Wwise ended this emitter's music within a second of starting it; after two, it plays through Unreal.
+	int32 WwiseQuickEnds = 0;
+
 	// Last value written to the Boom Box's own (vanilla, unreplicated) "is playing" flag; see
 	// UBBPPlaybackController::ApplyPaused. Lets Turbo Bass and anything else reading it work with Custom Music.
 	bool bAppliedVanillaPlaying = false;
@@ -121,6 +131,9 @@ public:
 
 	// Distance (cm) within which Boom Boxes stream and download, silently past GetAudibleRange.
 	static float GetStreamRange();
+
+	// The Wwise emitter (AkComponent) the vanilla Boom Box plays its tapes on, or null.
+	static UObject* FindWwiseEmitter(const AFGBoomBoxPlayer* BoomBox);
 
 	// This player's own volume for BoomBox, 0-2 (1 = as loud as the Boom Box's own volume sets it). Local only:
 	// it changes nothing for other players.

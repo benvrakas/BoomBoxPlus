@@ -345,7 +345,24 @@ int32 UBBPStreamingSoundWave::GetUnderrunCount() const
 int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 NumSamples)
 {
 	OutAudio.SetNumUninitialized(NumSamples * sizeof(int16), EAllowShrinking::No);
-	int16* Dst = reinterpret_cast<int16*>(OutAudio.GetData());
+	GeneratePCM(reinterpret_cast<int16*>(OutAudio.GetData()), NumSamples);
+	return NumSamples;
+}
+
+int32 UBBPStreamingSoundWave::GetStreamSampleRate() const
+{
+	const TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> Current = State;
+	return Current.IsValid() ? Current->SampleRate : 48000;
+}
+
+int32 UBBPStreamingSoundWave::GetStreamChannels() const
+{
+	const TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> Current = State;
+	return Current.IsValid() ? Current->Channels : 2;
+}
+
+void UBBPStreamingSoundWave::GeneratePCM(int16* Dst, int32 NumSamples)
+{
 	const TSharedPtr<FBBPStreamState, ESPMode::ThreadSafe> Current = State;
 	const int32 Read = Current.IsValid() ? Current->Read(Dst, NumSamples) : 0;
 	if (Read < NumSamples)
@@ -365,7 +382,6 @@ int32 UBBPStreamingSoundWave::OnGeneratePCMAudio(TArray<uint8>& OutAudio, int32 
 		}
 		PitchShifter->Process(Dst, NumSamples / Current->Channels, PitchRatio.load());
 	}
-	return NumSamples;
 }
 
 Audio::EAudioMixerStreamDataFormat::Type UBBPStreamingSoundWave::GetGeneratedPCMDataFormat() const

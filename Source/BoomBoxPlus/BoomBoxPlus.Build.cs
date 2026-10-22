@@ -84,6 +84,9 @@ public class BoomBoxPlus : ModuleRules
 			"HTTPServer",
 		});
 		
+		// Headers only, for the types of the game's sound engine; its functions are reached through their exports.
+		PrivateIncludePathModuleNames.Add("WwiseSoundEngine");
+
 		// The Open dialog for importing station and song lists.
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{

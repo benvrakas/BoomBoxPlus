@@ -33,6 +33,7 @@ public:
 	static const FString GameMusicLevelKey;
 	static const FString GameMusicFadeTimeKey;
 	static const FString MuteInBackgroundKey;
+	static const FString GameAudioEngineKey;
 	static const FString DopplerKey;
 	static const FString DopplerDeadzoneKey;
 	static const FString DopplerStrengthKey;

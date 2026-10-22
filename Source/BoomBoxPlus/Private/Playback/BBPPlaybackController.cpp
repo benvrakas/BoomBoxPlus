@@ -3,6 +3,7 @@
 #include "Playback/BBPSongHistory.h"
 #include "Audio/BBPAudioDevice.h"
 #include "Audio/BBPStreamingSoundWave.h"
+#include "Audio/BBPWwiseMusic.h"
 #include "AudioDevice.h"
 #include "BoomBoxPlus.h"
 #include "BBPBlueprintLibrary.h"
@@ -766,7 +767,18 @@ void UBBPPlaybackController::SyncEmitters()
 		Emitter->bMutedByMode = IsValid(BoomBox) && !IsHeardInMode(BoomBox);
 		const float Duck = AdaEasterEggs ? AdaEasterEggs->GetMusicDuck() : 1.f;
 		const float Output = bMutedInBackground || Emitter->bMutedByMode ? 0.f : Volume * Duck;
-		if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
+		if (Emitter->WwisePlayingId != 0)
+		{
+			// In Wwise the game's volume sliders apply on its Boom Box bus, so the samples only carry the Boom Box's own
+			// volume, My Volume and ducking.
+			const float WwiseGain = bMutedInBackground || Emitter->bMutedByMode ? 0.f : FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MyVolume * Duck;
+			if (!FMath::IsNearlyEqual(Emitter->AppliedWwiseGain, WwiseGain, 0.001f))
+			{
+				Emitter->AppliedWwiseGain = WwiseGain;
+				BBPWwiseMusic::SetGain(Emitter->WwisePlayingId, WwiseGain);
+			}
+		}
+		else if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
 		{
 			Emitter->AppliedOutput = Output;
 			Emitter->Component->SetVolumeMultiplier(Output);
@@ -816,6 +828,24 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	if (!Channel)
 	{
 		return;
+	}
+
+	if (Emitter.WwisePlayingId != 0)
+	{
+		if (BBPWwiseMusic::HasEnded(Emitter.WwisePlayingId))
+		{
+			// Something stopped every sound on the Boom Box's emitter; the track starts again below. If that keeps
+			// happening right after starting, this Boom Box plays through Unreal instead.
+			const bool bQuick = FPlatformTime::Seconds() - Emitter.WwiseStartTime < 1.0;
+			Emitter.WwiseQuickEnds += bQuick ? 1 : 0;
+			UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: Wwise ended the music on %s%s; restarting it%s"), *GetNameSafe(Emitter.BoomBox.Get()),
+				bQuick ? TEXT(" right after it started") : TEXT(""), Emitter.WwiseQuickEnds >= 2 ? TEXT(" through Unreal") : TEXT(""));
+			StopTrack(Emitter);
+		}
+		else
+		{
+			BBPWwiseMusic::UpdatePosition(Emitter.WwiseEmitter.Get());
+		}
 	}
 
 	// Beyond the streaming range nothing is decoded or streamed (a radio station disconnects). Back in range, the
@@ -1073,9 +1103,33 @@ void UBBPPlaybackController::StartLiveStream(FBBPEmitter& Emitter, const FBBPQue
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: tuning %s in to radio '%s'"), *GetNameSafe(Emitter.BoomBox.Get()), *Entry.Track.Title);
 }
 
+UObject* UBBPPlaybackController::FindWwiseEmitter(const AFGBoomBoxPlayer* BoomBox)
+{
+	static FObjectPropertyBase* Property = FindFProperty<FObjectPropertyBase>(AFGBoomBoxPlayer::StaticClass(), TEXT("mAkComponent"));
+	return Property && IsValid(BoomBox) ? Property->GetObjectPropertyValue_InContainer(BoomBox) : nullptr;
+}
+
 void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWave* Wave)
 {
 	Emitter.Wave = Wave;
+	// Through the Boom Box's own Wwise emitter when possible, so the game's rooms, reverb and occlusion apply to it.
+	UObject* WwiseEmitter = Emitter.WwiseQuickEnds < 2 && UBBPConfig::GetBool(Playlist, UBBPConfig::GameAudioEngineKey, true)
+		? FindWwiseEmitter(Emitter.BoomBox.Get()) : nullptr;
+	if (WwiseEmitter)
+	{
+		const uint32 PlayingId = BBPWwiseMusic::Play(Wave, WwiseEmitter, Wave->GetStreamSampleRate(), Wave->GetStreamChannels());
+		if (PlayingId != 0)
+		{
+			Emitter.WwiseEmitter = WwiseEmitter;
+			Emitter.WwisePlayingId = PlayingId;
+			Emitter.AppliedWwiseGain = -1.f;
+			Emitter.WwiseStartTime = FPlatformTime::Seconds();
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s plays through Wwise (playing id %u, %d Hz, %d ch)"),
+				*GetNameSafe(Emitter.BoomBox.Get()), PlayingId, Wave->GetStreamSampleRate(), Wave->GetStreamChannels());
+			return;
+		}
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Playback: Wwise wouldn't play on %s; playing through Unreal"), *GetNameSafe(Emitter.BoomBox.Get()));
+	}
 	Emitter.Component->SetSound(Wave);
 	// Unreal pauses game sounds while the game is paused (the single-player pause menu). A station can't pause, so it
 	// keeps playing; a track pauses with the game, whose clock it follows.
@@ -1090,6 +1144,11 @@ void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWa
 
 void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 {
+	if (Emitter.WwisePlayingId != 0)
+	{
+		BBPWwiseMusic::Stop(Emitter.WwisePlayingId);
+		Emitter.WwisePlayingId = 0;
+	}
 	if (Emitter.Component)
 	{
 		Emitter.Component->Stop();
@@ -1105,6 +1164,10 @@ void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 
 void UBBPPlaybackController::ApplyPaused(FBBPEmitter& Emitter, bool bPaused)
 {
+	if (Emitter.WwisePlayingId != 0)
+	{
+		BBPWwiseMusic::SetPaused(Emitter.WwisePlayingId, bPaused);
+	}
 	if (Emitter.Component)
 	{
 		Emitter.Component->SetPaused(bPaused);
