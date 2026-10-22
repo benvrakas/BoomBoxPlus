@@ -10,9 +10,9 @@
   what it's doing for you: playing, streaming a station, silent beyond hearing, downloading, paused, or out of range.
 - **`/bbp stopall`.** The host can type `/bbp stopall` in chat to pause every Custom Music Boom Box in the world at
   once. Queues stay as they are; press Play on a Boom Box to start it again.
-- **ADA's sound bank: finding out why it won't load.** The game still refuses the mod's ADA sound bank, so her
-  easter-egg lines play through the mod's own audio (they work as before). This version doesn't fix that yet: it
-  writes the details of the refusal to the game log, so the next version can.
+- **ADA's sound bank: a likely fix.** The game has been refusing the mod's ADA sound bank, so her easter-egg lines
+  played through the mod's own audio. This version fixes the most likely cause and, if the bank still won't load,
+  writes the exact reason to the game log. Her lines work either way.
 
 ## 1.5.3
 

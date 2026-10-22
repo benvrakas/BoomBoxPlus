@@ -121,6 +121,14 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   under its own bank id (the real id + 1, 2, 3): the header alone, header + media (DIDX, DATA), header + objects
   (HIRC). Each that loads is unloaded again (`UnloadBank(id, nullptr, type)`). Which ones load narrows the 15 down to
   the header, the media or the objects.
+- The first 1.5.4 session: header 1, header + media 1, header + objects 15. So the objects. Each play action (HIRC type
+  3) ends with the id and type of the bank holding its sound, copied from the game's bank as type 30. That explains
+  both failures: as a type-30 bank (1.5.0-1.5.2) ours is taken for an auto-generated per-event bank, whose id must be
+  its event's; as a user bank (1.5.3) its actions still point at a type-30 bank that doesn't exist. `LoadBank` now
+  also rewrites every action's bank type to 0 (`RetargetActions`), and `make_bank.py` writes 0 there. (That first
+  objects test was flawed anyway: the cut-down copies get their own id, but their actions still named the original.)
+  The diagnostics now point each copy's actions at the copy, and add the objects type by type (actor-mixer, sounds,
+  actions, events), so a remaining problem shows which type it's in. Untested in game when written.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not

@@ -134,17 +134,26 @@ namespace
 	// Offset of the bank id in a bank file ('BKHD', chunk size, version, then the id).
 	constexpr int32 BankIdOffset = 12;
 
-	// Loads parts of a bank that failed to load, each as its own small bank, and logs which load: the header alone, then
-	// with the media, then with the objects. Each one that loads is unloaded again.
-	void DiagnoseBank(const FBBPWwiseCalls& Wwise, const TArray<uint8>& Bytes)
+	// A chunk of a bank file ('BKHD', 'DIDX', 'DATA', 'HIRC'), as a byte range including its 8-byte header.
+	struct FBankChunk
 	{
-		struct FChunk
-		{
-			FString Tag;
-			int32 Start = 0;
-			int32 Size = 0;
-		};
-		TArray<FChunk> Chunks;
+		FString Tag;
+		int32 Start = 0;
+		int32 Size = 0;
+	};
+
+	// One object of a bank's HIRC chunk: its type (2 sound, 3 action, 4 event, 7 actor-mixer) and byte range including its
+	// 5-byte header.
+	struct FBankObject
+	{
+		uint8 Type = 0;
+		int32 Start = 0;
+		int32 Size = 0;
+	};
+
+	TArray<FBankChunk> ReadChunks(const TArray<uint8>& Bytes)
+	{
+		TArray<FBankChunk> Chunks;
 		for (int32 Pos = 0; Pos + 8 <= Bytes.Num();)
 		{
 			uint32 Size = 0;
@@ -162,8 +171,71 @@ namespace
 			Chunks.Add({ Tag, Pos, (int32)Size + 8 });
 			Pos += 8 + Size;
 		}
+		return Chunks;
+	}
+
+	TArray<FBankObject> ReadObjects(const TArray<uint8>& Bytes, const FBankChunk& Hirc)
+	{
+		TArray<FBankObject> Objects;
+		const int32 End = Hirc.Start + Hirc.Size;
+		uint32 Count = 0;
+		FMemory::Memcpy(&Count, Bytes.GetData() + Hirc.Start + 8, sizeof(Count));
+		int32 Pos = Hirc.Start + 12;
+		for (uint32 i = 0; i < Count && Pos + 5 <= End; ++i)
+		{
+			uint32 Size = 0;
+			FMemory::Memcpy(&Size, Bytes.GetData() + Pos + 1, sizeof(Size));
+			if (Pos + 5 + (int64)Size > End)
+			{
+				break;
+			}
+			Objects.Add({ Bytes[Pos], Pos, (int32)Size + 5 });
+			Pos += 5 + Size;
+		}
+		return Objects;
+	}
+
+	// Points every play action that names bank FromId at bank ToId of type ToType instead (an action ends with the id and
+	// type of the bank holding its target). Returns how many changed.
+	int32 RetargetActions(TArray<uint8>& Bytes, uint32 FromId, uint32 ToId, uint32 ToType)
+	{
+		int32 Changed = 0;
+		for (const FBankChunk& Chunk : ReadChunks(Bytes))
+		{
+			if (Chunk.Tag != TEXT("HIRC"))
+			{
+				continue;
+			}
+			for (const FBankObject& Object : ReadObjects(Bytes, Chunk))
+			{
+				if (Object.Type != 3 || Object.Size < 5 + 8)
+				{
+					continue;
+				}
+				uint8* Tail = Bytes.GetData() + Object.Start + Object.Size - 8;
+				uint32 BankId = 0;
+				uint32 BankType = 0;
+				FMemory::Memcpy(&BankId, Tail, sizeof(BankId));
+				FMemory::Memcpy(&BankType, Tail + 4, sizeof(BankType));
+				if (BankId == FromId && (BankId != ToId || BankType != ToType))
+				{
+					FMemory::Memcpy(Tail, &ToId, sizeof(ToId));
+					FMemory::Memcpy(Tail + 4, &ToType, sizeof(ToType));
+					++Changed;
+				}
+			}
+		}
+		return Changed;
+	}
+
+	// Loads parts of a bank that failed to load, each as its own small bank (its own id, its actions pointed at it), and
+	// logs which load: the header alone, with the media, then with the objects added type by type. Each that loads is
+	// unloaded again.
+	void DiagnoseBank(const FBBPWwiseCalls& Wwise, const TArray<uint8>& Bytes)
+	{
+		const TArray<FBankChunk> Chunks = ReadChunks(Bytes);
 		FString Layout;
-		for (const FChunk& Chunk : Chunks)
+		for (const FBankChunk& Chunk : Chunks)
 		{
 			Layout += FString::Printf(TEXT("%s %d, "), *Chunk.Tag, Chunk.Size - 8);
 		}
@@ -174,28 +246,60 @@ namespace
 		}
 		uint32 BaseId = 0;
 		FMemory::Memcpy(&BaseId, Bytes.GetData() + BankIdOffset, sizeof(BaseId));
-		const TArray<TArray<FString>> Variants = {
-			{ TEXT("BKHD") },
-			{ TEXT("BKHD"), TEXT("DIDX"), TEXT("DATA") },
-			{ TEXT("BKHD"), TEXT("HIRC") },
+		const FBankChunk* Hirc = Chunks.FindByPredicate([](const FBankChunk& Chunk) { return Chunk.Tag == TEXT("HIRC"); });
+		const TArray<FBankObject> Objects = Hirc ? ReadObjects(Bytes, *Hirc) : TArray<FBankObject>();
+
+		struct FVariant
+		{
+			const TCHAR* Label;
+			bool bMedia;
+			TArray<uint8> ObjectTypes;
+		};
+		const TArray<FVariant> Variants = {
+			{ TEXT("header"), false, {} },
+			{ TEXT("header + media"), true, {} },
+			{ TEXT("header + media + actor-mixer"), true, { 7 } },
+			{ TEXT("header + media + actor-mixer + sounds"), true, { 7, 2 } },
+			{ TEXT("header + media + actor-mixer + sounds + actions"), true, { 7, 2, 3 } },
+			{ TEXT("everything"), true, { 7, 2, 3, 4 } },
 		};
 		for (int32 i = 0; i < Variants.Num(); ++i)
 		{
+			const FVariant& Variant = Variants[i];
 			TArray<uint8> Part;
-			for (const FChunk& Chunk : Chunks)
+			for (const FBankChunk& Chunk : Chunks)
 			{
-				if (Variants[i].Contains(Chunk.Tag))
+				if (Chunk.Tag == TEXT("BKHD") || (Variant.bMedia && (Chunk.Tag == TEXT("DIDX") || Chunk.Tag == TEXT("DATA"))))
 				{
 					Part.Append(Bytes.GetData() + Chunk.Start, Chunk.Size);
 				}
 			}
+			if (Hirc && Variant.ObjectTypes.Num() > 0)
+			{
+				TArray<uint8> Body;
+				uint32 Count = 0;
+				for (const FBankObject& Object : Objects)
+				{
+					if (Variant.ObjectTypes.Contains(Object.Type))
+					{
+						Body.Append(Bytes.GetData() + Object.Start, Object.Size);
+						++Count;
+					}
+				}
+				const uint32 ChunkSize = Body.Num() + 4;
+				Part.Append(reinterpret_cast<const uint8*>("HIRC"), 4);
+				Part.Append(reinterpret_cast<const uint8*>(&ChunkSize), 4);
+				Part.Append(reinterpret_cast<const uint8*>(&Count), 4);
+				Part.Append(Body);
+			}
 			const uint32 PartId = BaseId + 1 + i;
 			FMemory::Memcpy(Part.GetData() + BankIdOffset, &PartId, sizeof(PartId));
+			RetargetActions(Part, BaseId, PartId, UserBankType);
 			uint32 LoadedId = 0;
 			uint32 LoadedType = 0;
 			const int32 Result = Wwise.LoadBankMemoryCopyTyped ? Wwise.LoadBankMemoryCopyTyped(Part.GetData(), Part.Num(), LoadedId, LoadedType)
 				: Wwise.LoadBankMemoryCopy(Part.GetData(), Part.Num(), LoadedId);
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: test load of the bank's %s (%d bytes): result %d"), *FString::Join(Variants[i], TEXT("+")), Part.Num(), Result);
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: test load of the bank's %s (%d bytes): result %d"), Variant.Label, Part.Num(), Result);
 			if (Result == 1 && Wwise.UnloadBank)
 			{
 				Wwise.UnloadBank(LoadedId, nullptr, LoadedType);
@@ -321,6 +425,17 @@ void UBBPAdaEasterEggs::LoadBank()
 	if (Wwise.SetLocalOutput)
 	{
 		Wwise.SetLocalOutput(WwiseAllMessages, &LogWwiseMessage);
+	}
+	// Each play action also names the bank holding its sound, with that bank's type, still 30 from the template.
+	if (Bytes.Num() >= BankIdOffset + 4)
+	{
+		uint32 HeaderId = 0;
+		FMemory::Memcpy(&HeaderId, Bytes.GetData() + BankIdOffset, sizeof(HeaderId));
+		const int32 Retargeted = RetargetActions(Bytes, HeaderId, HeaderId, UserBankType);
+		if (Retargeted > 0)
+		{
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: %d play action(s) now name this bank as a user bank"), Retargeted);
+		}
 	}
 	uint32 BankId = 0;
 	uint32 BankType = 0;
