@@ -49,6 +49,14 @@ object `IWwiseSoundEngineModule::SoundEngine` (an exported variable), calling `A
 SetAudioInputCallbacks` from the kit's headers (the kit's Wwise matches the game's, 2025.1.6). There is one set for the
 whole game; the integration's own `FAkAudioInputManager` would replace it if the game ever used Audio Input itself.
 
+Telescreen feeds Audio Input too, so the two mods share the callbacks through `Private/Audio/SFModWwiseAudioInput.h`
+(an identical copy in each mod, agreed with the Telescreen session on 2026-10-22). Each mod registers an
+`ISFModWwiseAudioInputSource` with `IModularFeatures` under "SFModWwiseAudioInputSource" and installs the same
+dispatcher: under the modular-feature lock it asks each source in turn, the first that knows the playing id fills the
+buffer (or format), and if none does it hands over silence (48 kHz stereo). So it doesn't matter which mod installs
+the callbacks last. The plugin registration may then already be done by the other mod, so its result is only logged;
+the bank load tells whether Audio Input is there.
+
 - `BBPWwiseMusic::Play` posts the event on the emitter's game object (its id is the component's address, as in
   `UAkGameObject::GetAkGameObjectID`) with an end-of-event callback, and registers a feed (wave, rate, channels,
   gain, paused) under the playing id. The registry lock is held while posting, so the feed exists before Wwise asks

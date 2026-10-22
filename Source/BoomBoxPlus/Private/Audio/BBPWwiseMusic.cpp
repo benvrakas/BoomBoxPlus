@@ -1,7 +1,9 @@
 #include "Audio/BBPWwiseMusic.h"
 #include "Audio/BBPStreamingSoundWave.h"
 #include "Audio/BBPWwise.h"
+#include "Audio/SFModWwiseAudioInput.h"
 #include "BoomBoxPlus.h"
+#include "Features/IModularFeatures.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -47,50 +49,104 @@ namespace
 	constexpr int32 BankIdOffset = 12;
 	constexpr int32 BankTypeOffset = 28;
 
-	void HandleAudioInput(uint32 PlayingId, AkAudioBuffer* Buffer)
+	void WriteSilence(AkAudioBuffer* Buffer)
+	{
+		// ZeroPadToMaxFrames only zeroes past uValidFrames.
+		Buffer->uValidFrames = 0;
+		Buffer->ZeroPadToMaxFrames();
+		Buffer->eState = AK_DataReady;
+	}
+
+	bool FillMusic(uint32 PlayingId, AkAudioBuffer* Buffer)
 	{
 		FScopeLock Lock(&FeedsLock);
 		const TSharedPtr<FFeed>* Found = Feeds.Find(PlayingId);
-		const uint32 Frames = Buffer->MaxFrames();
-		FFeed* Feed = Found ? Found->Get() : nullptr;
-		const int32 Channels = FMath::Min<int32>(Buffer->NumChannels(), Feed ? Feed->Channels : 0);
-		if (!Feed || !Feed->Wave || Feed->bPaused.load() || Channels <= 0)
+		if (!Found)
 		{
-			for (uint32 Channel = 0; Channel < Buffer->NumChannels(); ++Channel)
+			return false;
+		}
+		const uint32 Frames = Buffer->MaxFrames();
+		FFeed* Feed = Found->Get();
+		const int32 Channels = FMath::Min<int32>(Buffer->NumChannels(), Feed->Channels);
+		if (!Feed->Wave || Feed->bPaused.load() || Channels <= 0)
+		{
+			WriteSilence(Buffer);
+			return true;
+		}
+		Feed->Scratch.SetNumUninitialized(Frames * Feed->Channels, EAllowShrinking::No);
+		Feed->Wave->GeneratePCM(Feed->Scratch.GetData(), Frames * Feed->Channels);
+		const float Scale = Feed->Gain.load() / 32768.f;
+		for (int32 Channel = 0; Channel < Channels; ++Channel)
+		{
+			AkSampleType* Out = Buffer->GetChannel(Channel);
+			for (uint32 Frame = 0; Frame < Frames; ++Frame)
 			{
-				FMemory::Memzero(Buffer->GetChannel(Channel), Frames * sizeof(AkSampleType));
+				Out[Frame] = Feed->Scratch[Frame * Feed->Channels + Channel] * Scale;
 			}
 		}
-		else
+		for (uint32 Channel = Channels; Channel < Buffer->NumChannels(); ++Channel)
 		{
-			Feed->Scratch.SetNumUninitialized(Frames * Feed->Channels, EAllowShrinking::No);
-			Feed->Wave->GeneratePCM(Feed->Scratch.GetData(), Frames * Feed->Channels);
-			const float Scale = Feed->Gain.load() / 32768.f;
-			for (int32 Channel = 0; Channel < Channels; ++Channel)
-			{
-				AkSampleType* Out = Buffer->GetChannel(Channel);
-				for (uint32 Frame = 0; Frame < Frames; ++Frame)
-				{
-					Out[Frame] = Feed->Scratch[Frame * Feed->Channels + Channel] * Scale;
-				}
-			}
-			for (uint32 Channel = Channels; Channel < Buffer->NumChannels(); ++Channel)
-			{
-				FMemory::Memzero(Buffer->GetChannel(Channel), Frames * sizeof(AkSampleType));
-			}
+			FMemory::Memzero(Buffer->GetChannel(Channel), Frames * sizeof(AkSampleType));
 		}
 		Buffer->uValidFrames = static_cast<AkUInt16>(Frames);
 		Buffer->eState = AK_DataReady;
+		return true;
+	}
+
+	void SetFormat(AkAudioFormat& Format, int32 SampleRate, int32 Channels)
+	{
+		Format.uSampleRate = SampleRate;
+		Format.channelConfig.SetStandard(Channels == 1 ? AK_SPEAKER_SETUP_MONO : AK_SPEAKER_SETUP_STEREO);
+		Format.uBlockAlign = sizeof(AkSampleType) * Format.channelConfig.uNumChannels;
+	}
+
+	bool GetMusicFormat(uint32 PlayingId, AkAudioFormat& Format)
+	{
+		FScopeLock Lock(&FeedsLock);
+		const TSharedPtr<FFeed>* Found = Feeds.Find(PlayingId);
+		if (!Found)
+		{
+			return false;
+		}
+		SetFormat(Format, (*Found)->SampleRate, (*Found)->Channels);
+		return true;
+	}
+
+	// BoomBoxPlus's music as one of the Audio Input sources shared with other mods (SFModWwiseAudioInput.h).
+	class FMusicSource : public ISFModWwiseAudioInputSource
+	{
+	public:
+		virtual bool FillAudioInput(uint32 PlayingId, AkAudioBuffer* Buffer) override { return FillMusic(PlayingId, Buffer); }
+		virtual bool GetAudioInputFormat(uint32 PlayingId, AkAudioFormat& Format) override { return GetMusicFormat(PlayingId, Format); }
+	};
+	FMusicSource MusicSource;
+	bool bSourceRegistered = false;
+
+	// The game's single set of Audio Input callbacks: each mod's registered source is asked in turn.
+	void HandleAudioInput(uint32 PlayingId, AkAudioBuffer* Buffer)
+	{
+		IModularFeatures::FScopedLockModularFeatureList Lock;
+		for (ISFModWwiseAudioInputSource* Source : IModularFeatures::Get().GetModularFeatureImplementations<ISFModWwiseAudioInputSource>(ISFModWwiseAudioInputSource::GetName()))
+		{
+			if (Source->FillAudioInput(PlayingId, Buffer))
+			{
+				return;
+			}
+		}
+		WriteSilence(Buffer);
 	}
 
 	void HandleAudioFormat(uint32 PlayingId, AkAudioFormat& Format)
 	{
-		FScopeLock Lock(&FeedsLock);
-		const TSharedPtr<FFeed>* Found = Feeds.Find(PlayingId);
-		const int32 Channels = Found ? (*Found)->Channels : 2;
-		Format.uSampleRate = Found ? (*Found)->SampleRate : 48000;
-		Format.channelConfig.SetStandard(Channels == 1 ? AK_SPEAKER_SETUP_MONO : AK_SPEAKER_SETUP_STEREO);
-		Format.uBlockAlign = sizeof(AkSampleType) * Format.channelConfig.uNumChannels;
+		IModularFeatures::FScopedLockModularFeatureList Lock;
+		for (ISFModWwiseAudioInputSource* Source : IModularFeatures::Get().GetModularFeatureImplementations<ISFModWwiseAudioInputSource>(ISFModWwiseAudioInputSource::GetName()))
+		{
+			if (Source->GetAudioInputFormat(PlayingId, Format))
+			{
+				return;
+			}
+		}
+		SetFormat(Format, 48000, 2);
 	}
 
 	void HandleEventCallback(int32 Type, void* EventInfo, void* CallbackInfo, void* Cookie)
@@ -263,11 +319,8 @@ bool BBPWwiseMusic::EnsureReady()
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Wwise music: the game's Wwise functions aren't all there; Custom Music plays through Unreal"));
 		return false;
 	}
-	if (!BBPWwise::RegisterBuiltInPlugin(BBPWwise::AudioInputPluginId, TEXT("Wwise music")))
-	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: unavailable; Custom Music plays through Unreal"));
-		return false;
-	}
+	// Another mod may have registered it already; the bank load shows whether it's there.
+	BBPWwise::RegisterBuiltInPlugin(BBPWwise::AudioInputPluginId, TEXT("Wwise music"));
 	TArray<FString> Files;
 	IFileManager::Get().FindFilesRecursive(Files, *(FPaths::ProjectContentDir() / TEXT("WwiseAudio") / TEXT("Event")), TEXT("Play_Boombox_*.bnk"), true, false);
 	Files.Sort();
@@ -289,6 +342,11 @@ bool BBPWwiseMusic::EnsureReady()
 		if (!BBPWwise::LoadBank(Bank, TEXT("Wwise music")))
 		{
 			break;
+		}
+		if (!bSourceRegistered)
+		{
+			IModularFeatures::Get().RegisterModularFeature(ISFModWwiseAudioInputSource::GetName(), &MusicSource);
+			bSourceRegistered = true;
 		}
 		bReady = BBPWwise::SetAudioInputCallbacks(&HandleAudioInput, &HandleAudioFormat);
 		break;
