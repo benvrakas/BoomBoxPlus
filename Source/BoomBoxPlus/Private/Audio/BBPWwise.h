@@ -16,6 +16,8 @@ namespace BBPWwise
 		uint32 (*PostEvent)(uint32, uint64, uint32, void (*)(int32, void*, void*, void*), void*, uint32, void*, uint32) = nullptr;
 		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
 		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
+		// Only needed for RegisterBuiltInPlugin, so not part of IsComplete.
+		int32 (*RegisterPlugin)(int32, uint32, uint32, void*, void*, void*) = nullptr;
 
 		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
 	};
@@ -50,6 +52,10 @@ namespace BBPWwise
 
 	// AkPluginID of Wwise's Audio Input source plugin.
 	constexpr uint32 AudioInputPluginId = 0x00C80002;
+
+	// Registers a plugin compiled into the game's Wwise DLL (AkPluginID: plugin id << 16 | company id << 4 | type)
+	// that the game's Init bank doesn't list; Wwise only registers the ones it lists. Returns true if it is registered.
+	bool RegisterBuiltInPlugin(uint32 PluginId, const TCHAR* Label);
 
 	// Audio Input callbacks (AK::AudioInputPlugin): fill a buffer for a playing id, and give its format.
 	using FAudioInputExecute = void (*)(uint32 PlayingId, AkAudioBuffer* Buffer);

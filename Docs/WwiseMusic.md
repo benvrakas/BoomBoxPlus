@@ -27,6 +27,15 @@ action targets a sound):
 - The bank gets id `BBP_Music_Bank`, user type 0 in its header, and every action names it as a user bank. Then
   `BBPWwise::PrepareBank` (shared with ADA's bank) and `BBPWwise::LoadBank`.
 
+The plugin has to be registered first. Its code is compiled into the game's Wwise DLL (`AkFXSrcAudioInput.cpp`, with
+the integration's `FAudioInputPlugin`), but Wwise 2025 only registers the plugins the Init bank's `INIT` chunk lists,
+and the game's project doesn't use Audio Input. Loading the music bank without it failed with result 92
+(`AK_InitBankNotLoaded`) in the first 1.5.5 test. `BBPWwise::RegisterBuiltInPlugin` walks the DLL's exported
+`g_pAKPluginList` (the static `AK::PluginRegistration` objects) to the Audio Input entry and passes its factory
+functions to the exported `AK::SoundEngine::RegisterPlugin`. The built-in copy matters: the game also ships
+`AkAudioInput.dll`, but `RegisterPluginDLL` would load a second copy whose callbacks the mod can't reach, since the
+DLL exports only its plugin list.
+
 The vanilla song bank needs no reordering (its sounds come before their mixers); see EasterEggs.md for the three
 things that made hand-built banks load at all.
 

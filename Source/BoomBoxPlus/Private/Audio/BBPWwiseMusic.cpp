@@ -261,6 +261,11 @@ bool BBPWwiseMusic::EnsureReady()
 		UE_LOG(LogBoomBoxPlus, Warning, TEXT("Wwise music: the game's Wwise functions aren't all there; Custom Music plays through Unreal"));
 		return false;
 	}
+	if (!BBPWwise::RegisterBuiltInPlugin(BBPWwise::AudioInputPluginId, TEXT("Wwise music")))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: unavailable; Custom Music plays through Unreal"));
+		return false;
+	}
 	TArray<FString> Files;
 	IFileManager::Get().FindFilesRecursive(Files, *(FPaths::ProjectContentDir() / TEXT("WwiseAudio") / TEXT("Event")), TEXT("Play_Boombox_*.bnk"), true, false);
 	Files.Sort();

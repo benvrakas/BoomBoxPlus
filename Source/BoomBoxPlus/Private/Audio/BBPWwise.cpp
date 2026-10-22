@@ -5,6 +5,7 @@
 #include <Windows.h>
 #include "Windows/HideWindowsPlatformTypes.h"
 #include "Wwise/API/WwiseSoundEngineAPI.h"
+#include "AK/SoundEngine/Common/IAkPlugin.h"
 #endif
 
 namespace
@@ -113,6 +114,7 @@ const BBPWwise::FCalls& BBPWwise::GetCalls()
 		Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
 		Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
 		Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
+		Found.RegisterPlugin = reinterpret_cast<decltype(Found.RegisterPlugin)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterPlugin@SoundEngine@AK@@YA?AW4AKRESULT@@W4AkPluginType@@IIP6APEAVIAkPlugin@2@PEAVIAkPluginMemAlloc@2@@ZP6APEAVIAkPluginParam@2@1@ZP6A?AW43@AEAIPEAUAkDeviceDescription@@@Z@Z")));
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise: game sound engine functions %s"), Found.IsComplete() ? TEXT("found") : TEXT("INCOMPLETE; Wwise playback off"));
 #endif
 		return Found;
@@ -210,6 +212,37 @@ bool BBPWwise::LoadBank(const TArray<uint8>& Bytes, const TCHAR* Label)
 	const int32 Result = Calls.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId, BankType);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("%s: Wwise bank (%d bytes) %s (result %d)"), Label, Bytes.Num(), Result == WwiseSuccess ? TEXT("loaded") : TEXT("FAILED to load"), Result);
 	return Result == WwiseSuccess;
+}
+
+bool BBPWwise::RegisterBuiltInPlugin(uint32 PluginId, const TCHAR* Label)
+{
+#if PLATFORM_WINDOWS
+	const FCalls& Calls = GetCalls();
+	void* Module = GetSoundEngineModule();
+	// g_pAKPluginList: every AK::PluginRegistration compiled into the DLL, linked through pNext.
+	AK::PluginRegistration** List = Module ? reinterpret_cast<AK::PluginRegistration**>(FPlatformProcess::GetDllExport(Module, TEXT("g_pAKPluginList"))) : nullptr;
+	if (!Calls.RegisterPlugin || !List)
+	{
+		UE_LOG(LogBoomBoxPlus, Warning, TEXT("%s: the game's Wwise plugin list or RegisterPlugin isn't exported"), Label);
+		return false;
+	}
+	const uint32 Type = PluginId & 0xF;
+	const uint32 Company = (PluginId >> 4) & 0xFFF;
+	const uint32 Id = PluginId >> 16;
+	int32 Listed = 0;
+	for (const AK::PluginRegistration* Entry = *List; Entry && Listed < 1000; Entry = Entry->pNext, ++Listed)
+	{
+		if ((uint32)Entry->m_eType == Type && Entry->m_ulCompanyID == Company && Entry->m_ulPluginID == Id)
+		{
+			const int32 Result = Calls.RegisterPlugin(Entry->m_eType, Company, Id, reinterpret_cast<void*>(Entry->m_pCreateFunc),
+				reinterpret_cast<void*>(Entry->m_pCreateParamFunc), reinterpret_cast<void*>(Entry->m_pGetDeviceListFunc));
+			UE_LOG(LogBoomBoxPlus, Log, TEXT("%s: built-in Wwise plugin %08x %s (result %d)"), Label, PluginId, Result == WwiseSuccess ? TEXT("registered") : TEXT("FAILED to register"), Result);
+			return Result == WwiseSuccess;
+		}
+	}
+	UE_LOG(LogBoomBoxPlus, Warning, TEXT("%s: Wwise plugin %08x isn't among the %d built into the game"), Label, PluginId, Listed);
+#endif
+	return false;
 }
 
 bool BBPWwise::SetAudioInputCallbacks(FAudioInputExecute Execute, FAudioInputFormat Format)
