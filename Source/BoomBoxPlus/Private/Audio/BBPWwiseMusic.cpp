@@ -194,6 +194,8 @@ namespace
 				AppendU32(Source, 0);
 				AppendU32(Source, 0);
 				Source.Add(0);
+				// A plugin source's parameter size (its parameters are in the settings object).
+				AppendU32(Source, 0);
 				Source.Append(Body.GetData() + SoundSourceEnd, Body.Num() - SoundSourceEnd);
 				Body = MoveTemp(Source);
 			}

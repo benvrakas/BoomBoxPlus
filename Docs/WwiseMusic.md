@@ -16,7 +16,10 @@ Play_Boombox_*.bnk`, read from the pak at runtime, not shipped; the first in nam
 action targets a sound):
 
 - The song's Sound keeps its node settings (parent mixer chain, positioning, attenuation), but its 22-byte source
-  header becomes Audio Input: plugin `0x00C80002`, stream type 0, source id `BBP_Music_Input`, no media. Before it
+  header becomes Audio Input: plugin `0x00C80002`, stream type 0, source id `BBP_Music_Input`, no media, followed by
+  a 4-byte parameter size (0) that only plugin sources have. (The first builds left that out; Wwise then read the
+  node settings 4 bytes early, took the parent mixer's id for the output bus, and refused the bank with result 92,
+  `AK_InitBankNotLoaded`: the code it uses for an output bus that isn't loaded.) Before it
   goes a plugin-settings object (HIRC type 17) with that id: plugin id, parameter size 0 (the plugin's defaults),
   then 7 zero bytes (no media, RTPCs or states). This is the layout of the game's own plugin sources (Silence in
   `Play_GolfCartUnfold`, Tone Generator in `Play_Parachute_Open`).
