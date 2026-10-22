@@ -74,9 +74,13 @@ Music fades to 20% (`GetMusicDuck`, applied in `SyncEmitters`).
 
 ## Through ADA's own Wwise bus (BBP_ADA.bnk)
 
-The voice normally plays through Wwise, on ADA's own voice bus, so it gets her processing (compressors, a Harmonizer,
-a third-party radio/lo-fi effect, Meter-driven ducking, reverb sends) and her volume, exactly like her own lines. Her
-recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each phrase): all of that is added live.
+The voice normally plays through Wwise, on ADA's own voice bus, so it gets the same mix as her own lines: her volume,
+the Dialogue bus's EQ and compressors, Meter-driven ducking and the master limiter. That chain adds no voice character:
+what makes ADA sound like ADA is in her recordings. (Up to 1.5.5 these notes said her bus added a Harmonizer and a
+radio/lo-fi effect live; walking every bus, aux bus and effect reachable from bus 1690368967 in `Init.bnk` finds only
+Parametric EQ, Compressor, CoffeeMidSideEQ, Gain, Meter and Peak Limiter, and her Sound and ActorMixer have no effects.
+Her recordings are dry of reverb, a decoded line falls to -65 dB or less within 150 ms of each phrase, but not
+unprocessed.) So our lines through Wwise sound like our audio, mixed like hers.
 
 - `D:/SFMod/Tools/ADA/make_bank.py <engine>` builds `Resources/Audio/ADA/BBP_ADA.bnk` (bank version 172, the game's)
   from the dry speech in `raw/<engine>`: each line toned to match ADA's own recording and leveled to -20.7 LUFS (the
@@ -144,9 +148,10 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   result 1. So all three were needed: user bank type in the header, user bank type in the actions, children first.
 - The test loads and the Wwise monitor capture were removed once the bank loaded; `BBPWwise::PrepareBank` (shared
   with the Wwise music bank, WwiseMusic.md) applies the three fixes, and one log line reports the load.
-- Heard through Wwise, her line sounded dry: none of the voice-bus effects. The game plays her lines on the message
-  box's own emitter (`UFGAudioMessage::mAkAudioComponent`), so `PostWwiseVoice` now posts on that component (by
-  reflection; its game object id is its address), falling back to the mod's own game object. Untested when written.
+- Heard through Wwise, her line sounded like the raw speech. The game plays her lines on the message box's own emitter
+  (`UFGAudioMessage::mAkAudioComponent`), so `PostWwiseVoice` posts on that component (by reflection; its game object
+  id is its address), falling back to the mod's own game object. It still sounded raw (2026-10-22), which is expected
+  once the chain above is known: any ADA-like effect has to be in the audio `make_bank.py` embeds.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
