@@ -188,12 +188,19 @@ different channels can collide.
 
 Each machine used to play every Custom Music Boom Box it knew about, however far away: a forgotten Boom Box across
 the map kept its radio connected and kept decoding (and downloading the next songs), silent only by distance.
-Since 1.5.4 `UpdateEmitter` stops an emitter's stream (`StopTrack`) once the Boom Box is more than the hearing range
-plus 20 m (`OutOfRangeMargin`) from the player's pawn, and sets `FBBPEmitter::bOutOfRange`; a radio station drops its
-connection with it. Back within hearing range, the emitter has no entry, so the normal start path plays the current
-track at the channel's current position (a station reconnects to what it's playing now), the same way a late
-joiner catches up. The margin keeps a player standing at the edge from stopping and starting it over and over.
-`PrefetchNetworkTracks` only downloads for channels with an emitter in range. The channel itself is untouched: its
+Since 1.5.4 `UpdateEmitter` stops an emitter's stream (`StopTrack`) once the Boom Box is more than 5% past the
+streaming range (`GetStreamRange`, 10 times the 250 m hearing range: 2.5 km) from the player's pawn, and sets
+`FBBPEmitter::bOutOfRange`; a radio station drops its connection with it. Back within the streaming range, the emitter
+has no entry, so the normal start path plays the current track at the channel's current position (a station
+reconnects to what it's playing now), the same way a late joiner catches up. The streaming range is far bigger than
+hearing range on purpose: the music is already running, silent, when a player walks into earshot, so nothing
+buffers then. The 5% margin keeps a player at the edge from stopping and starting it over and over.
+
+`PrefetchNetworkTracks` downloads the current and next songs of every channel with a Boom Box within the streaming
+range, and of every channel with a Boom Box this machine doesn't have. The game only sends a client actors near it
+(its network relevancy), so on a client a far Boom Box may not exist at all, and its emitter only appears when the
+player gets close; downloading by channel (channels are always relevant) means the song is usually on disk by then.
+The cost: a client downloads the next songs of channels whose Boom Boxes it can't see, wherever they are. The channel itself is untouched: its
 queue keeps advancing on the server, so linked Boom Boxes stay in step and everything is where it should be on
 return. With no pawn (dead, loading) nothing changes until there is one.
 

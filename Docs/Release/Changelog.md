@@ -3,8 +3,9 @@
 ## 1.5.4
 
 - **Far-away Boom Boxes stop streaming.** A Boom Box left playing on the other side of the map used to keep its
-  radio station connected and keep decoding songs nobody could hear. Now it stops once you're out of hearing range,
-  and picks the music up at the right spot when you come back.
+  radio station connected and keep decoding songs nobody could hear. Now it stops once you're more than 2.5 km away
+  (ten times hearing range), and picks the music up at the right spot when you come back. Within that distance it
+  keeps playing silently, so the music never has to buffer when you or a friend walk up to it.
 - **`/bbp stopall`.** The host can type `/bbp stopall` in chat to pause every Custom Music Boom Box in the world at
   once. Queues stay as they are; press Play on a Boom Box to start it again.
 - **ADA's sound bank: finding out why it won't load.** The game still refuses the mod's ADA sound bank, so her

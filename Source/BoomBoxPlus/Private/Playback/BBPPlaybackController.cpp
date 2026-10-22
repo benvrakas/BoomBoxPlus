@@ -51,8 +51,12 @@ namespace
 	// Closer than this (cm), the direction between Boom Box and listener is too unstable for Doppler.
 	constexpr float MinDopplerDistance = 100.f;
 
-	// A Boom Box this much beyond hearing range stops streaming; it starts again once back within range (cm).
-	constexpr float OutOfRangeMargin = 2000.f;
+	// Boom Boxes stream (and download their next songs) out to this many times the hearing range, so the music is
+	// already running, silent, by the time a player walks into earshot.
+	constexpr float StreamRangeFactor = 10.f;
+
+	// A Boom Box this far past the streaming range (as a fraction of it) stops; inside the range it starts again.
+	constexpr float StreamRangeMargin = 0.05f;
 
 	constexpr float MinDopplerPitch = 0.5f;
 	constexpr float MaxDopplerPitch = 2.f;
@@ -107,6 +111,11 @@ namespace
 float UBBPPlaybackController::GetAudibleRange()
 {
 	return InnerRadius + FalloffDistance;
+}
+
+float UBBPPlaybackController::GetStreamRange()
+{
+	return GetAudibleRange() * StreamRangeFactor;
 }
 
 void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
@@ -520,11 +529,22 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 	{
 		return;
 	}
-	// Only channels a Boom Box in range is playing need their tracks on disk.
+	// Channels with a Boom Box within the streaming range need their tracks on disk. So does a channel with a Boom Box
+	// this machine doesn't have (the game only sends a client nearby actors), since it can't tell how far that one is.
+	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
+	const float StreamRangeSquared = FMath::Square(GetStreamRange());
 	TSet<const ABBPMusicChannel*> Heard;
-	for (const FBBPEmitter& Emitter : Emitters)
+	for (const ABBPMusicChannel* Channel : Playlist->GetChannels())
 	{
-		if (const ABBPMusicChannel* Channel = Emitter.bOutOfRange ? nullptr : Emitter.Channel.Get())
+		if (!IsValid(Channel))
+		{
+			continue;
+		}
+		const bool bNear = Channel->GetMembers().ContainsByPredicate([Pawn, StreamRangeSquared](const AFGBoomBoxPlayer* BoomBox)
+		{
+			return !Pawn || !IsValid(BoomBox) || FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= StreamRangeSquared;
+		});
+		if (bNear)
 		{
 			Heard.Add(Channel);
 		}
@@ -721,20 +741,20 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		return;
 	}
 
-	// Out of earshot nothing is decoded or streamed (a radio station disconnects). Back in range, the current track
-	// starts again below at the channel's current position, like for a player joining mid-song.
+	// Beyond the streaming range nothing is decoded or streamed (a radio station disconnects). Back in range, the
+	// current track starts again below at the channel's current position, like for a player joining mid-song.
 	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
 	const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
 	if (Pawn && BoomBox)
 	{
 		const float Distance = FVector::Dist(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
-		if (!Emitter.bOutOfRange && Distance > GetAudibleRange() + OutOfRangeMargin)
+		if (!Emitter.bOutOfRange && Distance > GetStreamRange() * (1.f + StreamRangeMargin))
 		{
 			Emitter.bOutOfRange = true;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is out of range (%.0f m); stopped streaming it"), *GetNameSafe(BoomBox), Distance / 100.f);
 			StopTrack(Emitter);
 		}
-		else if (Emitter.bOutOfRange && Distance <= GetAudibleRange())
+		else if (Emitter.bOutOfRange && Distance <= GetStreamRange())
 		{
 			Emitter.bOutOfRange = false;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is back in range (%.0f m); joining its music"), *GetNameSafe(BoomBox), Distance / 100.f);

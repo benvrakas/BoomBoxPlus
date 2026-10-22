@@ -119,6 +119,9 @@ public:
 	// Returns the distance in centimetres at which Boom Box music becomes inaudible.
 	static float GetAudibleRange();
 
+	// Distance (cm) within which Boom Boxes stream and download, silently past GetAudibleRange.
+	static float GetStreamRange();
+
 	// This player's own volume for BoomBox, 0-2 (1 = as loud as the Boom Box's own volume sets it). Local only:
 	// it changes nothing for other players.
 	float GetMyVolume(const AFGBoomBoxPlayer* BoomBox) const;
