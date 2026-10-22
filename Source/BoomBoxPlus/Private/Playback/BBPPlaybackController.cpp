@@ -6,6 +6,7 @@
 #include "AudioDevice.h"
 #include "BoomBoxPlus.h"
 #include "BBPBlueprintLibrary.h"
+#include "GameFramework/PlayerState.h"
 #include "BBPConfig.h"
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
@@ -401,6 +402,82 @@ void UBBPPlaybackController::UpdateVanillaPages()
 			It.RemoveCurrent();
 		}
 	}
+}
+
+void UBBPPlaybackController::DescribeStreams(TArray<FString>& OutLines) const
+{
+	const APawn* Pawn = Playlist ? UGameplayStatics::GetPlayerPawn(Playlist, 0) : nullptr;
+	struct FLine
+	{
+		float Distance;
+		FString Text;
+	};
+	TArray<FLine> Lines;
+	int32 Streaming = 0;
+	int32 OutOfRange = 0;
+	for (const FBBPEmitter& Emitter : Emitters)
+	{
+		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
+		if (!BoomBox)
+		{
+			continue;
+		}
+		const float Distance = Pawn ? FVector::Dist(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) : -1.f;
+		const ABBPMusicChannel* Channel = Emitter.Channel.Get();
+		FBBPQueueEntry Entry;
+		const bool bHasEntry = Channel && Channel->GetCurrentEntry(Entry);
+		const FString Title = bHasEntry ? FString::Printf(TEXT("'%s'"), *Entry.Track.Title) : FString();
+		const bool bSilent = Distance > GetAudibleRange();
+		FString State;
+		if (Emitter.bOutOfRange)
+		{
+			State = TEXT("out of range, not streaming");
+			++OutOfRange;
+		}
+		else if (!bHasEntry)
+		{
+			State = TEXT("nothing playing");
+		}
+		else if (Channel->GetPlaybackState().bPaused)
+		{
+			State = TEXT("paused on ") + Title;
+		}
+		else if (Emitter.Wave && !Emitter.Wave->HasFailed())
+		{
+			State = (Emitter.bLive ? TEXT("streaming radio ") : TEXT("playing ")) + Title
+				+ (Emitter.bLive ? FString() : TEXT(" (") + UBBPBlueprintLibrary::GetSourceName(Entry.Track) + TEXT(")"))
+				+ (bSilent ? TEXT(", silent (beyond hearing)") : TEXT(""));
+			++Streaming;
+		}
+		else if (Emitter.bWaitingForFile)
+		{
+			State = TEXT("downloading ") + Title;
+		}
+		else
+		{
+			State = Title + TEXT(" can't play here");
+		}
+		const UObject* Carrier = BoomBox->IsInEquipmentMode() ? BoomBox->GetmOwningCharacter() : nullptr;
+		const APawn* CarrierPawn = Cast<APawn>(Carrier);
+		const APlayerState* CarrierState = CarrierPawn ? CarrierPawn->GetPlayerState() : nullptr;
+		const FString Where = Distance < 0.f ? FString(TEXT("? m"))
+			: Distance >= 100000.f ? FString::Printf(TEXT("%.1f km"), Distance / 100000.f) : FString::Printf(TEXT("%.0f m"), Distance / 100.f);
+		Lines.Add({ Distance, FString::Printf(TEXT("%s, queue %04d%s: %s"), *Where, Channel ? Channel->GetLinkCode() : 0,
+			CarrierState ? *(TEXT(", carried by ") + CarrierState->GetPlayerName()) : TEXT(""), *State) });
+	}
+	Lines.Sort([](const FLine& A, const FLine& B) { return A.Distance < B.Distance; });
+	OutLines.Reset();
+	if (Lines.Num() == 0)
+	{
+		OutLines.Add(TEXT("No Boom Box has Custom Music loaded."));
+		return;
+	}
+	for (const FLine& Line : Lines)
+	{
+		OutLines.Add(Line.Text);
+	}
+	OutLines.Add(FString::Printf(TEXT("%d Boom Box(es): %d streaming on this game, %d out of range (over %.1f km)."),
+		Lines.Num(), Streaming, OutOfRange, GetStreamRange() / 100000.f));
 }
 
 const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireSound) const

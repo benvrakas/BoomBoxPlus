@@ -10,6 +10,7 @@
 #include "Net/BBPRadio.h"
 #include "Net/UnrealNetwork.h"
 #include "Playback/BBPAdaChatCommand.h"
+#include "Playback/BBPPlaybackController.h"
 #include "Playlist/BBPMusicChannel.h"
 #include "Playlist/BBPPlaylistSubsystem.h"
 #include "UI/BBPMusicPage.h"
@@ -342,13 +343,41 @@ void UBBPRemoteCallObject::Client_AdaCommand_Implementation(const TArray<FString
 	FLinearColor Color;
 	ABBPAdaChatCommand::RunLocally(this, Arguments, Reply, Color);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: /ada %s from the server: %s"), *FString::Join(Arguments, TEXT(" ")), Reply.IsEmpty() ? TEXT("done") : *Reply);
+	if (!Reply.IsEmpty())
+	{
+		ShowInChat(Reply, Color);
+	}
+}
+
+void UBBPRemoteCallObject::Client_ListStreams_Implementation()
+{
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	const UBBPPlaybackController* Controller = Playlist ? Playlist->GetPlaybackController() : nullptr;
+	TArray<FString> Lines;
+	if (Controller)
+	{
+		Controller->DescribeStreams(Lines);
+	}
+	else
+	{
+		Lines.Add(TEXT("BoomBoxPlus isn't playing anything on this game yet."));
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Command: /bbp list from the server (%d line(s))"), Lines.Num());
+	for (const FString& Line : Lines)
+	{
+		ShowInChat(Line, FLinearColor::White);
+	}
+}
+
+void UBBPRemoteCallObject::ShowInChat(const FString& Text, const FLinearColor& Color) const
+{
 	AFGChatManager* ChatManager = AFGChatManager::Get(GetWorld());
-	if (Reply.IsEmpty() || !ChatManager)
+	if (!ChatManager)
 	{
 		return;
 	}
 	FChatMessageStruct Message;
-	Message.MessageText = FText::FromString(Reply);
+	Message.MessageText = FText::FromString(Text);
 	Message.MessageType = EFGChatMessageType::CMT_CustomMessage;
 	Message.MessageSender = FText::FromString(TEXT("SYSTEM"));
 	Message.MessageSenderColor = Color;

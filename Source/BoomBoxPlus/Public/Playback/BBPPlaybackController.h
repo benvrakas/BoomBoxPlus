@@ -130,6 +130,10 @@ public:
 	// Custom Music Boom Boxes within hearing range of the local player, nearest first.
 	void GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out) const;
 
+	// One line per Custom Music Boom Box this machine knows, nearest first, saying what it streams here (or that it's
+	// out of range), then a summary line. For the /bbp list chat command.
+	void DescribeStreams(TArray<FString>& OutLines) const;
+
 	// Returns the channel playing on the nearest Custom Music Boom Box the local player can hear, or null.
 	// With bRequireSound, only counts Boom Boxes actually producing sound on this machine.
 	const ABBPMusicChannel* GetAudibleChannel(bool bRequireSound) const;

@@ -167,8 +167,9 @@ next to the transport controls, rather than a setting here.
 
 - A Boom Box you're nowhere near doesn't stream anything: more than 2.5 km away it stops decoding and disconnects
   its radio station, and it picks the music up at the right spot when you come back. Closer than that it keeps
-  playing silently, so it never has to buffer when you walk up to it. The host can pause every Custom
-  Music Boom Box in the world with the chat command `/bbp stopall`.
+  playing silently, so it never has to buffer when you walk up to it.
+- Chat commands: `/bbp list` lists the Boom Boxes your game knows and what each one streams for you (or that it's
+  out of range). The host can pause every Custom Music Boom Box in the world with `/bbp stopall`.
 - Radio and YouTube live streams can't be synced to the second like songs: each player's game connects
   to the station itself, so players may hear it a few seconds apart. Pausing disconnects; resuming picks up
   the live broadcast. Seeking, lyrics and repeat don't apply to them, and they play until someone presses

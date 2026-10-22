@@ -328,7 +328,14 @@ Everyone can control by default. `HostOnlyControl` (mod config) rejects requests
 listen server, including link/unlink; the check is `UBBPRemoteCallObject::MayControl`. Link and unlink
 replies go back to the requesting player (`Client_LinkResult`) and show under the page's Link field.
 
-**`/bbp stopall`** (1.5.4, `ABBPStopAllChatCommand`) pauses every channel that's playing (`SetPlaying(false)`, so
+**`/bbp list`** (1.5.4, `ABBPBoomBoxChatCommand::List`) lists every Custom Music Boom Box the player's own game
+knows, nearest first: distance, queue (link code), who carries it, and what this game does with it (playing a song
+and from where, streaming a station, silent beyond hearing, downloading, paused, out of range), then a count of
+streams and out-of-range Boom Boxes (`UBBPPlaybackController::DescribeStreams`). Streams are per machine, and chat
+commands run on the server, so a remote player's command is sent to their game (`Client_ListStreams`, replies through
+`ShowInChat`, like `/ada`). A client only knows the Boom Boxes the game has sent it (the nearby ones).
+
+**`/bbp stopall`** (1.5.4, `ABBPBoomBoxChatCommand::StopAll`) pauses every channel that's playing (`SetPlaying(false)`, so
 queues and positions stay). Chat commands run on the server, so "the host" is a player sender whose player
 controller is local there; any other player gets "Only the host can stop every Boom Box". On a dedicated server, no
 player is local, so only the server console can run it. Vanilla tapes aren't touched.

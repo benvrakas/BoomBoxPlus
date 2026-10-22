@@ -105,9 +105,16 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_AdaCommand(const TArray<FString>& Arguments);
 
+	// Shows this player's /bbp list (what their own game streams) in their chat.
+	UFUNCTION(Client, Reliable)
+	void Client_ListStreams();
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	// Adds a SYSTEM line to this player's chat.
+	void ShowInChat(const FString& Text, const FLinearColor& Color) const;
+
 	// Returns BoomBox's channel if the calling player may control it; logs why not otherwise.
 	ABBPMusicChannel* GetChannelForRequest(AFGBoomBoxPlayer* BoomBox, const TCHAR* RequestName) const;
 
