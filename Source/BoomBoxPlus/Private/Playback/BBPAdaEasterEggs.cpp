@@ -254,6 +254,9 @@ namespace
 			const TCHAR* Label;
 			bool bMedia;
 			TArray<uint8> ObjectTypes;
+			// Changes to the actor-mixer in this copy: no child list, and/or the bus it routes to set to none (0).
+			bool bMixerNoChildren = false;
+			bool bMixerNoBus = false;
 		};
 		const TArray<FVariant> Variants = {
 			{ TEXT("header"), false, {} },
@@ -262,6 +265,10 @@ namespace
 			{ TEXT("header + media + actor-mixer + sounds"), true, { 7, 2 } },
 			{ TEXT("header + media + actor-mixer + sounds + actions"), true, { 7, 2, 3 } },
 			{ TEXT("everything"), true, { 7, 2, 3, 4 } },
+			{ TEXT("header + actor-mixer without children"), false, { 7 }, true, false },
+			{ TEXT("header + actor-mixer without a bus"), false, { 7 }, false, true },
+			{ TEXT("header + actor-mixer without children or bus"), false, { 7 }, true, true },
+			{ TEXT("header + media + all objects, mixer without a bus"), true, { 7, 2, 3, 4 }, false, true },
 		};
 		for (int32 i = 0; i < Variants.Num(); ++i)
 		{
@@ -280,11 +287,47 @@ namespace
 				uint32 Count = 0;
 				for (const FBankObject& Object : Objects)
 				{
-					if (Variant.ObjectTypes.Contains(Object.Type))
+					if (!Variant.ObjectTypes.Contains(Object.Type))
 					{
-						Body.Append(Bytes.GetData() + Object.Start, Object.Size);
-						++Count;
+						continue;
 					}
+					TArray<uint8> Copy(Bytes.GetData() + Object.Start, Object.Size);
+					if (Object.Type == 7)
+					{
+						// Object header: type (1), size (4); body: id (4), then 4 bytes, then the bus id at body offset 8;
+						// the child list (count, ids) ends the body.
+						constexpr int32 HeaderBytes = 5;
+						constexpr int32 BusOffset = HeaderBytes + 8;
+						if (Variant.bMixerNoBus && Copy.Num() > BusOffset + 4)
+						{
+							const uint32 NoBus = 0;
+							FMemory::Memcpy(Copy.GetData() + BusOffset, &NoBus, sizeof(NoBus));
+						}
+						if (Variant.bMixerNoChildren)
+						{
+							int32 Sounds = 0;
+							for (const FBankObject& Other : Objects)
+							{
+								Sounds += Other.Type == 2 ? 1 : 0;
+							}
+							const int32 CountAt = Copy.Num() - 4 - 4 * Sounds;
+							uint32 Listed = 0;
+							if (CountAt > HeaderBytes && (FMemory::Memcpy(&Listed, Copy.GetData() + CountAt, sizeof(Listed)), Listed == (uint32)Sounds))
+							{
+								Copy.SetNum(CountAt + 4);
+								const uint32 None = 0;
+								FMemory::Memcpy(Copy.GetData() + CountAt, &None, sizeof(None));
+								const uint32 NewBodySize = Copy.Num() - HeaderBytes;
+								FMemory::Memcpy(Copy.GetData() + 1, &NewBodySize, sizeof(NewBodySize));
+							}
+							else
+							{
+								UE_LOG(LogBoomBoxPlus, Warning, TEXT("ADA: can't find the actor-mixer's child list; copy '%s' keeps it"), Variant.Label);
+							}
+						}
+					}
+					Body.Append(Copy);
+					++Count;
 				}
 				const uint32 ChunkSize = Body.Num() + 4;
 				Part.Append(reinterpret_cast<const uint8*>("HIRC"), 4);

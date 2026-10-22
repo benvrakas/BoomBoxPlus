@@ -134,6 +134,9 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
   routes to ADA's voice bus 1690368967): the first object type that fails, and every later variant includes it.
   Suspects: the bus id it names isn't known to Wwise at that point, or the mixer's child list (sounds that aren't in
   the cut-down copy). Next test: mixer with an empty child list; mixer with the bus id zeroed.
+- 1.5.5 (a test build, not released) adds those test loads: the actor-mixer alone without its children, alone
+  without a bus, without both, and the full bank with the mixer's bus zeroed. The first one that loads (result 1)
+  names the culprit.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
