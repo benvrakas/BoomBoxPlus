@@ -228,6 +228,51 @@ namespace
 		return Changed;
 	}
 
+	// Moves the bank's actor-mixers after its sounds. Wwise looks up a container's children while loading it, so they
+	// have to come first; the bank from make_bank.py up to 1.5.5 put the mixer first. Returns true if anything moved.
+	bool PutChildrenFirst(TArray<uint8>& Bytes)
+	{
+		for (const FBankChunk& Chunk : ReadChunks(Bytes))
+		{
+			if (Chunk.Tag != TEXT("HIRC"))
+			{
+				continue;
+			}
+			const TArray<FBankObject> Objects = ReadObjects(Bytes, Chunk);
+			const int32 FirstSound = Objects.IndexOfByPredicate([](const FBankObject& Object) { return Object.Type == 2; });
+			const int32 FirstMixer = Objects.IndexOfByPredicate([](const FBankObject& Object) { return Object.Type == 7; });
+			if (FirstSound == INDEX_NONE || FirstMixer == INDEX_NONE || FirstMixer > FirstSound)
+			{
+				return false;
+			}
+			TArray<uint8> Body;
+			for (const uint8 Type : { 2, 7 })
+			{
+				for (const FBankObject& Object : Objects)
+				{
+					if (Object.Type == Type)
+					{
+						Body.Append(Bytes.GetData() + Object.Start, Object.Size);
+					}
+				}
+			}
+			for (const FBankObject& Object : Objects)
+			{
+				if (Object.Type != 2 && Object.Type != 7)
+				{
+					Body.Append(Bytes.GetData() + Object.Start, Object.Size);
+				}
+			}
+			if (Objects.Num() == 0 || Body.Num() != Objects.Last().Start + Objects.Last().Size - Objects[0].Start)
+			{
+				return false;
+			}
+			FMemory::Memcpy(Bytes.GetData() + Objects[0].Start, Body.GetData(), Body.Num());
+			return true;
+		}
+		return false;
+	}
+
 	// Loads parts of a bank that failed to load, each as its own small bank (its own id, its actions pointed at it), and
 	// logs which load: the header alone, with the media, then with the objects added type by type. Each that loads is
 	// unloaded again.
@@ -479,6 +524,10 @@ void UBBPAdaEasterEggs::LoadBank()
 		{
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: %d play action(s) now name this bank as a user bank"), Retargeted);
 		}
+	}
+	if (PutChildrenFirst(Bytes))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("ADA: bank objects reordered so the sounds come before their actor-mixer"));
 	}
 	uint32 BankId = 0;
 	uint32 BankType = 0;
