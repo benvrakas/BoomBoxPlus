@@ -72,10 +72,10 @@ the bank load tells whether Audio Input is there.
 - If Wwise ends the event itself (the game stopping every sound on the emitter), the track restarts at the channel's
   position; ending twice within a second of starting sends that Boom Box to the Unreal path.
 
-## Untested when written
+## Tested
 
-Built and compiled; not yet heard in game. Things to check: that it plays at all (log "plays through Wwise"), the
-Boom Box knob and the game's Boom Box slider, falloff distance (the vanilla Boom Box's attenuation replaces the mod's
+Heard in game on 2026-10-22 (shipped in 1.6.0): the bank loads, the Boom Box plays through Wwise ("plays through
+Wwise (playing id ..., 48000 Hz, 2 ch)", and 44100 Hz for a 44.1 kHz file), and the user confirmed it sounds like
+the game's audio. Not yet checked one by one: falloff distance (the vanilla Boom Box's attenuation replaces the mod's
 250 m; the mod's "audible range" for lyrics and the game-music fade is still 250 m), reverb indoors, muffling behind
-walls, carried Boom Boxes following the player, and the sample rate of 44.1 kHz files (pitch would be off if Audio
-Input ignored the format's rate).
+walls, and pitch of 44.1 kHz files. Telescreen sharing the callbacks was built but not yet heard with both mods.

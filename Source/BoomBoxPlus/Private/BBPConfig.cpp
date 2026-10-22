@@ -116,7 +116,7 @@ UBBPConfig::UBBPConfig()
 
 	UConfigPropertyBool* GameAudioEngine = CreateDefaultSubobject<UConfigPropertyBool>(TEXT("GameAudioEngine"));
 	GameAudioEngine->DisplayName = LOCTEXT("GameAudioEngine", "Play through the game's audio engine");
-	GameAudioEngine->Tooltip = LOCTEXT("GameAudioEngineTip", "Custom Music sounds like the game's own Boom Box tapes: it echoes inside buildings and caves, is muffled behind walls, and follows the game's Boom Box volume. Off plays it on its own, as before. Applies from the next song.");
+	GameAudioEngine->Tooltip = LOCTEXT("GameAudioEngineTip", "Custom Music plays through the game's own audio engine, like the Boom Box's tapes, with the game's Boom Box sound and volume. Off plays it on its own, as before. Applies from the next song.");
 	GameAudioEngine->DefaultValue = true;
 	GameAudioEngine->Value = true;
 	AddSetting(GameAudioEngineKey, GameAudioEngine);

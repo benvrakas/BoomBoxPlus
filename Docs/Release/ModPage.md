@@ -54,8 +54,9 @@ Inspired by the PEAK mod sPEAKer.
   found on YouTube.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle and repeat (off, whole queue, or one
   song). Drag the seek bar to jump anywhere in a song. The queue stops at the end unless repeat is on.
-- **Real 3D sound.** Music comes from the Boom Box itself and fades with distance (about 250 m), whether you
-  carry it or place it. Drive or fly past one and its pitch bends like a passing car (the **Doppler effect**, with a
+- **Real 3D sound, through the game's own audio engine.** Music comes from the Boom Box itself, whether you carry
+  it or place it, and plays the way the Boom Box's tapes do: through the game's audio engine, with its Boom Box
+  sound and volume. Drive or fly past one and its pitch bends like a passing car (the **Doppler effect**, with a
   deadzone so walking and running around don't change it; adjustable or off in the settings).
 - **Your own volume for each Boom Box.** A "My Volume" slider sits next to the transport controls, from 0 to 200%
   (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type an exact
@@ -157,19 +158,27 @@ next to the transport controls, rather than a setting here.
 | Game music fade time | 2 s | How long the fade takes. |
 | Which Boom Boxes you hear | All Boom Boxes | All of them, only the nearest of each linked group, or only the one you carry. Only changes what you hear. Also the **Hear:** button on the Custom Music page. |
 | Mute when the game is in the background | On | Silences Custom Music while you're in another window; it keeps its place. Turn it off to keep listening while you're in another window. |
+| Play through the game's audio engine | On | Custom Music plays through the game's own audio engine, like the Boom Box's tapes. Off plays it on its own, as before. Applies from the next song. |
 | Doppler effect | On | A Boom Box sounds higher while you and it move towards each other and lower as you move apart, like a passing car. Only changes what you hear. |
 | Doppler deadzone (m/s) | 20 | How fast you and a Boom Box must move towards or away from each other before the pitch starts to change. 20 leaves running around alone, even two players sprinting towards each other; 0 bends it at any speed. |
 | Doppler strength | 1 | How strongly the pitch bends past the deadzone. 1 is true to life, 2 twice as much, 0.5 half as much. |
 | ADA easter eggs | On | Now and then ADA has something to say about what you're listening to. Only you hear her. |
 | Spotify Client ID / Secret | empty | Only needed for whole Spotify playlists (see above). |
 
+### Chat commands
+
+Type these in the game's chat.
+
+| Command | Who | What it does |
+|---|---|---|
+| `/bbp list` | Everyone | Lists every Boom Box your game knows about, how far away it is, and what it's doing for you: playing, streaming a station, silent beyond hearing, downloading, paused, or out of range (more than 2.5 km away, so not streaming). |
+| `/bbp stopall` | Host only | Pauses every Custom Music Boom Box in the world at once. Queues stay as they are; press Play on a Boom Box to start it again. On a dedicated server, type it in the server console. |
+
 ### Good to know
 
 - A Boom Box you're nowhere near doesn't stream anything: more than 2.5 km away it stops decoding and disconnects
   its radio station, and it picks the music up at the right spot when you come back. Closer than that it keeps
   playing silently, so it never has to buffer when you walk up to it.
-- Chat commands: `/bbp list` lists the Boom Boxes your game knows and what each one streams for you (or that it's
-  out of range). The host can pause every Custom Music Boom Box in the world with `/bbp stopall`.
 - Radio and YouTube live streams can't be synced to the second like songs: each player's game connects
   to the station itself, so players may hear it a few seconds apart. Pausing disconnects; resuming picks up
   the live broadcast. Seeking, lyrics and repeat don't apply to them, and they play until someone presses

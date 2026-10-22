@@ -153,8 +153,10 @@ unprocessed.) So our lines through Wwise sound like our audio, mixed like hers.
   id is its address), falling back to the mod's own game object. It still sounded raw (2026-10-22), which is expected
   once the chain above is known: any ADA-like effect has to be in the audio `make_bank.py` embeds. Measured against
   her decoded lines, our pitch level, range and jitter already match hers; hers are about twice as aperiodic on voiced
-  sounds, the mark of a doubled voice. So `make_bank.py` now adds two copies of each line detuned by +-12 cents and
-  12/20 ms late (details in the tools folder's README). Not yet heard in game.
+  sounds, the mark of a doubled voice. So `make_bank.py` now adds two copies of each line detuned by +-12 cents.
+  In game the first try (copies 12/20 ms late through a 50 ms pitch-shift window) had "too much echo"; from renders
+  between that and 0/2 ms through 12 ms, the user picked halfway (6/11 ms, 31 ms window) for 1.6.0. Details in the
+  tools folder's README.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not

@@ -4,7 +4,7 @@ A Satisfactory mod that makes the Boom Box play **your** music: songs from your 
 whole Spotify playlists and live internet radio. Everyone within earshot hears the same song at the same moment,
 with synced lyrics. Inspired by the PEAK mod sPEAKer.
 
-- **Current version:** 1.5.2 ([changelog](Docs/Release/Changelog.md))
+- **Current version:** 1.6.0 ([changelog](Docs/Release/Changelog.md))
 - **Needs:** Satisfactory build 513885 or newer (the October 2026 update) and SML 3.12 or newer.
 - **Get it:** install **BoomBoxPlus** with Satisfactory Mod Manager. Everyone in a multiplayer session needs it,
   on the same version.
@@ -23,8 +23,9 @@ with synced lyrics. Inspired by the PEAK mod sPEAKer.
 - **A real queue.** Play Now, Play Next, Add, reorder, remove, clear, shuffle, repeat, and a seek bar.
 - **Song history.** The **History** tab lists the last 100 songs each Boom Box played, radio songs included,
   to play again or copy.
-- **3D sound.** Music comes from the Boom Box and fades with distance, carried or placed, with an adjustable
-  Doppler effect when you drive or fly past.
+- **3D sound through the game's audio engine** (new in 1.6.0). Music comes from the Boom Box, carried or placed,
+  and plays through the game's own audio engine like the Boom Box's tapes, with an adjustable Doppler effect when
+  you drive or fly past.
 - **Multiplayer sync.** Same song, same position for everyone, including players who join mid-song. Each Boom
   Box has its own queue, or link several with a 4-digit code to share one.
 - **Your own volume per Boom Box**, from 0 to 200%, remembered between sessions.
