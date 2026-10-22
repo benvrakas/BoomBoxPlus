@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.5
+
+- **ADA finally sounds like ADA.** Her easter-egg lines now go through the game's own ADA voice processing, the
+  same as her other lines. The game had been refusing the mod's sound bank in every version so far, so they played
+  through the mod's own audio instead; this version found and fixed the last of the reasons.
+
 ## 1.5.4
 
 - **Far-away Boom Boxes stop streaming.** A Boom Box left playing on the other side of the map used to keep its

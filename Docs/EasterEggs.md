@@ -137,6 +137,11 @@ recordings are dry (a decoded line falls to -65 dB or less within 150 ms of each
 - 1.5.5 (a test build, not released) adds those test loads: the actor-mixer alone without its children, alone
   without a bus, without both, and the full bank with the mixer's bus zeroed. The first one that loads (result 1)
   names the culprit.
+- Result: the mixer loads without its child list (with or without its bus) and fails with it. Wwise looks a
+  container's children up while loading it, and `make_bank.py` had put the mixer first, before its sounds. `LoadBank`
+  now reorders the objects (`PutChildrenFirst`: sounds, then actor-mixers, then actions and events) and
+  `make_bank.py` writes that order. The first session with it (2026-10-22): "Wwise bank 'BBP_ADA.bnk' ... loaded",
+  result 1. So all three were needed: user bank type in the header, user bank type in the actions, children first.
 - Without the bank (or if Wwise won't post the event), the voice plays through Unreal as below, at `VoiceGain`.
 
 How the game's routing was found: banks are inside `FactoryGame-Windows.pak` (UnrealPak `-List`/`-Extract`, not
