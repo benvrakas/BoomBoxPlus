@@ -19,6 +19,9 @@ namespace
 	// AK_Success.
 	constexpr int32 WwiseSuccess = 1;
 
+	// AkCurveInterpolation_Linear.
+	constexpr int32 LinearCurve = 4;
+
 #if PLATFORM_WINDOWS
 	void* GetSoundEngineModule()
 	{
@@ -114,6 +117,8 @@ const BBPWwise::FCalls& BBPWwise::GetCalls()
 		Found.PostEvent = reinterpret_cast<decltype(Found.PostEvent)>(FPlatformProcess::GetDllExport(Module, TEXT("?PostEvent@SoundEngine@AK@@YAII_KIP6AXW4AkCallbackType@@PEAUAkEventCallbackInfo@@PEAX3@Z3IPEAUAkExternalSourceInfo@@I@Z")));
 		Found.RegisterGameObj = reinterpret_cast<decltype(Found.RegisterGameObj)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z")));
 		Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
+		Found.SetRTPCValue = reinterpret_cast<decltype(Found.SetRTPCValue)>(FPlatformProcess::GetDllExport(Module, TEXT("?SetRTPCValue@SoundEngine@AK@@YA?AW4AKRESULT@@IM_KHW4AkCurveInterpolation@@_N@Z")));
+		Found.ResetRTPCValue = reinterpret_cast<decltype(Found.ResetRTPCValue)>(FPlatformProcess::GetDllExport(Module, TEXT("?ResetRTPCValue@SoundEngine@AK@@YA?AW4AKRESULT@@I_KHW4AkCurveInterpolation@@_N@Z")));
 		Found.RegisterPlugin = reinterpret_cast<decltype(Found.RegisterPlugin)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterPlugin@SoundEngine@AK@@YA?AW4AKRESULT@@W4AkPluginType@@IIP6APEAVIAkPlugin@2@PEAVIAkPluginMemAlloc@2@@ZP6APEAVIAkPluginParam@2@1@ZP6A?AW43@AEAIPEAUAkDeviceDescription@@@Z@Z")));
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise: game sound engine functions %s"), Found.IsComplete() ? TEXT("found") : TEXT("INCOMPLETE; Wwise playback off"));
 #endif
@@ -212,6 +217,18 @@ bool BBPWwise::LoadBank(const TArray<uint8>& Bytes, const TCHAR* Label)
 	const int32 Result = Calls.LoadBankMemoryCopy(Bytes.GetData(), Bytes.Num(), BankId, BankType);
 	UE_LOG(LogBoomBoxPlus, Log, TEXT("%s: Wwise bank (%d bytes) %s (result %d)"), Label, Bytes.Num(), Result == WwiseSuccess ? TEXT("loaded") : TEXT("FAILED to load"), Result);
 	return Result == WwiseSuccess;
+}
+
+bool BBPWwise::SetObjectRtpc(uint32 Id, float Value, uint64 GameObject)
+{
+	const FCalls& Calls = GetCalls();
+	return Calls.SetRTPCValue && Calls.SetRTPCValue(Id, Value, GameObject, 0, LinearCurve, false) == WwiseSuccess;
+}
+
+bool BBPWwise::ResetObjectRtpc(uint32 Id, uint64 GameObject)
+{
+	const FCalls& Calls = GetCalls();
+	return Calls.ResetRTPCValue && Calls.ResetRTPCValue(Id, GameObject, 0, LinearCurve, false) == WwiseSuccess;
 }
 
 bool BBPWwise::RegisterBuiltInPlugin(uint32 PluginId, const TCHAR* Label)

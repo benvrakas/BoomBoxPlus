@@ -83,6 +83,9 @@ struct FBBPEmitter
 	TWeakObjectPtr<UObject> WwiseEmitter;
 	uint32 WwisePlayingId = 0;
 	float AppliedWwiseGain = -1.f;
+	// Master volume this emitter's Wwise game object keeps while the game is in the background, or -1 while it follows
+	// the game's (UBBPPlaybackController::UpdateMasterVolumeHold).
+	float HeldMasterVolume = -1.f;
 	double WwiseStartTime = 0.0;
 
 	// Times Wwise ended this emitter's music within a second of starting it; after two, it plays through Unreal.
@@ -222,6 +225,10 @@ private:
 	// Re-reads the game's Master and Boom Box volume sliders.
 	void UpdateGameVolumeScale();
 
+	// With the background mute setting off and the game in the background, keeps the Master slider's value on Emitter's
+	// Wwise game object (bHold), where the game has zeroed it for everything; otherwise hands it back to the game's value.
+	void UpdateMasterVolumeHold(FBBPEmitter& Emitter, bool bHold);
+
 	// Sends the current song, play state and position to open vanilla Boom Box pages, which otherwise only follow Wwise playback.
 	void UpdateVanillaPages();
 
@@ -231,6 +238,9 @@ private:
 
 	// Game volume sliders (Master x Boom Box), 0..1.
 	float GameVolumeScale = 1.f;
+
+	// The Master slider's saved value as the game passes it to Wwise (game parameter Menu_Volume_Master).
+	float MasterRtpcValue = 1.f;
 
 	// Master x Dialogue sliders (see GetVoiceVolumeScale).
 	float VoiceVolumeScale = 1.f;

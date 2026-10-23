@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.1
+
+- **Custom Music keeps playing in the background again.** With "Mute when the game is in the background" off, music
+  played through the game's audio engine still went silent whenever the game window wasn't in front, because the
+  game's own "Mute When Minimized" option turns the whole audio engine down. Boom Boxes now keep their music at your
+  Master volume while the game is in the background; the rest of the game stays muted as the game's option says.
+
 ## 1.6.0
 
 - **Custom Music plays through the game's own audio engine.** Boom Boxes now play your music the way they play

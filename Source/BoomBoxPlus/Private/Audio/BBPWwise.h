@@ -16,8 +16,10 @@ namespace BBPWwise
 		uint32 (*PostEvent)(uint32, uint64, uint32, void (*)(int32, void*, void*, void*), void*, uint32, void*, uint32) = nullptr;
 		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
 		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
-		// Only needed for RegisterBuiltInPlugin, so not part of IsComplete.
+		// Only needed for RegisterBuiltInPlugin and the game-object RTPCs, so not part of IsComplete.
 		int32 (*RegisterPlugin)(int32, uint32, uint32, void*, void*, void*) = nullptr;
+		int32 (*SetRTPCValue)(uint32, float, uint64, int32, int32, bool) = nullptr;
+		int32 (*ResetRTPCValue)(uint32, uint64, int32, int32, bool) = nullptr;
 
 		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
 	};
@@ -49,6 +51,11 @@ namespace BBPWwise
 
 	// Loads a bank from memory (Wwise keeps a copy). Logs the result under Label; returns true if it loaded.
 	bool LoadBank(const TArray<uint8>& Bytes, const TCHAR* Label);
+
+	// Sets game parameter Id on one game object only (it then ignores the global value), or hands it back to the global
+	// value. Returns true if Wwise accepted it.
+	bool SetObjectRtpc(uint32 Id, float Value, uint64 GameObject);
+	bool ResetObjectRtpc(uint32 Id, uint64 GameObject);
 
 	// AkPluginID of Wwise's Audio Input source plugin.
 	constexpr uint32 AudioInputPluginId = 0x00C80002;

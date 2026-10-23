@@ -72,6 +72,20 @@ the bank load tells whether Audio Input is there.
 - If Wwise ends the event itself (the game stopping every sound on the emitter), the track restarts at the channel's
   position; ending twice within a second of starting sends that Boom Box to the Unreal path.
 
+## In the background
+
+The game mutes Wwise when its window isn't in front (its "Mute When Minimized" option, `FG.MuteWhenMinimized`, on by
+default): the function that reads that option sets the global game parameter `Menu_Volume_Master` to 0 with
+`UAkGameplayStatics::SetGlobalRTPCValue`, and back to the Master slider's saved value (`RTPC.Menu_Volume_Master`) when
+the window is in front again. (Found in the game binary, 2026-10-23; the game's Wwise settings don't use the
+integration's own `SuspendAudioDuringFocusLoss`, and Wwise outputs directly, not through Unreal's mixer, so Unreal's
+unfocused volume doesn't reach it.) In `Init.bnk` that parameter drives the master bus's voice volume, which Wwise
+evaluates per game object. So with the mod's "Mute when the game is in the background" off, while the window is behind
+others, `UBBPPlaybackController::UpdateMasterVolumeHold` sets `Menu_Volume_Master` on each Boom Box's own emitter to
+the Master slider's value (`AK::SoundEngine::SetRTPCValue` on that game object), and resets it
+(`ResetRTPCValue`) when the window is in front again or the music stops. Only those emitters stay audible; the rest of
+the game stays muted as its option says. (The vanilla Boom Box's own sounds on the same emitter are heard too.)
+
 ## Tested
 
 Heard in game on 2026-10-22 (shipped in 1.6.0): the bank loads, the Boom Box plays through Wwise ("plays through

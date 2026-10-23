@@ -3,6 +3,7 @@
 #include "Playback/BBPSongHistory.h"
 #include "Audio/BBPAudioDevice.h"
 #include "Audio/BBPStreamingSoundWave.h"
+#include "Audio/BBPWwise.h"
 #include "Audio/BBPWwiseMusic.h"
 #include "AudioDevice.h"
 #include "BoomBoxPlus.h"
@@ -317,6 +318,8 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	}
 	// The Master slider is stored as "RTPC.Menu_Volume_Master"; "RTPC.Master_Bus_Volume" is not a saved option.
 	const float Master = ReadVolumeOption(*Settings, TEXT("RTPC.Menu_Volume_Master"));
+	const FVariant RawMaster = Settings->GetOptionValue(TEXT("RTPC.Menu_Volume_Master"));
+	MasterRtpcValue = RawMaster.GetType() == EVariantTypes::Float ? RawMaster.GetValue<float>() : Master;
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
 	const float Music = ReadVolumeOption(*Settings, TEXT("RTPC.Music_Bus_Volume"));
 	const float Scale = Master * BoomBox * Music;
@@ -664,7 +667,11 @@ void UBBPPlaybackController::SyncEmitters()
 		FApp::SetUnfocusedVolumeMultiplier(Unfocused);
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: Unreal's volume while the game is in the background set to %.2f"), Unfocused);
 	}
-	const bool bMute = bMuteSetting && !FPlatformApplicationMisc::IsThisApplicationForeground();
+	const bool bForeground = FPlatformApplicationMisc::IsThisApplicationForeground();
+	const bool bMute = bMuteSetting && !bForeground;
+	// The game mutes Wwise in the background by zeroing its master volume ("Mute When Minimized"); see
+	// UpdateMasterVolumeHold.
+	const bool bHoldMasterVolume = !bMuteSetting && !bForeground;
 	if (bMute != bMutedInBackground)
 	{
 		bMutedInBackground = bMute;
@@ -777,6 +784,7 @@ void UBBPPlaybackController::SyncEmitters()
 				Emitter->AppliedWwiseGain = WwiseGain;
 				BBPWwiseMusic::SetGain(Emitter->WwisePlayingId, WwiseGain);
 			}
+			UpdateMasterVolumeHold(*Emitter, bHoldMasterVolume);
 		}
 		else if (Emitter->Component && !FMath::IsNearlyEqual(Emitter->AppliedOutput, Output, 0.001f))
 		{
@@ -1144,6 +1152,7 @@ void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWa
 
 void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 {
+	UpdateMasterVolumeHold(Emitter, false);
 	if (Emitter.WwisePlayingId != 0)
 	{
 		BBPWwiseMusic::Stop(Emitter.WwisePlayingId);
@@ -1160,6 +1169,25 @@ void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 		Emitter.Wave = nullptr;
 	}
 	SetVanillaPlaybackFlag(Emitter, false);
+}
+
+void UBBPPlaybackController::UpdateMasterVolumeHold(FBBPEmitter& Emitter, bool bHold)
+{
+	// Wwise's id of game parameter Menu_Volume_Master, the voice volume of the master bus.
+	static const uint32 MasterVolumeRtpc = BBPWwise::IdFromName(TEXT("Menu_Volume_Master"));
+	const float Value = bHold ? MasterRtpcValue : -1.f;
+	UObject* WwiseEmitter = Emitter.WwiseEmitter.Get();
+	if (Value == Emitter.HeldMasterVolume || !IsValid(WwiseEmitter))
+	{
+		return;
+	}
+	// The game object id is the component's address (UAkGameObject::GetAkGameObjectID).
+	const uint64 GameObject = reinterpret_cast<uint64>(WwiseEmitter);
+	const bool bDone = bHold ? BBPWwise::SetObjectRtpc(MasterVolumeRtpc, Value, GameObject) : BBPWwise::ResetObjectRtpc(MasterVolumeRtpc, GameObject);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s %s"), *GetNameSafe(Emitter.BoomBox.Get()),
+		bHold ? *FString::Printf(TEXT("keeps master volume %.2f in the background%s"), Value, bDone ? TEXT("") : TEXT(" (Wwise refused)"))
+			: bDone ? TEXT("follows the game's master volume again") : TEXT("couldn't hand master volume back to the game"));
+	Emitter.HeldMasterVolume = Value;
 }
 
 void UBBPPlaybackController::ApplyPaused(FBBPEmitter& Emitter, bool bPaused)
