@@ -36,10 +36,6 @@ namespace
 	constexpr float PrefetchInterval = 1.f;
 	constexpr int32 PrefetchAhead = 2;
 	constexpr float DriftTolerance = 0.25f;
-
-	// How often, and how far from 1 (as a ratio), the rate Wwise pulls music at is checked and logged.
-	constexpr double WwiseRateCheckSeconds = 10.0;
-	constexpr double WwiseRateTolerance = 0.003;
 	constexpr float InnerRadius = 4000.f;
 	constexpr float FalloffDistance = 21000.f;
 
@@ -849,7 +845,6 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 		else
 		{
 			BBPWwiseMusic::UpdatePosition(Emitter.WwiseEmitter.Get());
-			CheckWwiseRate(Emitter);
 		}
 	}
 
@@ -1114,40 +1109,6 @@ UObject* UBBPPlaybackController::FindWwiseEmitter(const AFGBoomBoxPlayer* BoomBo
 	return Property && IsValid(BoomBox) ? Property->GetObjectPropertyValue_InContainer(BoomBox) : nullptr;
 }
 
-void UBBPPlaybackController::CheckWwiseRate(FBBPEmitter& Emitter)
-{
-	const double Now = FPlatformTime::Seconds();
-	const int64 Pulled = BBPWwiseMusic::GetFramesPulled(Emitter.WwisePlayingId);
-	if (Pulled < 0 || !Emitter.Wave)
-	{
-		return;
-	}
-	if (Emitter.WwiseRateCheckFrames < 0)
-	{
-		Emitter.WwiseRateCheckTime = Now;
-		Emitter.WwiseRateCheckFrames = Pulled;
-		return;
-	}
-	const double Elapsed = Now - Emitter.WwiseRateCheckTime;
-	if (Elapsed < WwiseRateCheckSeconds)
-	{
-		return;
-	}
-	const int32 StreamRate = Emitter.Wave->GetStreamSampleRate();
-	const double Ratio = (Pulled - Emitter.WwiseRateCheckFrames) / Elapsed / StreamRate;
-	const float Pitch = Emitter.Wave->GetPitchRatio();
-	const bool bOff = FMath::Abs(Ratio - 1.0) > WwiseRateTolerance || FMath::Abs(Pitch - 1.f) > WwiseRateTolerance;
-	if (bOff || !Emitter.bWwiseRateLogged)
-	{
-		UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s: Wwise pulls the music at x%.4f of its %d Hz over %.0f s; Doppler pitch x%.4f; %d underrun(s)%s"),
-			*GetNameSafe(Emitter.BoomBox.Get()), Ratio, StreamRate, Elapsed, Pitch, Emitter.Wave->GetUnderrunCount(),
-			bOff ? TEXT(" (OFF)") : TEXT(""));
-		Emitter.bWwiseRateLogged = true;
-	}
-	Emitter.WwiseRateCheckTime = Now;
-	Emitter.WwiseRateCheckFrames = Pulled;
-}
-
 void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWave* Wave)
 {
 	Emitter.Wave = Wave;
@@ -1163,8 +1124,6 @@ void UBBPPlaybackController::PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWa
 			Emitter.WwisePlayingId = PlayingId;
 			Emitter.AppliedWwiseGain = -1.f;
 			Emitter.WwiseStartTime = FPlatformTime::Seconds();
-			Emitter.WwiseRateCheckFrames = -1;
-			Emitter.bWwiseRateLogged = false;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s plays through Wwise (playing id %u, %d Hz, %d ch)"),
 				*GetNameSafe(Emitter.BoomBox.Get()), PlayingId, Wave->GetStreamSampleRate(), Wave->GetStreamChannels());
 			return;

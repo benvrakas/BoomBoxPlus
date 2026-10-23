@@ -88,12 +88,6 @@ struct FBBPEmitter
 	// Times Wwise ended this emitter's music within a second of starting it; after two, it plays through Unreal.
 	int32 WwiseQuickEnds = 0;
 
-	// Start of the current measurement of how fast Wwise pulls the music (UBBPPlaybackController::CheckWwiseRate):
-	// time and frames pulled by then (-1 before the first).
-	double WwiseRateCheckTime = 0.0;
-	int64 WwiseRateCheckFrames = -1;
-	bool bWwiseRateLogged = false;
-
 	// Last value written to the Boom Box's own (vanilla, unreplicated) "is playing" flag; see
 	// UBBPPlaybackController::ApplyPaused. Lets Turbo Bass and anything else reading it work with Custom Music.
 	bool bAppliedVanillaPlaying = false;
@@ -193,10 +187,6 @@ private:
 
 	// Plays a started wave on an emitter's audio component.
 	void PlayWave(FBBPEmitter& Emitter, UBBPStreamingSoundWave* Wave);
-
-	// Logs how fast Wwise pulls Emitter's music against the stream's own rate (and the Doppler pitch), once per playing id
-	// and whenever either is off.
-	void CheckWwiseRate(FBBPEmitter& Emitter);
 
 	// Stops and releases an emitter's wave, keeping the entry it plays.
 	void ReleaseWave(FBBPEmitter& Emitter);
