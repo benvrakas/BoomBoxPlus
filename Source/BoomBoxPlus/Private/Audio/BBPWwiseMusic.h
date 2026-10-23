@@ -26,6 +26,9 @@ namespace BBPWwiseMusic
 	// While paused, silence is handed to Wwise and the stream doesn't advance.
 	void SetPaused(uint32 PlayingId, bool bPaused);
 
+	// Frames Wwise has asked this playing id for so far (paused or not), or -1 if it isn't playing.
+	int64 GetFramesPulled(uint32 PlayingId);
+
 	// True once Wwise ended this playing id itself (for example when the game stopped every sound on the Boom Box).
 	bool HasEnded(uint32 PlayingId);
 

@@ -27,6 +27,8 @@ namespace
 		std::atomic<float> Gain{ 0.f };
 		std::atomic<bool> bPaused{ false };
 		std::atomic<bool> bEnded{ false };
+		// Frames Wwise has asked for, paused or not.
+		std::atomic<int64> FramesPulled{ 0 };
 		// Wwise audio thread only.
 		TArray<int16> Scratch;
 	};
@@ -67,6 +69,7 @@ namespace
 		}
 		const uint32 Frames = Buffer->MaxFrames();
 		FFeed* Feed = Found->Get();
+		Feed->FramesPulled += Frames;
 		const int32 Channels = FMath::Min<int32>(Buffer->NumChannels(), Feed->Channels);
 		if (!Feed->Wave || Feed->bPaused.load() || Channels <= 0)
 		{
@@ -406,6 +409,13 @@ void BBPWwiseMusic::SetPaused(uint32 PlayingId, bool bPaused)
 	{
 		(*Found)->bPaused = bPaused;
 	}
+}
+
+int64 BBPWwiseMusic::GetFramesPulled(uint32 PlayingId)
+{
+	FScopeLock Lock(&FeedsLock);
+	const TSharedPtr<FFeed>* Found = Feeds.Find(PlayingId);
+	return Found ? (*Found)->FramesPulled.load() : -1;
 }
 
 bool BBPWwiseMusic::HasEnded(uint32 PlayingId)

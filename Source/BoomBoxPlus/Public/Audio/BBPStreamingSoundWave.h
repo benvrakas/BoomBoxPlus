@@ -56,6 +56,7 @@ public:
 
 	// Sets the pitch the audio plays at, as a ratio (1 unchanged, 2 an octave up), without changing its speed.
 	void SetPitchRatio(float Ratio) { PitchRatio = Ratio; }
+	float GetPitchRatio() const { return PitchRatio.load(); }
 
 	// Fills Out with the next NumSamples interleaved 16-bit samples (silence where none are decoded yet) and advances
 	// the stream. Called by Unreal's mixer, or by Wwise when the music plays there; never by both.
