@@ -189,7 +189,8 @@ different channels can collide.
 Each machine used to play every Custom Music Boom Box it knew about, however far away: a forgotten Boom Box across
 the map kept its radio connected and kept decoding (and downloading the next songs), silent only by distance.
 Since 1.5.4 `UpdateEmitter` stops an emitter's stream (`StopTrack`) once the Boom Box is more than 5% past the
-streaming range (`GetStreamRange`, 10 times the 250 m hearing range: 2.5 km) from the player's pawn, and sets
+streaming range (`GetStreamRange`: that Boom Box's range plus 5 km since 1.7.0; before, 10 times the fixed 250 m
+hearing range, 2.5 km) from the player's pawn, and sets
 `FBBPEmitter::bOutOfRange`; a radio station drops its connection with it. Back within the streaming range, the emitter
 has no entry, so the normal start path plays the current track at the channel's current position (a station
 reconnects to what it's playing now), the same way a late joiner catches up. The streaming range is far bigger than
@@ -230,7 +231,8 @@ starts the clock from `PausedPosition` when:
 
 - every player in earshot has reported the current generation: it starts at once (a lone player always waits for
   themselves, however long the download takes). "In earshot" (`IsInEarshot`, 1.5.2) is a player whose pawn is within
-  the audible range (250 m) of one of the channel's Boom Boxes; players without a pawn or further away aren't waited
+  the audible range of one of the channel's Boom Boxes (each one's own range since 1.7.0, see "Range" below; 250 m
+  for all before); players without a pawn or further away aren't waited
   for and join mid-song when they come closer. Before 1.5.2 every player in `GameState->PlayerArray` counted. A
   player far away may not even have the Boom Box on their game (it's outside their network range), so they never
   reported, and with two players every new song hung for the full 2 minutes (seen in a log: "1 of 2 players
@@ -339,3 +341,25 @@ commands run on the server, so a remote player's command is sent to their game (
 queues and positions stay). Chat commands run on the server, so "the host" is a player sender whose player
 controller is local there; any other player gets "Only the host can stop every Boom Box". On a dedicated server, no
 player is local, so only the server console can run it. Vanilla tapes aren't touched.
+
+## Range (1.7.0)
+
+Each Boom Box has a hearing range, 10 m to 1000 m (`BBPRange` in `BBPPlaylistTypes.h`; default 140 m, the vanilla
+Boom Box's: its songs' Wwise attenuation ends at 14000 units). It's shared like the Boom Box's volume knob, not
+personal like My Volume:
+
+- The server keeps `ABBPPlaylistSubsystem::Ranges` (by `GetBoomBoxKey`, only values that aren't the default) and
+  saves them in `SavedRanges` (one `FBBPSavedRange` per Boom Box, as JSON, beside `SavedChannels`). An older save
+  simply has none. A range follows its Boom Box, not its channel, so linking or unlinking keeps it. (A carried Boom
+  Box remade after its carrier dies gets a new key, so it goes back to the default.)
+- Every player gets it in `FBBPActiveBoomBox::Range`, with the Boom Box's volume. `GetRange` reads that (or the
+  server's map), and `UBBPPlaybackController::GetAudibleRange(BoomBox)` / `GetStreamRange(BoomBox)` (range + 5 km)
+  replace the old fixed values everywhere: earshot for the load wait, lyrics and notifications, the game-music fade,
+  nearest-per-group, `/bbp list`, prefetch and out-of-range.
+- The page's Range slider sends `Server_SetRange` when let go (or a typed value), checked by `MayControl` like the
+  other controls. Until the new value comes back it shows the requested one (up to 2 s).
+- `UBBPPlaybackController::ApplyRange` sets the Unreal component's attenuation (16% of the range at full volume, the
+  rest fading) and scales every distance on the Boom Box's Wwise emitter by range / 140 m: `AK::SoundEngine::
+  SetScalingFactor` on its game object, and its `AttenuationScalingFactor` property (the component applies that again
+  whenever it activates). That emitter is the one the vanilla Boom Box plays its tapes on, so tapes get the range too;
+  it isn't reset when Custom Music is taken out.

@@ -25,7 +25,7 @@ with synced lyrics. Inspired by the PEAK mod sPEAKer.
   to play again or copy.
 - **3D sound through the game's audio engine** (new in 1.6.0). Music comes from the Boom Box, carried or placed,
   and plays through the game's own audio engine like the Boom Box's tapes, with an adjustable Doppler effect when
-  you drive or fly past.
+  you drive or fly past. A **Range** slider (new in 1.7.0) sets how far each Boom Box is heard, 10 to 1000 m.
 - **Multiplayer sync.** Same song, same position for everyone, including players who join mid-song. Each Boom
   Box has its own queue, or link several with a 4-digit code to share one.
 - **Your own volume per Boom Box**, from 0 to 200%, remembered between sessions.

@@ -74,9 +74,17 @@ void ABBPPlaylistSubsystem::BeginPlay()
 			}
 		}
 		RestoreDeadline = GetWorld()->GetTimeSeconds() + RestoreGraceSeconds;
+		for (const FString& Json : SavedRanges)
+		{
+			FBBPSavedRange Saved;
+			if (FJsonObjectConverter::JsonObjectStringToUStruct(Json, &Saved) && !Saved.Key.IsEmpty())
+			{
+				Ranges.Add(Saved.Key, FMath::Clamp(Saved.Range, BBPRange::Min, BBPRange::Max));
+			}
+		}
 	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s); %d saved channel(s) to restore"),
-		HasAuthority() ? TEXT("server") : TEXT("client"), PendingRestores.Num());
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist subsystem started (%s); %d saved channel(s) to restore, %d Boom Box range(s)"),
+		HasAuthority() ? TEXT("server") : TEXT("client"), PendingRestores.Num(), Ranges.Num());
 
 	if (GetNetMode() != NM_DedicatedServer)
 	{
@@ -701,6 +709,53 @@ void ABBPPlaylistSubsystem::SaveChannels()
 		Add(Pending);
 	}
 	SavedChannels = MoveTemp(NewSaved);
+
+	TArray<FString> NewRanges;
+	for (const TPair<FString, float>& Pair : Ranges)
+	{
+		FBBPSavedRange Saved;
+		Saved.Key = Pair.Key;
+		Saved.Range = Pair.Value;
+		FString Json;
+		if (FJsonObjectConverter::UStructToJsonObjectString(Saved, Json, 0, 0, 0, nullptr, false))
+		{
+			NewRanges.Add(MoveTemp(Json));
+		}
+	}
+	SavedRanges = MoveTemp(NewRanges);
+}
+
+float ABBPPlaylistSubsystem::GetRange(const AFGBoomBoxPlayer* BoomBox) const
+{
+	if (!BoomBox)
+	{
+		return BBPRange::Default;
+	}
+	if (const FBBPActiveBoomBox* Active = ActiveBoomBoxes.FindByPredicate([BoomBox](const FBBPActiveBoomBox& A) { return A.BoomBox == BoomBox; }))
+	{
+		return Active->Range;
+	}
+	const float* Found = Ranges.Find(GetBoomBoxKey(BoomBox));
+	return Found ? *Found : BBPRange::Default;
+}
+
+void ABBPPlaylistSubsystem::SetRange(AFGBoomBoxPlayer* BoomBox, float Range)
+{
+	if (!HasAuthority() || !BoomBox || !FMath::IsFinite(Range))
+	{
+		return;
+	}
+	const float Clamped = FMath::Clamp(Range, BBPRange::Min, BBPRange::Max);
+	if (FMath::IsNearlyEqual(Clamped, BBPRange::Default))
+	{
+		Ranges.Remove(GetBoomBoxKey(BoomBox));
+	}
+	else
+	{
+		Ranges.Add(GetBoomBoxKey(BoomBox), Clamped);
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playlist: %s is now heard out to %.0f m"), *GetNameSafe(BoomBox), Clamped / 100.f);
+	RefreshActiveBoomBoxes();
 }
 
 void ABBPPlaylistSubsystem::RefreshActiveBoomBoxes()
@@ -714,6 +769,8 @@ void ABBPPlaylistSubsystem::RefreshActiveBoomBoxes()
 			Active.BoomBox = *It;
 			Active.Volume = It->GetmState().mVolume;
 			Active.Key = GetBoomBoxKey(*It);
+			const float* Range = Ranges.Find(Active.Key);
+			Active.Range = Range ? *Range : BBPRange::Default;
 		}
 	}
 	if (Found != ActiveBoomBoxes)

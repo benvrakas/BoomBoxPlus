@@ -52,6 +52,9 @@ namespace
 	constexpr float ShowEnforceSeconds = 0.5f;
 	constexpr double LinkMessageSeconds = 8.0;
 
+	// How long a range asked of the server is shown before falling back to the server's value.
+	constexpr double PendingRangeSeconds = 2.0;
+
 	// Share of the screen the page fills.
 	constexpr float PageWidthShare = 0.9f;
 	constexpr float PageHeightShare = 0.86f;
@@ -147,6 +150,15 @@ void UBBPMusicPage::NativeOnInitialized()
 	if (AddAllButton) AddAllButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleAddAllOnline);
 	if (SpotifyButton) SpotifyButton->OnClicked.AddDynamic(this, &UBBPMusicPage::HandleConnectSpotify);
 	if (MyVolumeBox) MyVolumeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleMyVolumeCommitted);
+	if (RangeBox) RangeBox->OnTextCommitted.AddDynamic(this, &UBBPMusicPage::HandleRangeCommitted);
+	if (RangeSlider)
+	{
+		RangeSlider->OnValueChanged.AddDynamic(this, &UBBPMusicPage::HandleRangeChanged);
+		RangeSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleRangeCaptureBegin);
+		RangeSlider->OnMouseCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleRangeCaptureEnd);
+		RangeSlider->OnControllerCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleRangeCaptureBegin);
+		RangeSlider->OnControllerCaptureEnd.AddDynamic(this, &UBBPMusicPage::HandleRangeCaptureEnd);
+	}
 	if (SeekSlider)
 	{
 		SeekSlider->OnMouseCaptureBegin.AddDynamic(this, &UBBPMusicPage::HandleSeekBegin);
@@ -275,6 +287,32 @@ void UBBPMusicPage::BuildDefaultLayout()
 	MyVolumeBoxSize->SetContent(MyVolumeBox);
 	AddToRow(Transport, MyVolumeBoxSize, false, 3.f);
 	AddToRow(Transport, MakeText(WidgetTree, 11, DimTextColor, FText::FromString(TEXT("%")), EFontWeight::SemiBold), false, 0.f);
+
+	UHorizontalBox* RangeRow = AddRow(NowPlaying, 6.f);
+	UTextBlock* RangeLabel = MakeText(WidgetTree, 11, DimTextColor, LOCTEXT("RangeLabel", "Range"));
+	RangeLabel->SetToolTipText(LOCTEXT("RangeTip", "How far this Boom Box is heard, for every player."));
+	AddToRow(RangeRow, RangeLabel, false, 6.f);
+	RangeSlider = WidgetTree->ConstructWidget<USlider>();
+	StyleSlider(RangeSlider);
+	RangeSlider->SetMinValue(BBPRange::Min / 100.f);
+	RangeSlider->SetMaxValue(BBPRange::Max / 100.f);
+	RangeSlider->SetStepSize(10.f);
+	RangeSlider->MouseUsesStep = true;
+	RangeSlider->SetToolTipText(LOCTEXT("RangeTip", "How far this Boom Box is heard, for every player."));
+	USizeBox* RangeSize = WidgetTree->ConstructWidget<USizeBox>();
+	RangeSize->SetWidthOverride(180.f);
+	RangeSize->SetContent(RangeSlider);
+	AddToRow(RangeRow, RangeSize, false, 6.f);
+	RangeBox = WidgetTree->ConstructWidget<UEditableTextBox>();
+	StyleTextBox(RangeBox, 11);
+	RangeBox->SetJustification(ETextJustify::Center);
+	RangeBox->SetToolTipText(FText::Format(LOCTEXT("RangeBoxTip", "Type a range from {0} to {1} metres and press Enter."),
+		FText::AsNumber(FMath::RoundToInt(BBPRange::Min / 100.f)), FText::AsNumber(FMath::RoundToInt(BBPRange::Max / 100.f))));
+	USizeBox* RangeBoxSize = WidgetTree->ConstructWidget<USizeBox>();
+	RangeBoxSize->SetWidthOverride(52.f);
+	RangeBoxSize->SetContent(RangeBox);
+	AddToRow(RangeRow, RangeBoxSize, false, 3.f);
+	AddToRow(RangeRow, MakeText(WidgetTree, 11, DimTextColor, FText::FromString(TEXT("m")), EFontWeight::SemiBold), false, 0.f);
 
 	// Tabs for the views under Now Playing, on a thin rule.
 	UHorizontalBox* Tabs = AddRow(Column, 12.f);
@@ -917,6 +955,7 @@ void UBBPMusicPage::RebuildQueue()
 void UBBPMusicPage::RefreshTransport()
 {
 	RefreshMyVolume();
+	RefreshRange();
 
 	const AFGBoomBoxPlayer* ViewedBoomBox = GetBoomBox();
 	const bool bLoaded = ViewedBoomBox && UBBPCustomMusicTape::IsCustomMusicTape(ViewedBoomBox->GetCurrentTape());
@@ -1216,6 +1255,91 @@ void UBBPMusicPage::HandleMyVolumeCommitted(const FText& Text, ETextCommit::Type
 		MyVolumeBox->SetText(FText::FromString(FString::FromInt(FMath::RoundToInt(GetMyVolume() * 100.f))));
 	}
 	RefreshMyVolume();
+}
+
+void UBBPMusicPage::HandleRangeChanged(float Value)
+{
+	const float Meters = FMath::RoundToFloat(Value / 10.f) * 10.f;
+	if (RangeBox)
+	{
+		RangeBox->SetText(FText::AsNumber(FMath::RoundToInt(Meters)));
+	}
+	if (!bChangingRange)
+	{
+		RequestRange(Meters);
+	}
+}
+
+void UBBPMusicPage::HandleRangeCaptureBegin()
+{
+	bChangingRange = true;
+}
+
+void UBBPMusicPage::HandleRangeCaptureEnd()
+{
+	bChangingRange = false;
+	if (RangeSlider)
+	{
+		RequestRange(FMath::RoundToFloat(RangeSlider->GetValue() / 10.f) * 10.f);
+	}
+}
+
+void UBBPMusicPage::HandleRangeCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	const FString Typed = Text.ToString().Replace(TEXT("m"), TEXT("")).TrimStartAndEnd();
+	if (CommitMethod != ETextCommit::OnCleared && !Typed.IsEmpty() && Typed.IsNumeric())
+	{
+		RequestRange(FCString::Atof(*Typed));
+	}
+	// Anything that isn't a number just puts the current value back.
+	if (RangeBox)
+	{
+		const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+		const float Range = PendingRange >= 0.f ? PendingRange : Playlist ? Playlist->GetRange(GetBoomBox()) : BBPRange::Default;
+		RangeBox->SetText(FText::AsNumber(FMath::RoundToInt(Range / 100.f)));
+	}
+	RefreshRange();
+}
+
+void UBBPMusicPage::RequestRange(float Meters)
+{
+	AFGBoomBoxPlayer* BoomBox = GetBoomBox();
+	const float Range = FMath::Clamp(Meters * 100.f, BBPRange::Min, BBPRange::Max);
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	if (!BoomBox || !Playlist || FMath::IsNearlyEqual(Playlist->GetRange(BoomBox), Range))
+	{
+		return;
+	}
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("UI: range for %s set to %.0f m"), *GetNameSafe(BoomBox), Range / 100.f);
+	UBBPBlueprintLibrary::RequestSetRange(BoomBox, Range);
+	PendingRange = Range;
+	PendingRangeUntil = GetWorld() ? GetWorld()->GetTimeSeconds() + PendingRangeSeconds : 0.0;
+}
+
+void UBBPMusicPage::RefreshRange()
+{
+	const ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this);
+	float Range = Playlist ? Playlist->GetRange(GetBoomBox()) : BBPRange::Default;
+	if (PendingRange >= 0.f)
+	{
+		if (FMath::IsNearlyEqual(Range, PendingRange) || !GetWorld() || GetWorld()->GetTimeSeconds() > PendingRangeUntil)
+		{
+			PendingRange = -1.f;
+		}
+		else
+		{
+			Range = PendingRange;
+		}
+	}
+	const float Meters = Range / 100.f;
+	if (RangeSlider && !bChangingRange && !FMath::IsNearlyEqual(RangeSlider->GetValue(), Meters))
+	{
+		RangeSlider->SetValue(Meters);
+	}
+	if (RangeBox && !bChangingRange && !RangeBox->HasAnyUserFocus() && !RangeBox->HasFocusedDescendants())
+	{
+		RangeBox->SetText(FText::AsNumber(FMath::RoundToInt(Meters)));
+	}
 }
 
 void UBBPMusicPage::HandleSearchChanged(const FText& Text)

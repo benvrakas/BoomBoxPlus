@@ -241,6 +241,24 @@ void UBBPRemoteCallObject::Server_SetShuffle_Implementation(AFGBoomBoxPlayer* Bo
 	}
 }
 
+void UBBPRemoteCallObject::Server_SetRange_Implementation(AFGBoomBoxPlayer* BoomBox, float Range)
+{
+	if (!BoomBox || !MayControl(TEXT("SetRange")))
+	{
+		return;
+	}
+	if (ABBPPlaylistSubsystem* Playlist = ABBPPlaylistSubsystem::Get(this))
+	{
+		UE_LOG(LogBoomBoxPlus, Log, TEXT("RCO: SetRange from %s on %s: %.0f m"), *GetRequesterName(), *GetNameSafe(BoomBox), Range / 100.f);
+		Playlist->SetRange(BoomBox, Range);
+	}
+}
+
+bool UBBPRemoteCallObject::Server_SetRange_Validate(AFGBoomBoxPlayer* BoomBox, float Range)
+{
+	return FMath::IsFinite(Range);
+}
+
 void UBBPRemoteCallObject::Server_SetRepeatMode_Implementation(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode)
 {
 	if (ABBPMusicChannel* Channel = GetChannelForRequest(BoomBox, TEXT("SetRepeatMode")))

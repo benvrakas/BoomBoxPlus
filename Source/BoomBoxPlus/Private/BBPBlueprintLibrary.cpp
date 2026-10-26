@@ -176,6 +176,14 @@ void UBBPBlueprintLibrary::RequestSetShuffle(AFGBoomBoxPlayer* BoomBox, bool bEn
 	}
 }
 
+void UBBPBlueprintLibrary::RequestSetRange(AFGBoomBoxPlayer* BoomBox, float Range)
+{
+	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SetRange")))
+	{
+		RCO->Server_SetRange(BoomBox, Range);
+	}
+}
+
 void UBBPBlueprintLibrary::RequestSetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode)
 {
 	if (UBBPRemoteCallObject* RCO = GetLocalRCO(BoomBox, TEXT("SetRepeatMode")))

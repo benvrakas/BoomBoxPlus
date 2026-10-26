@@ -37,8 +37,8 @@ namespace
 	constexpr float PrefetchInterval = 1.f;
 	constexpr int32 PrefetchAhead = 2;
 	constexpr float DriftTolerance = 0.25f;
-	constexpr float InnerRadius = 4000.f;
-	constexpr float FalloffDistance = 21000.f;
+	// Share of a Boom Box's range at full volume in Unreal; beyond it the sound fades out over the rest.
+	constexpr float InnerRadiusShare = 0.16f;
 
 	constexpr float GameVolumeInterval = 1.f;
 
@@ -54,9 +54,9 @@ namespace
 	// Closer than this (cm), the direction between Boom Box and listener is too unstable for Doppler.
 	constexpr float MinDopplerDistance = 100.f;
 
-	// Boom Boxes stream (and download their next songs) out to this many times the hearing range, so the music is
+	// Boom Boxes stream (and download their next songs) this far (cm) beyond their hearing range, so the music is
 	// already running, silent, by the time a player walks into earshot.
-	constexpr float StreamRangeFactor = 10.f;
+	constexpr float StreamBuffer = 500000.f;
 
 	// A Boom Box this far past the streaming range (as a fraction of it) stops; inside the range it starts again.
 	constexpr float StreamRangeMargin = 0.05f;
@@ -111,14 +111,15 @@ namespace
 	}
 }
 
-float UBBPPlaybackController::GetAudibleRange()
+float UBBPPlaybackController::GetAudibleRange(const AFGBoomBoxPlayer* BoomBox)
 {
-	return InnerRadius + FalloffDistance;
+	const ABBPPlaylistSubsystem* Subsystem = BoomBox ? ABBPPlaylistSubsystem::Get(BoomBox) : nullptr;
+	return Subsystem ? Subsystem->GetRange(BoomBox) : BBPRange::Default;
 }
 
-float UBBPPlaybackController::GetStreamRange()
+float UBBPPlaybackController::GetStreamRange(const AFGBoomBoxPlayer* BoomBox)
 {
-	return GetAudibleRange() * StreamRangeFactor;
+	return GetAudibleRange(BoomBox) + StreamBuffer;
 }
 
 void UBBPPlaybackController::Initialize(ABBPPlaylistSubsystem* InPlaylist)
@@ -220,7 +221,6 @@ void UBBPPlaybackController::GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out)
 	{
 		return;
 	}
-	const float RangeSquared = FMath::Square(GetAudibleRange());
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
 		AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
@@ -229,7 +229,7 @@ void UBBPPlaybackController::GetAudibleBoomBoxes(TArray<FBBPNearbyBoomBox>& Out)
 			continue;
 		}
 		const float DistanceSquared = FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
-		if (DistanceSquared <= RangeSquared)
+		if (DistanceSquared <= FMath::Square(GetAudibleRange(BoomBox)))
 		{
 			Out.Add({ BoomBox, Emitter.Channel.Get(), FMath::Sqrt(DistanceSquared) / 100.f, Emitter.bMutedByMode });
 		}
@@ -431,7 +431,8 @@ void UBBPPlaybackController::DescribeStreams(TArray<FString>& OutLines) const
 		FBBPQueueEntry Entry;
 		const bool bHasEntry = Channel && Channel->GetCurrentEntry(Entry);
 		const FString Title = bHasEntry ? FString::Printf(TEXT("'%s'"), *Entry.Track.Title) : FString();
-		const bool bSilent = Distance > GetAudibleRange();
+		const float Range = GetAudibleRange(BoomBox);
+		const bool bSilent = Distance > Range;
 		FString State;
 		if (Emitter.bOutOfRange)
 		{
@@ -466,8 +467,8 @@ void UBBPPlaybackController::DescribeStreams(TArray<FString>& OutLines) const
 		const APlayerState* CarrierState = CarrierPawn ? CarrierPawn->GetPlayerState() : nullptr;
 		const FString Where = Distance < 0.f ? FString(TEXT("? m"))
 			: Distance >= 100000.f ? FString::Printf(TEXT("%.1f km"), Distance / 100000.f) : FString::Printf(TEXT("%.0f m"), Distance / 100.f);
-		Lines.Add({ Distance, FString::Printf(TEXT("%s, queue %04d%s: %s"), *Where, Channel ? Channel->GetLinkCode() : 0,
-			CarrierState ? *(TEXT(", carried by ") + CarrierState->GetPlayerName()) : TEXT(""), *State) });
+		Lines.Add({ Distance, FString::Printf(TEXT("%s, queue %04d, range %.0f m%s: %s"), *Where, Channel ? Channel->GetLinkCode() : 0,
+			Range / 100.f, CarrierState ? *(TEXT(", carried by ") + CarrierState->GetPlayerName()) : TEXT(""), *State) });
 	}
 	Lines.Sort([](const FLine& A, const FLine& B) { return A.Distance < B.Distance; });
 	OutLines.Reset();
@@ -480,8 +481,8 @@ void UBBPPlaybackController::DescribeStreams(TArray<FString>& OutLines) const
 	{
 		OutLines.Add(Line.Text);
 	}
-	OutLines.Add(FString::Printf(TEXT("%d Boom Box(es): %d streaming on this game, %d out of range (over %.1f km)."),
-		Lines.Num(), Streaming, OutOfRange, GetStreamRange() / 100000.f));
+	OutLines.Add(FString::Printf(TEXT("%d Boom Box(es): %d streaming on this game, %d out of range (over %.0f km beyond their range)."),
+		Lines.Num(), Streaming, OutOfRange, StreamBuffer / 100000.f));
 }
 
 const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireSound) const
@@ -492,7 +493,7 @@ const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireS
 		return nullptr;
 	}
 	const ABBPMusicChannel* Nearest = nullptr;
-	float NearestDistanceSquared = FMath::Square(GetAudibleRange());
+	float NearestDistanceSquared = TNumericLimits<float>::Max();
 	for (const FBBPEmitter& Emitter : Emitters)
 	{
 		const AFGBoomBoxPlayer* BoomBox = Emitter.BoomBox.Get();
@@ -507,7 +508,7 @@ const ABBPMusicChannel* UBBPPlaybackController::GetAudibleChannel(bool bRequireS
 			continue;
 		}
 		const float DistanceSquared = FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
-		if (DistanceSquared <= NearestDistanceSquared)
+		if (DistanceSquared <= FMath::Square(GetAudibleRange(BoomBox)) && DistanceSquared <= NearestDistanceSquared)
 		{
 			NearestDistanceSquared = DistanceSquared;
 			Nearest = Channel;
@@ -613,7 +614,6 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 	// Channels with a Boom Box within the streaming range need their tracks on disk. So does a channel with a Boom Box
 	// this machine doesn't have (the game only sends a client nearby actors), since it can't tell how far that one is.
 	const APawn* Pawn = UGameplayStatics::GetPlayerPawn(Playlist, 0);
-	const float StreamRangeSquared = FMath::Square(GetStreamRange());
 	TSet<const ABBPMusicChannel*> Heard;
 	for (const ABBPMusicChannel* Channel : Playlist->GetChannels())
 	{
@@ -621,9 +621,9 @@ void UBBPPlaybackController::PrefetchNetworkTracks()
 		{
 			continue;
 		}
-		const bool bNear = Channel->GetMembers().ContainsByPredicate([Pawn, StreamRangeSquared](const AFGBoomBoxPlayer* BoomBox)
+		const bool bNear = Channel->GetMembers().ContainsByPredicate([Pawn](const AFGBoomBoxPlayer* BoomBox)
 		{
-			return !Pawn || !IsValid(BoomBox) || FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= StreamRangeSquared;
+			return !Pawn || !IsValid(BoomBox) || FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= FMath::Square(GetStreamRange(BoomBox));
 		});
 		if (bNear)
 		{
@@ -760,6 +760,10 @@ void UBBPPlaybackController::SyncEmitters()
 			Emitter->Component = Component;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: attached audio to Boom Box %s"), *GetNameSafe(BoomBox));
 		}
+		if (Emitter->AppliedRange != ActiveBoomBox.Range)
+		{
+			ApplyRange(*Emitter, ActiveBoomBox.Range);
+		}
 		// Set before the first track starts on a new emitter, so it never plays a moment at the default volume.
 		const float MyVolume = GetMyVolume(BoomBox);
 		const float Volume = FMath::Clamp(ActiveBoomBox.Volume, 0.f, 1.f) * MyVolume * GameVolumeScale;
@@ -811,8 +815,8 @@ UAudioComponent* UBBPPlaybackController::CreateAudioComponent(AFGBoomBoxPlayer* 
 	Component->AttenuationOverrides.bAttenuate = true;
 	Component->AttenuationOverrides.bSpatialize = true;
 	Component->AttenuationOverrides.AttenuationShape = EAttenuationShape::Sphere;
-	Component->AttenuationOverrides.AttenuationShapeExtents = FVector(InnerRadius, 0.f, 0.f);
-	Component->AttenuationOverrides.FalloffDistance = FalloffDistance;
+	Component->AttenuationOverrides.AttenuationShapeExtents = FVector(BBPRange::Default * InnerRadiusShare, 0.f, 0.f);
+	Component->AttenuationOverrides.FalloffDistance = BBPRange::Default * (1.f - InnerRadiusShare);
 	Component->AttenuationOverrides.DistanceAlgorithm = EAttenuationDistanceModel::Logarithmic;
 	Component->SetupAttachment(Root);
 	Component->RegisterComponent();
@@ -863,13 +867,14 @@ void UBBPPlaybackController::UpdateEmitter(FBBPEmitter& Emitter, float DeltaSeco
 	if (Pawn && BoomBox)
 	{
 		const float Distance = FVector::Dist(BoomBox->GetActorLocation(), Pawn->GetActorLocation());
-		if (!Emitter.bOutOfRange && Distance > GetStreamRange() * (1.f + StreamRangeMargin))
+		const float StreamRange = GetStreamRange(BoomBox);
+		if (!Emitter.bOutOfRange && Distance > StreamRange * (1.f + StreamRangeMargin))
 		{
 			Emitter.bOutOfRange = true;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is out of range (%.0f m); stopped streaming it"), *GetNameSafe(BoomBox), Distance / 100.f);
 			StopTrack(Emitter);
 		}
-		else if (Emitter.bOutOfRange && Distance <= GetStreamRange())
+		else if (Emitter.bOutOfRange && Distance <= StreamRange)
 		{
 			Emitter.bOutOfRange = false;
 			UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s is back in range (%.0f m); joining its music"), *GetNameSafe(BoomBox), Distance / 100.f);
@@ -1169,6 +1174,23 @@ void UBBPPlaybackController::ReleaseWave(FBBPEmitter& Emitter)
 		Emitter.Wave = nullptr;
 	}
 	SetVanillaPlaybackFlag(Emitter, false);
+}
+
+void UBBPPlaybackController::ApplyRange(FBBPEmitter& Emitter, float Range)
+{
+	Emitter.AppliedRange = Range;
+	if (Emitter.Component)
+	{
+		// AdjustAttenuation also updates a sound that's already playing.
+		FSoundAttenuationSettings Settings = Emitter.Component->AttenuationOverrides;
+		Settings.AttenuationShapeExtents = FVector(Range * InnerRadiusShare, 0.f, 0.f);
+		Settings.FalloffDistance = Range * (1.f - InnerRadiusShare);
+		Emitter.Component->AdjustAttenuation(Settings);
+	}
+	UObject* WwiseEmitter = FindWwiseEmitter(Emitter.BoomBox.Get());
+	const bool bWwise = BBPWwise::SetAttenuationScale(WwiseEmitter, Range / BBPRange::Default);
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Playback: %s heard out to %.0f m%s"), *GetNameSafe(Emitter.BoomBox.Get()), Range / 100.f,
+		bWwise ? TEXT("") : WwiseEmitter ? TEXT(" (Wwise refused the scale)") : TEXT(" (no Wwise emitter)"));
 }
 
 void UBBPPlaybackController::UpdateMasterVolumeHold(FBBPEmitter& Emitter, bool bHold)

@@ -16,10 +16,11 @@ namespace BBPWwise
 		uint32 (*PostEvent)(uint32, uint64, uint32, void (*)(int32, void*, void*, void*), void*, uint32, void*, uint32) = nullptr;
 		int32 (*RegisterGameObj)(uint64, const char*) = nullptr;
 		void (*StopPlayingID)(uint32, int32, int32) = nullptr;
-		// Only needed for RegisterBuiltInPlugin and the game-object RTPCs, so not part of IsComplete.
+		// Only needed for RegisterBuiltInPlugin and the per-game-object settings, so not part of IsComplete.
 		int32 (*RegisterPlugin)(int32, uint32, uint32, void*, void*, void*) = nullptr;
 		int32 (*SetRTPCValue)(uint32, float, uint64, int32, int32, bool) = nullptr;
 		int32 (*ResetRTPCValue)(uint32, uint64, int32, int32, bool) = nullptr;
+		int32 (*SetScalingFactor)(uint64, float) = nullptr;
 
 		bool IsComplete() const { return LoadBankMemoryCopy && PostEvent && RegisterGameObj && StopPlayingID; }
 	};
@@ -56,6 +57,10 @@ namespace BBPWwise
 	// value. Returns true if Wwise accepted it.
 	bool SetObjectRtpc(uint32 Id, float Value, uint64 GameObject);
 	bool ResetObjectRtpc(uint32 Id, uint64 GameObject);
+
+	// Scales every attenuation distance of Emitter (an AkComponent) by Factor: in Wwise now, and on the component, which
+	// applies its own factor again whenever it activates. Returns true if Wwise accepted it.
+	bool SetAttenuationScale(UObject* Emitter, float Factor);
 
 	// AkPluginID of Wwise's Audio Input source plugin.
 	constexpr uint32 AudioInputPluginId = 0x00C80002;

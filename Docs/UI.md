@@ -359,7 +359,7 @@ stacked in one vertical box whose bottom edge is anchored at (0.5, 0.84), so the
 at every resolution,
 
 **only while the local pawn is within hearing range** of a Boom Box playing Custom Music
-(`UBBPPlaybackController::GetAudibleRange()`, the attenuation's inner radius + falloff = 250 m). Both are
+(`UBBPPlaybackController::GetAudibleRange(BoomBox)`, that Boom Box's Range setting since 1.7.0; 250 m for all before). Both are
 toggled by the mod config. Same `BindWidgetOptional` pattern as the page: `LyricText`, `NowPlayingBox`,
 `NowPlayingTitleText`, `NowPlayingArtistText`.
 

@@ -58,6 +58,9 @@ Inspired by the PEAK mod sPEAKer.
   it or place it, and plays the way the Boom Box's tapes do: through the game's audio engine, with its Boom Box
   sound and volume. Drive or fly past one and its pitch bends like a passing car (the **Doppler effect**, with a
   deadzone so walking and running around don't change it; adjustable or off in the settings).
+- **Set how far each Boom Box is heard.** The **Range** slider on its Custom Music page goes from 10 m to 1000 m
+  (new Boom Boxes start at the vanilla Boom Box's 140 m). Everyone hears it to the same distance, and it's kept with
+  your save.
 - **Your own volume for each Boom Box.** A "My Volume" slider sits next to the transport controls, from 0 to 200%
   (default 100%, so you can boost Custom Music above the game's own mix); click the percentage to type an exact
   value. It's yours alone and set per Boom Box: two players with Boom Boxes side by side can each turn the other's
@@ -171,14 +174,14 @@ Type these in the game's chat.
 
 | Command | Who | What it does |
 |---|---|---|
-| `/bbp list` | Everyone | Lists every Boom Box your game knows about, how far away it is, and what it's doing for you: playing, streaming a station, silent beyond hearing, downloading, paused, or out of range (more than 2.5 km away, so not streaming). |
+| `/bbp list` | Everyone | Lists every Boom Box your game knows about, how far away it is, and what it's doing for you: playing, streaming a station, silent beyond hearing, downloading, paused, or out of range (more than 5 km past its range, so not streaming), and each one's range. |
 | `/bbp stopall` | Host only | Pauses every Custom Music Boom Box in the world at once. Queues stay as they are; press Play on a Boom Box to start it again. On a dedicated server, type it in the server console. |
 
 ### Good to know
 
-- A Boom Box you're nowhere near doesn't stream anything: more than 2.5 km away it stops decoding and disconnects
-  its radio station, and it picks the music up at the right spot when you come back. Closer than that it keeps
-  playing silently, so it never has to buffer when you walk up to it.
+- A Boom Box you're nowhere near doesn't stream anything: more than 5 km past its range it stops decoding and
+  disconnects its radio station, and it picks the music up at the right spot when you come back. Closer than that it
+  keeps playing silently, so it never has to buffer when you walk up to it.
 - Radio and YouTube live streams can't be synced to the second like songs: each player's game connects
   to the station itself, so players may hear it a few seconds apart. Pausing disconnects; resuming picks up
   the live broadcast. Seeking, lyrics and repeat don't apply to them, and they play until someone presses

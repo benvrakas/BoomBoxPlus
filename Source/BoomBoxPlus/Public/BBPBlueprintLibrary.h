@@ -73,6 +73,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestSetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode);
 
+	// Asks the server to set how far BoomBox is heard, in cm (the same for every player).
+	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
+	static void RequestSetRange(AFGBoomBoxPlayer* BoomBox, float Range);
+
 	// Links BoomBox to the Boom Box whose 4-digit code is Code, so both share one queue.
 	UFUNCTION(BlueprintCallable, Category = "BoomBoxPlus")
 	static void RequestLinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code);

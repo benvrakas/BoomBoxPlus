@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0
+
+- **A Range slider for each Boom Box.** Set how far a Boom Box is heard, from 10 m to 1000 m, with the new **Range**
+  slider on its Custom Music page (or type a number). It's the same for every player and kept with your save; new
+  Boom Boxes start at the vanilla Boom Box's range (140 m). It covers everything that Boom Box plays, its tapes
+  included. Lyrics, the "now playing" notification, the game-music fade and which players a new song waits for all
+  follow each Boom Box's range. With "Only the host controls music" on, only the host can change it.
+- **Streaming reaches a fixed distance past hearing.** A Boom Box now keeps streaming, silently, out to 5 km beyond its
+  range (before: ten times the old 250 m hearing range, 2.5 km), so the music never has to buffer when you walk up
+  to it. `/bbp list` shows each Boom Box's range.
+
 ## 1.6.1
 
 - **Custom Music keeps playing in the background again.** With "Mute when the game is in the background" off, music

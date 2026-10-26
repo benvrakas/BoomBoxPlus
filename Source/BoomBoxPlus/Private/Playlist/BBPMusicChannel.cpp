@@ -657,10 +657,9 @@ bool ABBPMusicChannel::IsInEarshot(const APlayerState* Player) const
 	{
 		return false;
 	}
-	const float RangeSquared = FMath::Square(UBBPPlaybackController::GetAudibleRange());
-	return Members.ContainsByPredicate([Pawn, RangeSquared](const AFGBoomBoxPlayer* BoomBox)
+	return Members.ContainsByPredicate([Pawn](const AFGBoomBoxPlayer* BoomBox)
 	{
-		return IsValid(BoomBox) && FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= RangeSquared;
+		return IsValid(BoomBox) && FVector::DistSquared(BoomBox->GetActorLocation(), Pawn->GetActorLocation()) <= FMath::Square(UBBPPlaybackController::GetAudibleRange(BoomBox));
 	});
 }
 

@@ -196,6 +196,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UEditableTextBox> MyVolumeBox;
 
+	// How far this Boom Box is heard, in metres (the same for every player); sent to the server when let go.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USlider> RangeSlider;
+
+	// The range in metres; click it to type a value and press Enter.
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UEditableTextBox> RangeBox;
+
 	// This Boom Box's link code and how many Boom Boxes share its queue.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> LinkCodeText;
@@ -395,6 +403,34 @@ private:
 
 	// True while the player is dragging the personal volume slider.
 	bool bChangingMyVolume = false;
+
+	// Shows the dragged range in the box; a step from the keyboard or a gamepad (no drag) is sent at once.
+	UFUNCTION()
+	void HandleRangeChanged(float Value);
+
+	UFUNCTION()
+	void HandleRangeCaptureBegin();
+
+	// Sends the dragged range to the server.
+	UFUNCTION()
+	void HandleRangeCaptureEnd();
+
+	// Sends a typed range (metres) to the server.
+	UFUNCTION()
+	void HandleRangeCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	// Asks the server to set this Boom Box's range to Meters.
+	void RequestRange(float Meters);
+
+	// Refreshes RangeSlider and RangeBox from the Boom Box's range, unless the player is changing them.
+	void RefreshRange();
+
+	// True while the player is dragging the range slider.
+	bool bChangingRange = false;
+
+	// Range (cm) last asked of the server, shown until the server's value arrives or PendingRangeUntil (game time) passes.
+	float PendingRange = -1.f;
+	double PendingRangeUntil = 0.0;
 
 	// Switches to the first switcher page whose class name contains NameFragment.
 	bool ShowSiblingPage(const TCHAR* NameFragment);

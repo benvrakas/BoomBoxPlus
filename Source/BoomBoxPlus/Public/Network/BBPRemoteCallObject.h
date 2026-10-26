@@ -77,6 +77,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_SetRepeatMode(AFGBoomBoxPlayer* BoomBox, EBBPRepeatMode Mode);
 
+	// Sets how far BoomBox is heard, in cm (ABBPPlaylistSubsystem::SetRange).
+	UFUNCTION(Server, Reliable, WithValidation = Server_SetRange_Validate)
+	void Server_SetRange(AFGBoomBoxPlayer* BoomBox, float Range);
+	bool Server_SetRange_Validate(AFGBoomBoxPlayer* BoomBox, float Range);
+
 	// Links BoomBox to the channel with the given 4-digit code.
 	UFUNCTION(Server, Reliable, WithValidation = Server_LinkBoomBox_Validate)
 	void Server_LinkBoomBox(AFGBoomBoxPlayer* BoomBox, int32 Code);

@@ -82,6 +82,12 @@ public:
 	// Boom Boxes that currently have the Custom Music tape loaded.
 	const TArray<FBBPActiveBoomBox>& GetActiveBoomBoxes() const { return ActiveBoomBoxes; }
 
+	// How far BoomBox is heard, in cm: its Range setting, or BBPRange::Default.
+	float GetRange(const AFGBoomBoxPlayer* BoomBox) const;
+
+	// Server only. Sets how far BoomBox is heard by everyone (cm, clamped to BBPRange) and keeps it in the save.
+	void SetRange(AFGBoomBoxPlayer* BoomBox, float Range);
+
 	// Every channel in the session.
 	const TArray<TObjectPtr<ABBPMusicChannel>>& GetChannels() const { return Channels; }
 
@@ -160,6 +166,14 @@ private:
 	// system needing SaveGame flags on every field). Written by SaveChannels, read at BeginPlay.
 	UPROPERTY(SaveGame)
 	TArray<FString> SavedChannels;
+
+	// Kept in the save: one FBBPSavedRange per Boom Box whose range isn't the default, as JSON. Written by SaveChannels,
+	// read at BeginPlay.
+	UPROPERTY(SaveGame)
+	TArray<FString> SavedRanges;
+
+	// Server only. Range of each Boom Box that isn't at the default, by GetBoomBoxKey.
+	TMap<FString, float> Ranges;
 
 	// Server only. Saved channels whose Boom Boxes haven't all turned up yet, and when to stop waiting for them.
 	TArray<FBBPSavedChannel> PendingRestores;

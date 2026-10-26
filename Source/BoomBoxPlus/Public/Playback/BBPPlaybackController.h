@@ -86,6 +86,9 @@ struct FBBPEmitter
 	// Master volume this emitter's Wwise game object keeps while the game is in the background, or -1 while it follows
 	// the game's (UBBPPlaybackController::UpdateMasterVolumeHold).
 	float HeldMasterVolume = -1.f;
+
+	// Range (cm) last applied to the sound (UBBPPlaybackController::ApplyRange), or -1.
+	float AppliedRange = -1.f;
 	double WwiseStartTime = 0.0;
 
 	// Times Wwise ended this emitter's music within a second of starting it; after two, it plays through Unreal.
@@ -129,11 +132,11 @@ public:
 	void Shutdown();
 	void Tick(float DeltaSeconds);
 
-	// Returns the distance in centimetres at which Boom Box music becomes inaudible.
-	static float GetAudibleRange();
+	// Distance (cm) at which BoomBox's music becomes inaudible: its Range setting.
+	static float GetAudibleRange(const AFGBoomBoxPlayer* BoomBox);
 
-	// Distance (cm) within which Boom Boxes stream and download, silently past GetAudibleRange.
-	static float GetStreamRange();
+	// Distance (cm) within which BoomBox streams and downloads, silently past GetAudibleRange: that plus a fixed buffer.
+	static float GetStreamRange(const AFGBoomBoxPlayer* BoomBox);
 
 	// The Wwise emitter (AkComponent) the vanilla Boom Box plays its tapes on, or null.
 	static UObject* FindWwiseEmitter(const AFGBoomBoxPlayer* BoomBox);
@@ -228,6 +231,10 @@ private:
 	// With the background mute setting off and the game in the background, keeps the Master slider's value on Emitter's
 	// Wwise game object (bHold), where the game has zeroed it for everything; otherwise hands it back to the game's value.
 	void UpdateMasterVolumeHold(FBBPEmitter& Emitter, bool bHold);
+
+	// Makes Emitter's music fade out at Range (cm): the Unreal component's attenuation, and the scale of every distance
+	// on the Boom Box's Wwise emitter (which covers its vanilla tapes too).
+	void ApplyRange(FBBPEmitter& Emitter, float Range);
 
 	// Sends the current song, play state and position to open vanilla Boom Box pages, which otherwise only follow Wwise playback.
 	void UpdateVanillaPages();

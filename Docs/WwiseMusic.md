@@ -90,6 +90,6 @@ the game stays muted as its option says. (The vanilla Boom Box's own sounds on t
 
 Heard in game on 2026-10-22 (shipped in 1.6.0): the bank loads, the Boom Box plays through Wwise ("plays through
 Wwise (playing id ..., 48000 Hz, 2 ch)", and 44100 Hz for a 44.1 kHz file), and the user confirmed it sounds like
-the game's audio. Not yet checked one by one: falloff distance (the vanilla Boom Box's attenuation replaces the mod's
-250 m; the mod's "audible range" for lyrics and the game-music fade is still 250 m), reverb indoors, muffling behind
-walls, and pitch of 44.1 kHz files. Telescreen sharing the callbacks was built but not yet heard with both mods.
+the game's audio. Not yet checked one by one: reverb indoors, muffling behind walls, and pitch of 44.1 kHz files.
+Falloff: the vanilla Boom Box's attenuation (140 m) replaced the mod's 250 m while lyrics and the game-music fade still
+used 250 m; since 1.7.0 both come from each Boom Box's Range setting (Multiplayer.md, "Range"). Telescreen sharing the callbacks was built but not yet heard with both mods.

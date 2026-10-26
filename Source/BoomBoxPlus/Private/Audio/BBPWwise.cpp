@@ -1,5 +1,6 @@
 #include "Audio/BBPWwise.h"
 #include "BoomBoxPlus.h"
+#include "UObject/UnrealType.h"
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
 #include <Windows.h>
@@ -119,6 +120,7 @@ const BBPWwise::FCalls& BBPWwise::GetCalls()
 		Found.StopPlayingID = reinterpret_cast<decltype(Found.StopPlayingID)>(FPlatformProcess::GetDllExport(Module, TEXT("?StopPlayingID@SoundEngine@AK@@YAXIHW4AkCurveInterpolation@@@Z")));
 		Found.SetRTPCValue = reinterpret_cast<decltype(Found.SetRTPCValue)>(FPlatformProcess::GetDllExport(Module, TEXT("?SetRTPCValue@SoundEngine@AK@@YA?AW4AKRESULT@@IM_KHW4AkCurveInterpolation@@_N@Z")));
 		Found.ResetRTPCValue = reinterpret_cast<decltype(Found.ResetRTPCValue)>(FPlatformProcess::GetDllExport(Module, TEXT("?ResetRTPCValue@SoundEngine@AK@@YA?AW4AKRESULT@@I_KHW4AkCurveInterpolation@@_N@Z")));
+		Found.SetScalingFactor = reinterpret_cast<decltype(Found.SetScalingFactor)>(FPlatformProcess::GetDllExport(Module, TEXT("?SetScalingFactor@SoundEngine@AK@@YA?AW4AKRESULT@@_KM@Z")));
 		Found.RegisterPlugin = reinterpret_cast<decltype(Found.RegisterPlugin)>(FPlatformProcess::GetDllExport(Module, TEXT("?RegisterPlugin@SoundEngine@AK@@YA?AW4AKRESULT@@W4AkPluginType@@IIP6APEAVIAkPlugin@2@PEAVIAkPluginMemAlloc@2@@ZP6APEAVIAkPluginParam@2@1@ZP6A?AW43@AEAIPEAUAkDeviceDescription@@@Z@Z")));
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise: game sound engine functions %s"), Found.IsComplete() ? TEXT("found") : TEXT("INCOMPLETE; Wwise playback off"));
 #endif
@@ -229,6 +231,22 @@ bool BBPWwise::ResetObjectRtpc(uint32 Id, uint64 GameObject)
 {
 	const FCalls& Calls = GetCalls();
 	return Calls.ResetRTPCValue && Calls.ResetRTPCValue(Id, GameObject, 0, LinearCurve, false) == WwiseSuccess;
+}
+
+bool BBPWwise::SetAttenuationScale(UObject* Emitter, float Factor)
+{
+	if (!IsValid(Emitter))
+	{
+		return false;
+	}
+	// UAkGameObject::AttenuationScalingFactor.
+	if (FFloatProperty* Property = FindFProperty<FFloatProperty>(Emitter->GetClass(), TEXT("AttenuationScalingFactor")))
+	{
+		Property->SetPropertyValue_InContainer(Emitter, Factor);
+	}
+	const FCalls& Calls = GetCalls();
+	// The game object id is the component's address (UAkGameObject::GetAkGameObjectID).
+	return Calls.SetScalingFactor && Calls.SetScalingFactor(reinterpret_cast<uint64>(Emitter), Factor) == WwiseSuccess;
 }
 
 bool BBPWwise::RegisterBuiltInPlugin(uint32 PluginId, const TCHAR* Label)

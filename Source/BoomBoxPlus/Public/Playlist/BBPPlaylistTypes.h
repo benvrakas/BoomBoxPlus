@@ -6,6 +6,15 @@
 
 class AFGBoomBoxPlayer;
 
+// A Boom Box's hearing range, in cm: what each one starts at and the slider's limits. The default is the vanilla Boom
+// Box's own (its songs' Wwise attenuation ends at 14000 units, 140 m).
+namespace BBPRange
+{
+	constexpr float Default = 14000.f;
+	constexpr float Min = 1000.f;
+	constexpr float Max = 100000.f;
+}
+
 // What happens when the current track ends.
 UENUM(BlueprintType)
 enum class EBBPRepeatMode : uint8
@@ -51,7 +60,11 @@ struct BOOMBOXPLUS_API FBBPActiveBoomBox
 	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
 	FString Key;
 
-	bool operator==(const FBBPActiveBoomBox& Other) const { return BoomBox == Other.BoomBox && Volume == Other.Volume && Key == Other.Key; }
+	// How far it's heard, in cm (ABBPPlaylistSubsystem::SetRange; the same for every player).
+	UPROPERTY(BlueprintReadOnly, Category = "BoomBoxPlus")
+	float Range = BBPRange::Default;
+
+	bool operator==(const FBBPActiveBoomBox& Other) const { return BoomBox == Other.BoomBox && Volume == Other.Volume && Key == Other.Key && Range == Other.Range; }
 };
 
 // Transport state shared by every player. Replicated as one unit so clients never see a half-applied change.
@@ -123,6 +136,21 @@ struct BOOMBOXPLUS_API FBBPSavedChannel
 
 	UPROPERTY()
 	EBBPRepeatMode RepeatMode = EBBPRepeatMode::Off;
+};
+
+// A Boom Box's hearing range as kept in the save file (as JSON, in ABBPPlaylistSubsystem::SavedRanges).
+USTRUCT()
+struct BOOMBOXPLUS_API FBBPSavedRange
+{
+	GENERATED_BODY()
+
+	// ABBPPlaylistSubsystem::GetBoomBoxKey of the Boom Box.
+	UPROPERTY()
+	FString Key;
+
+	// In cm.
+	UPROPERTY()
+	float Range = BBPRange::Default;
 };
 
 // A Boom Box's request to link with another; completes when the other enters this one's code before it expires.
