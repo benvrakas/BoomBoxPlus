@@ -10,6 +10,8 @@
 - **Streaming reaches a fixed distance past hearing.** A Boom Box now keeps streaming, silently, out to 5 km beyond its
   range (before: ten times the old 250 m hearing range, 2.5 km), so the music never has to buffer when you walk up
   to it. `/bbp list` shows each Boom Box's range.
+- Fixed other players sometimes hearing a far-away Boom Box at full volume, as if it were right next to them (since
+  1.6.0).
 
 ## 1.6.1
 

@@ -69,6 +69,12 @@ the bank load tells whether Audio Input is there.
   game's Master and Boom Box sliders apply on the Wwise bus, so `GameVolumeScale` isn't used here.
 - Every update, `UAkComponent::UpdateGameObjectPosition` (exported) moves the emitter's Wwise position, spatial-audio
   room and reverb volumes to the Boom Box: the component doesn't know about events posted around it.
+- `UAkComponent::UpdateGameObjectPosition` only sets the position while the component is active
+  (`if (IsActive() && ...)`), and the vanilla Boom Box activates it for its own tapes, which Custom Music cancels. On
+  a friend's game in 1.6.x a placed Boom Box 500 m away was heard at full volume, as if beside him: most likely its
+  component was never active there, so Wwise never got its position. Since 1.7.0 `BBPWwiseMusic::UpdatePosition`
+  activates an inactive component first and logs it once per component ("Wwise emitter was inactive; activated it").
+  Untested when written.
 - If Wwise ends the event itself (the game stopping every sound on the emitter), the track restarts at the channel's
   position; ending twice within a second of starting sends that Boom Box to the Unreal path.
 
