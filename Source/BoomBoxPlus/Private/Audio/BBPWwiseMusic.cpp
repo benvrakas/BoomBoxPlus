@@ -3,7 +3,6 @@
 #include "Audio/BBPWwise.h"
 #include "Audio/SFModWwiseAudioInput.h"
 #include "BoomBoxPlus.h"
-#include "Components/ActorComponent.h"
 #include "Features/IModularFeatures.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
@@ -418,20 +417,6 @@ bool BBPWwiseMusic::HasEnded(uint32 PlayingId)
 
 void BBPWwiseMusic::UpdatePosition(UObject* Emitter)
 {
-	// The component only moves its Wwise position while it's active, and the vanilla Boom Box activates it for its own
-	// tapes, which Custom Music never plays: on another player's game it can still be inactive, and the music then
-	// plays from wherever Wwise last had it, at full volume.
-	if (UActorComponent* Component = Cast<UActorComponent>(Emitter); IsValid(Component) && !Component->IsActive())
-	{
-		Component->Activate();
-		static TSet<FObjectKey> Reported;
-		if (!Reported.Contains(Component))
-		{
-			Reported.Add(Component);
-			UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: %s's Wwise emitter was inactive; activated it (%s)"),
-				*GetNameSafe(Component->GetOwner()), Component->IsActive() ? TEXT("now active") : TEXT("STILL INACTIVE"));
-		}
-	}
 	if (void (*Update)(UObject*) = GetUpdatePosition(); Update && IsValid(Emitter))
 	{
 		Update(Emitter);

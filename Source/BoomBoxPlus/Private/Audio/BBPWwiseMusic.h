@@ -29,7 +29,6 @@ namespace BBPWwiseMusic
 	// True once Wwise ended this playing id itself (for example when the game stopped every sound on the Boom Box).
 	bool HasEnded(uint32 PlayingId);
 
-	// Moves Emitter's Wwise position, room and reverb volumes to where its component is now, activating the component
-	// first if it isn't (it only moves its Wwise position while active).
+	// Moves Emitter's Wwise position, room and reverb volumes to where its component is now.
 	void UpdatePosition(UObject* Emitter);
 }
