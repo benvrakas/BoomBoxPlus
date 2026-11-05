@@ -140,6 +140,16 @@ the result for Custom Music with a valid `FSongData`: the current track's title/
 "Custom Music / BoomBoxPlus" placeholder. `Song` stays null — nothing should play it, since transport calls
 are intercepted. (SML emits a harmless C4191 warning for hooks on functions returning structs by value.)
 
+Not in Linux builds (since 1.6.2). SML's `HookInvokerExecutorMemberFunction::ApplyCallUserTypeByValue`
+(`NativeHookManager.h`) takes `(Self, OutReturnValue, Args...)`, the Windows (MSVC) order for a member function
+returning a class by value. On Linux (System V x86-64) the hidden return pointer comes first and `this` second, so
+the hook got the return buffer as `Self`: `GetCurrentTape()` read garbage and the Linux dedicated server crashed
+(SIGSEGV in `IsCustomMusicTape`) when a player equipped a Boom Box (`AFGEquipmentBoomBox::BeginPlay` ->
+`ApplyStateLocally` -> `FullyNotifyListeners` -> `GetCurrentSong`), 2026-11-05 on the user's server. Linux builds
+are only dedicated servers, which show no song, so the hook is compiled out there; vanilla then logs the "Invalid
+current song index" line, as it does for an empty playlist. It is the mod's only hook on a function that returns a
+struct by value; every other one returns void (`GetUnlockedTapes` fills an out parameter).
+
 ## Unreal audio device
 
 Satisfactory does all its sound through Wwise and ships with `[Audio] AudioMixerModuleName` empty, so the
