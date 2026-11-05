@@ -11,6 +11,10 @@
   range (before: ten times the old 250 m hearing range, 2.5 km), so the music never has to buffer when you walk up
   to it. `/bbp list` shows each Boom Box's range.
 
+## 1.6.2
+
+- Fixed Linux dedicated servers crashing when a player put a Boom Box in their hand.
+
 ## 1.6.1
 
 - **Custom Music keeps playing in the background again.** With "Mute when the game is in the background" off, music

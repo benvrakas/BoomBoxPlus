@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.5.5",
+	"VersionName": "1.7.0",
 	"SemVersion": "1.7.0",
 	"GameVersion": ">=513885",
 	"FriendlyName": "BoomBoxPlus",

@@ -186,6 +186,9 @@ void InstallBBPHooks()
 	});
 
 	// Gives the game a valid song for the Custom Music tape (whose playlist is empty): the current track, or a placeholder.
+	// Not on Linux (dedicated servers only, which show no song): SML's hooks on functions returning a struct by value
+	// assume the Windows calling convention and crash there (Docs/Architecture.md).
+#if !PLATFORM_LINUX
 	SUBSCRIBE_METHOD(AFGBoomBoxPlayer::GetCurrentSong, [](auto& Scope, AFGBoomBoxPlayer* Self)
 	{
 		if (!Self || !UBBPCustomMusicTape::IsCustomMusicTape(Self->GetCurrentTape()))
@@ -209,6 +212,7 @@ void InstallBBPHooks()
 		}
 		Scope.Override(Song);
 	});
+#endif
 
 	// Observes tape changes so the in-game flow can be followed in the log.
 	SUBSCRIBE_METHOD_AFTER(AFGBoomBoxPlayer::LoadTapeNow, [](AFGBoomBoxPlayer* Self, AFGCharacterPlayer* Character)
