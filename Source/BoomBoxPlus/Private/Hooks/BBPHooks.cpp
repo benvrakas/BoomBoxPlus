@@ -227,5 +227,6 @@ void InstallBBPHooks()
 		UBBPAdaEasterEggs::NotifyAudioMessageStarted(Self);
 	});
 
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, GetCurrentSong, LoadTapeNow, UFGAudioMessage::StartPlayback"));
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Hooks installed: GetUnlockedTapes, Boom Box transport (Begin*/Toggle/*Now), BeginChangeTapeSequence, %sLoadTapeNow, UFGAudioMessage::StartPlayback"),
+		PLATFORM_LINUX ? TEXT("") : TEXT("GetCurrentSong, "));
 }
