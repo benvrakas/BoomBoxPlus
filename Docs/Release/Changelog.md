@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.1
+
+- **Custom Music plays through the game's audio engine again.** Since the game update of 4 November 2026, Boom Boxes
+  played your music the old way (straight through Unreal), so the game's Boom Box sound and volume slider no longer
+  applied to it. The game now keeps its Boom Box sounds in a different place; BoomBoxPlus reads them from there.
+
 ## 1.7.0
 
 - **A Range slider for each Boom Box.** Set how far a Boom Box is heard, from 10 m to 1000 m, with the new **Range**

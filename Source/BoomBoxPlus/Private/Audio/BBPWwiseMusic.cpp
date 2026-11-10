@@ -2,11 +2,9 @@
 #include "Audio/BBPStreamingSoundWave.h"
 #include "Audio/BBPWwise.h"
 #include "Audio/SFModWwiseAudioInput.h"
+#include "Audio/SFModWwiseGameBanks.h"
 #include "BoomBoxPlus.h"
 #include "Features/IModularFeatures.h"
-#include "HAL/FileManager.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
 #include <Windows.h>
@@ -321,27 +319,19 @@ bool BBPWwiseMusic::EnsureReady()
 	}
 	// Another mod may have registered it already; the bank load shows whether it's there.
 	BBPWwise::RegisterBuiltInPlugin(BBPWwise::AudioInputPluginId, TEXT("Wwise music"));
-	TArray<FString> Files;
-	IFileManager::Get().FindFilesRecursive(Files, *(FPaths::ProjectContentDir() / TEXT("WwiseAudio") / TEXT("Event")), TEXT("Play_Boombox_*.bnk"), true, false);
-	Files.Sort();
-	for (const FString& File : Files)
+	const SFModWwiseGameBanks::FSearch Search = SFModWwiseGameBanks::ForEachSongBank([](const FString& Name, const TArray<uint8>& Song)
 	{
-		const FString Name = FPaths::GetBaseFilename(File);
-		if (Name.Contains(TEXT("_UI_")) || Name.Contains(TEXT("Animation")))
-		{
-			continue;
-		}
-		TArray<uint8> Song;
 		TArray<uint8> Bank;
-		if (!FFileHelper::LoadFileToArray(Song, *File) || !BuildBank(Song, Bank, EventId))
+		if (!BuildBank(Song, Bank, EventId))
 		{
-			continue;
+			return false;
 		}
 		BBPWwise::PrepareBank(Bank, TEXT("Wwise music"));
 		UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: built from the game's '%s'"), *Name);
+		// A bank Wwise refuses stops the search: every song bank builds the same way.
 		if (!BBPWwise::LoadBank(Bank, TEXT("Wwise music")))
 		{
-			break;
+			return true;
 		}
 		if (!bSourceRegistered)
 		{
@@ -349,10 +339,11 @@ bool BBPWwiseMusic::EnsureReady()
 			bSourceRegistered = true;
 		}
 		bReady = BBPWwise::SetAudioInputCallbacks(&HandleAudioInput, &HandleAudioFormat);
-		break;
-	}
-	UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: %s (%d Boom Box song bank(s) found)"),
-		bReady ? TEXT("ready; Custom Music plays through the game's audio engine") : TEXT("unavailable; Custom Music plays through Unreal"), Files.Num());
+		return true;
+	});
+	UE_LOG(LogBoomBoxPlus, Log, TEXT("Wwise music: %s (Boom Box song banks read: %d from event assets, %d event asset(s) unreadable, %d bank file(s))"),
+		bReady ? TEXT("ready; Custom Music plays through the game's audio engine") : TEXT("unavailable; Custom Music plays through Unreal"),
+		Search.EventAssets, Search.UnreadableEventAssets, Search.BankFiles);
 	return bReady;
 }
 

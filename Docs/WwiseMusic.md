@@ -11,9 +11,9 @@ Nothing is imitated in Unreal: the fallback is simply the old path.
 
 Wwise has a source plugin for audio a program supplies, Audio Input (plugin 200, `0x00C80002`), and the shipped game
 contains it. The mod needs a Wwise event whose sound uses it, routed like a Boom Box song. `BBPWwiseMusic::EnsureReady`
-builds that bank once per game from one of the game's own Boom Box song banks (`Content/WwiseAudio/Event/*/
-Play_Boombox_*.bnk`, read from the pak at runtime, not shipped; the first in name order that has one event whose Play
-action targets a sound):
+builds that bank once per game from one of the game's own Boom Box song banks (read from the game at runtime, not
+shipped; the first in name order that has one event whose Play action targets a sound; see "Where the song banks
+are" below):
 
 - The song's Sound keeps its node settings (parent mixer chain, positioning, attenuation), but its 22-byte source
   header becomes Audio Input: plugin `0x00C80002`, stream type 0, source id `BBP_Music_Input`, no media, followed by
@@ -41,6 +41,37 @@ DLL exports only its plugin list.
 
 The vanilla song bank needs no reordering (its sounds come before their mixers); see EasterEggs.md for the three
 things that made hand-built banks load at all.
+
+## Where the song banks are
+
+Until the game update of 2026-11-04 the banks were loose files in the pak, `Content/WwiseAudio/Event/*/
+Play_Boombox_*.bnk`. Since then the pak has no `WwiseAudio` entries and no `.bnk` at all: the game's Wwise integration
+packages each event's bank as bulk data inside the event asset in the IoStore container
+(`FactoryGame-Windows.utoc`, e.g. `/Game/WwiseAudio/Events/Equipment/BoomBox/Goat/Play_Boombox_GSFTS_Goatshire`;
+`FWwisePackagedFile` with `PackagingStrategy` BulkData). The 1.7.0 log then said "unavailable ... (0 Boom Box song
+bank(s) found)" and every Boom Box played through Unreal.
+
+`Private/Audio/SFModWwiseGameBanks.h` (an identical copy in Telescreen) finds them again, without calling into Wwise:
+
+- `FindSongEvents`: the asset registry's assets under `/Game/WwiseAudio/Events` named `Play_Boombox_*` (not `_UI_`
+  or `Animation`), in name order. Three known song packages stand in if the registry lists none.
+- `ReadPackageData`: the package's `.uexp` where the game has one (pak or loose files), otherwise its package data
+  chunk read synchronously through `FIoDispatcher` (`CreatePackageDataChunkId(FPackageId::FromName(...))`). The
+  event asset itself is never loaded.
+- `ExtractBank`: the bank inside that data, which is stored whole as the bulk data's payload: the first `BKHD`
+  (header size up to 4 KB, bank version 100 to 1000) followed by known bank chunks (`HIRC`, `DIDX`, `DATA`, ...),
+  with at least one `HIRC`. The song media stay in the separate `.ubulk`; the music bank doesn't need them.
+- `ForEachSongBank` tries those banks in order, then the old loose `.bnk` files, until one builds and loads.
+
+Reading the package data rather than loading the `UAkAudioEvent` and walking its `EventCookedData` down to the
+`FByteBulkData`: loading the event starts its own asynchronous bank load (`bAutoLoad`), which marks the bulk data
+single-use and frees it after copying, possibly while the mod reads it; and the walk would depend on the layout of
+`FWwisePackagedFile::SharedBulkDataArray`, which isn't a reflected property.
+
+Checked offline against the game of 2026-11-04 (`UnrealPak <utoc> -Extract ... -Filter=*Play_Boombox_*`, the same
+search in Python): all 39 song events hold a version-172 bank of about 1.9 KB that the builder accepts; the three
+`Play_Boombox_Debris_*` sounds are skipped by the builder as before. The first in name order is
+`Play_Boombox_Dream_Thing_Hyperfocus`.
 
 ## Feeding it
 
