@@ -55,7 +55,7 @@ python Tools/TrimServerPackages.py
 This strips `Resources/Tools/` from the two single-platform server zips and from `WindowsServer/`/
 `LinuxServer/` inside the combined `BoomBoxPlus.zip`, in place. Cuts the combined zip roughly in half
 (328 MB -> 155 MB as of 1.1.1). The Windows client zip is untouched. Run it every release, after
-`release-full.bat` and before uploading.
+packaging and before uploading. (In the author's workspace, `sfmod package BoomBoxPlus` does this itself.)
 
 ## Install for testing
 
