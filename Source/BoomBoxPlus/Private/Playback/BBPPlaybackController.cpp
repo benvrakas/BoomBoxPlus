@@ -323,7 +323,8 @@ void UBBPPlaybackController::UpdateGameVolumeScale()
 	const float BoomBox = ReadVolumeOption(*Settings, TEXT("RTPC.Boombox_Bus_Volume"));
 	const float Music = ReadVolumeOption(*Settings, TEXT("RTPC.Music_Bus_Volume"));
 	const float Scale = Master * BoomBox * Music;
-	const float Dialogue = ReadVolumeOption(*Settings, TEXT("RTPC.VO_Bus_Volume"));
+	// The Dialogue slider is stored as "RTPC.Menu_Volume_Dialogue"; "RTPC.VO_Bus_Volume" is not a saved option.
+	const float Dialogue = ReadVolumeOption(*Settings, TEXT("RTPC.Menu_Volume_Dialogue"));
 	VoiceVolumeScale = Master * Dialogue;
 	if (!FMath::IsNearlyEqual(Scale, GameVolumeScale, 0.001f))
 	{

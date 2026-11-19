@@ -1,5 +1,11 @@
 # Changelog
 
+## Next (with the build for game 1.2.5.1)
+
+- **Fixed: ADA's easter-egg lines ignored the Dialogue volume slider** when they played through Unreal instead of the
+  game's audio engine: BoomBoxPlus looked the slider up under a name the game doesn't use and played them at full
+  volume. It also logged an error and a warning on every world load. Reported by scotthowson (GitHub issue 4).
+
 ## 1.7.1
 
 - **Custom Music plays through the game's audio engine again.** Since the game update of 4 November 2026, Boom Boxes
