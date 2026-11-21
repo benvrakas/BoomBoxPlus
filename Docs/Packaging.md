@@ -59,5 +59,5 @@ packaging and before uploading. (In the author's workspace, `sfmod package BoomB
 
 ## Install for testing
 
-The zip's contents go in `<Satisfactory>\FactoryGame\Mods\BoomBoxPlus\`. SML 3.12.0 must be installed in the
+The zip's contents go in `<Satisfactory>\FactoryGame\Mods\BoomBoxPlus\`. SML 3.12.1 must be installed in the
 game (via Satisfactory Mod Manager) or the mod won't load.

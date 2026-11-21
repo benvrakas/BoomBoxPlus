@@ -5,7 +5,7 @@ whole Spotify playlists and live internet radio. Everyone within earshot hears t
 with synced lyrics. Inspired by the PEAK mod sPEAKer.
 
 - **Current version:** 1.6.0 ([changelog](Docs/Release/Changelog.md))
-- **Needs:** Satisfactory build 513885 or newer (the October 2026 update) and SML 3.12 or newer.
+- **Needs:** Satisfactory build 520140 or newer (game 1.2.5.1, November 2026) and SML 3.12.1 or newer.
 - **Get it:** install **BoomBoxPlus** with Satisfactory Mod Manager. Everyone in a multiplayer session needs it,
   on the same version.
 

@@ -1,7 +1,9 @@
 # Changelog
 
-## Next (with the build for game 1.2.5.1)
+## 1.7.2
 
+- **For game 1.2.5.1** (the update of 18 November 2026): built against its new game files. Needs SML 3.12.1, which
+  also fixes the crash when joining a multiplayer game on 1.2.5.1.
 - **Fixed: ADA's easter-egg lines ignored the Dialogue volume slider** when they played through Unreal instead of the
   game's audio engine: BoomBoxPlus looked the slider up under a name the game doesn't use and played them at full
   volume. It also logged an error and a warning on every world load. Reported by scotthowson (GitHub issue 4).
